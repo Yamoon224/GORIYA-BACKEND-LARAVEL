@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateUserRequest;
 use App\Http\Requests\UpdateUserRequest;
@@ -196,7 +197,13 @@ class UsersController extends Controller
             abort(404, 'User not found');
         }
 
-        $updated = $this->userService->update($user, $request->validated(), $request->file('avatar'));
+        // role/status/companyId sont des champs privilégiés : seul un ADMIN peut
+        // les modifier (via cette route ou une autre), qu'il s'agisse de son propre
+        // compte ou de celui d'un tiers — sinon n'importe quel utilisateur authentifié
+        // pourrait s'auto-promouvoir ADMIN en PATCHant son propre id.
+        $isAdmin = $request->user()?->role === UserRole::ADMIN;
+
+        $updated = $this->userService->update($user, $request->validated(), $request->file('avatar'), allowPrivilegedFields: $isAdmin);
 
         return new UserResource($updated);
     }

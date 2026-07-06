@@ -326,16 +326,13 @@ class AdminAuthController extends Controller
     #[OA\Put(
         path: '/admin/user/profile',
         tags: ['Admin Auth'],
-        summary: "Met à jour le profil de l'admin courant (pas de FormRequest, champs libres transmis tels quels)",
+        summary: "Met à jour le profil de l'admin courant (name/email/password uniquement)",
         security: [['bearerAuth' => []]],
         requestBody: new OA\RequestBody(
             content: new OA\JsonContent(properties: [
                 new OA\Property(property: 'name', type: 'string', nullable: true),
                 new OA\Property(property: 'email', type: 'string', format: 'email', nullable: true),
                 new OA\Property(property: 'password', type: 'string', format: 'password', nullable: true),
-                new OA\Property(property: 'role', type: 'string', enum: ['ADMIN', 'USER', 'ENTREPRISE'], nullable: true),
-                new OA\Property(property: 'status', type: 'string', enum: ['ACTIVE', 'INACTIVE'], nullable: true),
-                new OA\Property(property: 'companyId', type: 'string', format: 'uuid', nullable: true),
             ])
         ),
         responses: [
@@ -353,7 +350,15 @@ class AdminAuthController extends Controller
     )]
     public function updateProfile(Request $request)
     {
-        return ApiResponse::success($this->adminAuthService->updateMyProfile($request->user()->id, $request->all()));
+        // Whitelist explicite : cette route édite TOUJOURS le compte de l'appelant
+        // ($request->user()->id, pas un {id} de route), donc role/status/companyId
+        // ne doivent jamais y être acceptés — même un admin ne doit pas pouvoir
+        // s'auto-modifier ces champs par ce biais (utiliser la gestion admin dédiée).
+        // Avant ce correctif, $request->all() transmettait tout tel quel, permettant
+        // à n'importe quel utilisateur authentifié de s'auto-promouvoir ADMIN.
+        $data = $request->only(['name', 'email', 'password']);
+
+        return ApiResponse::success($this->adminAuthService->updateMyProfile($request->user()->id, $data));
     }
 
     #[OA\Post(

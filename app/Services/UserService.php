@@ -87,7 +87,13 @@ class UserService
         return ['user' => $fullUser, 'accessToken' => $accessToken];
     }
 
-    public function update(User $user, array $data, ?UploadedFile $avatar): User
+    /**
+     * @param  bool  $allowPrivilegedFields  role/status/companyId ne sont appliqués que si true
+     *                                       (appelant ADMIN) — sinon silencieusement ignorés pour
+     *                                       empêcher une auto-élévation de privilèges via
+     *                                       PATCH /users/{id} ou PUT /admin/user/profile.
+     */
+    public function update(User $user, array $data, ?UploadedFile $avatar, bool $allowPrivilegedFields = false): User
     {
         $mapped = [];
 
@@ -98,7 +104,7 @@ class UserService
             $mapped['avatar'] = $this->storeAvatar($avatar);
         }
 
-        if (! empty($data['companyId'])) {
+        if ($allowPrivilegedFields && ! empty($data['companyId'])) {
             $role = $data['role'] ?? $user->role->value;
             if ($role !== UserRole::ENTERPRISE->value) {
                 abort(400, 'Only enterprise users can have a company');
@@ -116,9 +122,14 @@ class UserService
             'name' => 'name',
             'email' => 'email',
             'password' => 'password',
-            'role' => 'role',
-            'status' => 'status',
         ]);
+
+        if ($allowPrivilegedFields) {
+            $mapped += $this->mapFields($data, [
+                'role' => 'role',
+                'status' => 'status',
+            ]);
+        }
 
         try {
             $this->userRepository->update($user, $mapped);

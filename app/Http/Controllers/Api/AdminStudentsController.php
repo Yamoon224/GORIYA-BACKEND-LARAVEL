@@ -243,7 +243,9 @@ class AdminStudentsController extends Controller
             abort(404, 'User not found');
         }
 
-        $updated = $this->userService->update($user, $request->except('avatar'), $request->file('avatar'));
+        // Route role:ADMIN (voir routes/api.php) : l'appelant est déjà un admin,
+        // donc role/status/companyId peuvent être modifiés ici sans risque.
+        $updated = $this->userService->update($user, $request->except('avatar'), $request->file('avatar'), allowPrivilegedFields: true);
 
         return ApiResponse::success(new UserResource($updated));
     }
@@ -283,7 +285,8 @@ class AdminStudentsController extends Controller
             abort(404, 'User not found');
         }
 
-        $updated = $this->userService->update($user, ['status' => $request->input('status')], null);
+        // Route role:ADMIN (voir routes/api.php) : l'appelant est déjà un admin.
+        $updated = $this->userService->update($user, ['status' => $request->input('status')], null, allowPrivilegedFields: true);
 
         return ApiResponse::success(new UserResource($updated));
     }
