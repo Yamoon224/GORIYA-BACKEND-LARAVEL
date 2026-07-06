@@ -1,0 +1,84 @@
+<?php
+
+namespace App\Services;
+
+use App\Http\Concerns\HandlesUniqueViolations;
+use App\Models\Candidature;
+use App\Repositories\Contracts\CandidatureRepositoryInterface;
+use App\Services\Concerns\MapsFieldsToColumns;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\QueryException;
+
+/**
+ * Mirroir de backend/src/candidatures/candidatures.service.ts.
+ */
+class CandidatureService
+{
+    use HandlesUniqueViolations, MapsFieldsToColumns;
+
+    private const RELATIONS = ['user', 'jobOffer'];
+
+    public function __construct(private readonly CandidatureRepositoryInterface $candidatureRepository) {}
+
+    /*
+    |----------------------------------------------------------------------
+    | CREATE — pas de vérification d'existence de userId/jobOfferId côté
+    | NestJS : on laisse la contrainte FK de la DB faire foi (parité).
+    |----------------------------------------------------------------------
+    */
+    public function create(array $data): Candidature
+    {
+        $payload = [
+            'candidate_name' => $data['candidateName'],
+            'candidate_email' => $data['candidateEmail'],
+            'applied_date' => $data['appliedDate'],
+            'user_id' => $data['userId'],
+            'job_offer_id' => $data['jobOfferId'],
+        ];
+
+        foreach (['status', 'score'] as $field) {
+            if (array_key_exists($field, $data)) {
+                $payload[$field] = $data[$field];
+            }
+        }
+
+        try {
+            $candidature = $this->candidatureRepository->create($payload);
+        } catch (QueryException $e) {
+            $this->abortOnUniqueViolation($e, []);
+        }
+
+        return $candidature->fresh(self::RELATIONS);
+    }
+
+    public function update(Candidature $candidature, array $data): Candidature
+    {
+        $mapped = $this->mapFields($data, [
+            'candidateName' => 'candidate_name',
+            'candidateEmail' => 'candidate_email',
+            'status' => 'status',
+            'score' => 'score',
+            'appliedDate' => 'applied_date',
+            'userId' => 'user_id',
+            'jobOfferId' => 'job_offer_id',
+        ]);
+
+        try {
+            $this->candidatureRepository->update($candidature, $mapped);
+        } catch (QueryException $e) {
+            $this->abortOnUniqueViolation($e, []);
+        }
+
+        return $candidature->fresh(self::RELATIONS);
+    }
+
+    public function paginate(int $page, int $limit, array $filters = []): LengthAwarePaginator
+    {
+        return $this->candidatureRepository->paginate($page, $limit, $filters);
+    }
+
+    public function remove(Candidature $candidature): void
+    {
+        $this->candidatureRepository->delete($candidature);
+    }
+}
