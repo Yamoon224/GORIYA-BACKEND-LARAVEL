@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Concerns\Auditable;
 use App\Concerns\HasUuid;
 use App\Enums\SubscriptionStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class UserSubscription extends Model
 {
-    use HasFactory, HasUuid;
+    use Auditable, HasFactory, HasUuid;
 
     /**
      * The attributes that are mass assignable.

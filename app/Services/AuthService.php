@@ -18,7 +18,10 @@ use Tymon\JWTAuth\Facades\JWTAuth;
  */
 class AuthService
 {
-    public function __construct(private readonly UserRepositoryInterface $userRepository) {}
+    public function __construct(
+        private readonly UserRepositoryInterface $userRepository,
+        private readonly AuditLogService $auditLogService,
+    ) {}
 
     /**
      * @return array{access_token: string, user: UserResource}
@@ -28,16 +31,20 @@ class AuthService
         $user = $this->userRepository->findByEmailWithPassword($email);
 
         if (! $user || ! Hash::check($password, $user->password)) {
+            $this->auditLogService->log('login_failed', null, [], ['email' => $email]);
             abort(401, 'Invalid credentials');
         }
 
         if ($user->status === UserStatus::INACTIVE) {
+            $this->auditLogService->log('login_failed', $user, [], ['email' => $email, 'reason' => 'inactive'], actor: $user);
             abort(401, "Compte bloqué. Vous n'êtes pas autorisé à vous connecter. Veuillez contacter l'administrateur.");
         }
 
         $token = auth('api')->login($user);
         $fullUser = $this->userRepository->findOrFail($user->id);
         $fullUser->load('company');
+
+        $this->auditLogService->log('login', $fullUser, actor: $fullUser);
 
         return ['access_token' => $token, 'user' => new UserResource($fullUser)];
     }
@@ -54,7 +61,9 @@ class AuthService
         $token = str_replace('Bearer ', '', $authHeader);
 
         try {
+            $user = JWTAuth::setToken($token)->authenticate() ?: null;
             JWTAuth::setToken($token)->invalidate();
+            $this->auditLogService->log('logout', $user, actor: $user);
         } catch (JWTException) {
             // Token déjà invalide/expiré : on considère la déconnexion réussie quand même.
         }

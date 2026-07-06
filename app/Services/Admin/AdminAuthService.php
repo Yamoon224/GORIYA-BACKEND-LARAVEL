@@ -5,6 +5,7 @@ namespace App\Services\Admin;
 use App\Enums\UserRole;
 use App\Http\Resources\UserResource;
 use App\Repositories\Contracts\UserRepositoryInterface;
+use App\Services\AuditLogService;
 use App\Services\UserService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
@@ -22,6 +23,7 @@ class AdminAuthService
     public function __construct(
         private readonly UserRepositoryInterface $userRepository,
         private readonly UserService $userService,
+        private readonly AuditLogService $auditLogService,
     ) {}
 
     public function verifyOtp(string $email, string $code): array
@@ -50,6 +52,8 @@ class AdminAuthService
                 'role' => UserRole::USER->value,
             ], null);
 
+            $this->auditLogService->log('login', $result['user'], actor: $result['user']);
+
             return ['token' => $result['accessToken'], 'user' => new UserResource($result['user'])];
         }
 
@@ -65,6 +69,8 @@ class AdminAuthService
 
         $token = auth('api')->login($user);
         $user->load('company');
+
+        $this->auditLogService->log('login', $user, actor: $user);
 
         return ['token' => $token, 'user' => new UserResource($user)];
     }

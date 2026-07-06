@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Concerns\Auditable;
 use App\Concerns\HasUuid;
 use App\Enums\MatchingStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class MatchingResult extends Model
 {
-    use HasFactory, HasUuid;
+    use Auditable, HasFactory, HasUuid;
 
     /**
      * The attributes that are mass assignable.

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Concerns\Auditable;
 use App\Concerns\HasUuid;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
@@ -16,7 +17,7 @@ use Tymon\JWTAuth\Contracts\JWTSubject;
 class User extends Authenticatable implements JWTSubject
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, HasUuid, Notifiable;
+    use Auditable, HasFactory, HasUuid, Notifiable;
 
     /**
      * The attributes that are mass assignable.

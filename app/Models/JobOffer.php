@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Concerns\Auditable;
 use App\Concerns\HasUuid;
 use App\Enums\JobExperienceType;
 use App\Enums\JobStatus;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class JobOffer extends Model
 {
-    use HasFactory, HasUuid;
+    use Auditable, HasFactory, HasUuid;
 
     /**
      * The attributes that are mass assignable.

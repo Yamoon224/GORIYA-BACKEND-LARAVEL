@@ -8,6 +8,7 @@ use App\Http\Requests\CreateUserRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\Admin\AdminAuthService;
+use App\Services\AuditLogService;
 use App\Services\UserService;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
@@ -27,6 +28,7 @@ class AdminAuthController extends Controller
     public function __construct(
         private readonly UserService $userService,
         private readonly AdminAuthService $adminAuthService,
+        private readonly AuditLogService $auditLogService,
     ) {}
 
     /*
@@ -82,15 +84,19 @@ class AdminAuthController extends Controller
             ->first();
 
         if (! $user || ! Hash::check($data['password'], $user->password)) {
+            $this->auditLogService->log('login_failed', null, [], ['email' => $data['email']]);
             abort(401, 'Invalid credentials');
         }
 
         if ($user->status === UserStatus::INACTIVE) {
+            $this->auditLogService->log('login_failed', $user, [], ['email' => $data['email'], 'reason' => 'inactive'], actor: $user);
             abort(401, "Compte bloqué. Vous n'êtes pas autorisé à vous connecter. Veuillez contacter l'administrateur.");
         }
 
         $token = auth('api')->login($user);
         $fullUser = User::with('company')->findOrFail($user->id);
+
+        $this->auditLogService->log('login', $fullUser, actor: $fullUser);
 
         return ApiResponse::success([
             'access_token' => $token,
@@ -175,7 +181,9 @@ class AdminAuthController extends Controller
         $token = str_replace('Bearer ', '', $authHeader);
 
         try {
+            $user = JWTAuth::setToken($token)->authenticate() ?: null;
             JWTAuth::setToken($token)->invalidate();
+            $this->auditLogService->log('logout', $user, actor: $user);
         } catch (JWTException) {
             // Token déjà invalide/expiré : on considère la déconnexion réussie quand même.
         }

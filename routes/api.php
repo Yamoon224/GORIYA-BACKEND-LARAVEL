@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AdminAiController;
 use App\Http\Controllers\Api\AdminAnalyticsController;
+use App\Http\Controllers\Api\AdminAuditLogsController;
 use App\Http\Controllers\Api\AdminAuthController;
 use App\Http\Controllers\Api\AdminCompaniesController;
 use App\Http\Controllers\Api\AdminDashboardController;
@@ -318,4 +319,9 @@ Route::middleware(['auth:api', 'role:ADMIN'])->group(function () {
     Route::post('/admin/settings/email/test', [AdminSystemController::class, 'testEmailSettings']);
     Route::get('/admin/settings', [AdminSystemController::class, 'settings']);
     Route::patch('/admin/settings', [AdminSystemController::class, 'updateSettings']);
+
+    // --- Admin: Audit Logs — qui a fait quoi dans le système ---
+    Route::get('/admin/audit-logs/paginate', [AdminAuditLogsController::class, 'paginate']);
+    Route::get('/admin/audit-logs/actions', [AdminAuditLogsController::class, 'actions']);
+    Route::get('/admin/audit-logs/{id}', [AdminAuditLogsController::class, 'show']);
 });
