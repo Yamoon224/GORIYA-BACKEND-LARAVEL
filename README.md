@@ -1,59 +1,71 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Goriya — Backend Laravel
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+API REST de **Goriya**, plateforme de recrutement pour le marché ivoirien : recherche d'emploi, gestion des candidatures, portfolios, et analyse de CV par IA.
 
-## About Laravel
+Ce dépôt est un **portage Laravel** du backend historique NestJS de Goriya, avec parité fonctionnelle sur les modèles métier et les routes API (mêmes chemins, mêmes comportements — y compris certaines limitations connues, documentées dans le code).
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Stack technique
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- **Laravel 12** / PHP 8.2+
+- **MySQL** ou **PostgreSQL** (schéma agnostique, testé sur les deux)
+- **JWT** (`tymon/jwt-auth`) pour l'authentification stateless
+- **Swagger / OpenAPI** (`darkaonline/l5-swagger`) pour la documentation API interactive
+- **Claude (Anthropic)** pour l'analyse de CV, le scoring, le matching et la simulation d'entretien
+- `phpoffice/phpword` / `smalot/pdfparser` pour la génération et l'extraction de documents
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Fonctionnalités
 
-## Learning Laravel
+- **Authentification** : email/mot de passe, Google OAuth, JWT (access + refresh)
+- **Utilisateurs & entreprises** : candidats, comptes entreprise, gestion de profil
+- **Offres d'emploi & candidatures** : publication, recherche filtrée/paginée, suivi de statut
+- **Portfolios** candidats
+- **IA** : analyse de CV, scoring, matching, simulation d'entretien
+- **Abonnements** : plans candidats/entreprises, paiement Wave
+- **Back-office admin** : dashboard, analytics, planning, messagerie, recherche, paramètres
+- **Documentation API interactive** (Swagger UI)
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+## Architecture
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+```text
+Route  →  Controller  →  FormRequest (validation)  →  Service (logique métier)  →  Repository  →  Eloquent Model
+```
 
-## Laravel Sponsors
+- **Rôles** (`ADMIN` / `USER` / `ENTREPRISE`) appliqués par middleware (`role:ADMIN`) sur les routes qui l'exigent.
+- **Propriété des ressources** : les entités rattachées à un utilisateur ou une entreprise (companies, job-offers, portfolios, candidatures) vérifient que l'appelant est bien le propriétaire (ou un admin) avant toute modification/suppression — voir `App\Http\Concerns\AuthorizesOwnership`.
+- **Champs privilégiés** (`role`, `status`, `companyId` d'un utilisateur) non modifiables en self-service : seul un admin peut les changer — voir `UserService::update()`.
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## Démarrage
 
-### Premium Partners
+```bash
+composer install
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+cp .env.example .env
+php artisan key:generate
 
-## Contributing
+# configurer DB_CONNECTION / DB_HOST / DB_PORT / DB_DATABASE / DB_USERNAME / DB_PASSWORD
+# ainsi que JWT_SECRET dans .env
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+php artisan migrate
+php artisan db:seed        # jeu de données de démo (~500 enregistrements par entité, reliés entre eux)
 
-## Code of Conduct
+php artisan serve
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Documentation API
 
-## Security Vulnerabilities
+Une fois le serveur lancé : [http://localhost:8000/api/documentation](http://localhost:8000/api/documentation)
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## Tests
 
-## License
+```bash
+composer test
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Sécurité
+
+- Authentification JWT stateless, tokens invalidés à la déconnexion.
+- Autorisation par rôle (middleware `role:ADMIN`) sur les routes d'administration.
+- Autorisation par propriété (`AuthorizesOwnership`) sur les ressources métier, pour empêcher qu'un utilisateur authentifié modifie ou supprime la ressource d'un tiers.
+- Pas de mass-assignment de champs sensibles (`role`, `status`, `companyId`) hors contexte admin.
+
+Toute vulnérabilité découverte peut être signalée directement via une issue privée ou par contact direct avec le mainteneur du dépôt.
