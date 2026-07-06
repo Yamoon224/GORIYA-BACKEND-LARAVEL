@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\UserRole;
+use App\Http\Concerns\AuthorizesOwnership;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateCandidatureRequest;
 use App\Http\Requests\UpdateCandidatureRequest;
 use App\Http\Resources\CandidatureResource;
 use App\Models\Candidature;
+use App\Models\User;
 use App\Services\CandidatureService;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
@@ -15,9 +18,29 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: 'Candidatures', description: 'Gestion des candidatures')]
 class CandidaturesController extends Controller
 {
+    use AuthorizesOwnership;
+
     private const RELATIONS = ['user', 'jobOffer'];
 
     public function __construct(private readonly CandidatureService $candidatureService) {}
+
+    /**
+     * Propriétaire = le candidat lui-même, ou l'entreprise qui recrute pour
+     * l'offre visée (pour valider/refuser une candidature).
+     */
+    private function isCandidatureOwner(?User $actingUser, Candidature $candidature): bool
+    {
+        if (! $actingUser) {
+            return false;
+        }
+
+        if ($actingUser->id === $candidature->user_id) {
+            return true;
+        }
+
+        return $actingUser->role === UserRole::ENTERPRISE
+            && $actingUser->company_id === $candidature->jobOffer?->company_id;
+    }
 
     /*
     |----------------------------------------------------------------------
@@ -184,6 +207,8 @@ class CandidaturesController extends Controller
             abort(404, 'Candidature not found');
         }
 
+        $this->authorizeOwnerOrAdmin($request->user(), $this->isCandidatureOwner($request->user(), $candidature));
+
         $updated = $this->candidatureService->update($candidature, $request->validated());
 
         return new CandidatureResource($updated);
@@ -206,13 +231,15 @@ class CandidaturesController extends Controller
             new OA\Response(response: 404, description: 'Candidature introuvable'),
         ]
     )]
-    public function destroy(string $id)
+    public function destroy(string $id, Request $request)
     {
-        $candidature = Candidature::find($id);
+        $candidature = Candidature::with('jobOffer')->find($id);
 
         if (! $candidature) {
             abort(404, 'Candidature not found');
         }
+
+        $this->authorizeOwnerOrAdmin($request->user(), $this->isCandidatureOwner($request->user(), $candidature));
 
         $this->candidatureService->remove($candidature);
 

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\UserRole;
+use App\Http\Concerns\AuthorizesOwnership;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateCompanyRequest;
 use App\Http\Requests\UpdateCompanyRequest;
@@ -15,6 +17,8 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: 'Companies', description: 'Gestion des entreprises')]
 class CompaniesController extends Controller
 {
+    use AuthorizesOwnership;
+
     public function __construct(private readonly CompanyService $companyService) {}
 
     /*
@@ -206,6 +210,12 @@ class CompaniesController extends Controller
             abort(404, 'Company not found');
         }
 
+        $actingUser = $request->user();
+        $this->authorizeOwnerOrAdmin(
+            $actingUser,
+            $actingUser?->role === UserRole::ENTERPRISE && $actingUser->company_id === $company->id
+        );
+
         $updated = $this->companyService->update($company, $request->validated(), [
             'logo' => $request->file('logo'),
             'coverImage' => $request->file('coverImage'),
@@ -231,13 +241,19 @@ class CompaniesController extends Controller
             new OA\Response(response: 404, description: 'Entreprise introuvable'),
         ]
     )]
-    public function destroy(string $id)
+    public function destroy(string $id, Request $request)
     {
         $company = Company::find($id);
 
         if (! $company) {
             abort(404, 'Company not found');
         }
+
+        $actingUser = $request->user();
+        $this->authorizeOwnerOrAdmin(
+            $actingUser,
+            $actingUser?->role === UserRole::ENTERPRISE && $actingUser->company_id === $company->id
+        );
 
         $this->companyService->remove($company);
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Concerns\AuthorizesOwnership;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreatePortfolioRequest;
 use App\Http\Requests\UpdatePortfolioRequest;
@@ -15,6 +16,8 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: 'Portfolios', description: 'Gestion des portfolios des candidats')]
 class PortfoliosController extends Controller
 {
+    use AuthorizesOwnership;
+
     public function __construct(private readonly PortfolioService $portfolioService) {}
 
     /*
@@ -178,6 +181,8 @@ class PortfoliosController extends Controller
             abort(404, 'Portfolio not found');
         }
 
+        $this->authorizeOwnerOrAdmin($request->user(), $request->user()?->id === $portfolio->user_id);
+
         $updated = $this->portfolioService->update($portfolio, $request->validated());
 
         return new PortfolioResource($updated);
@@ -200,13 +205,15 @@ class PortfoliosController extends Controller
             new OA\Response(response: 404, description: 'Portfolio introuvable'),
         ]
     )]
-    public function destroy(string $id)
+    public function destroy(string $id, Request $request)
     {
         $portfolio = Portfolio::find($id);
 
         if (! $portfolio) {
             abort(404, 'Portfolio not found');
         }
+
+        $this->authorizeOwnerOrAdmin($request->user(), $request->user()?->id === $portfolio->user_id);
 
         $this->portfolioService->remove($portfolio);
 

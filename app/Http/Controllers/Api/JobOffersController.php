@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\UserRole;
+use App\Http\Concerns\AuthorizesOwnership;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateJobOfferRequest;
 use App\Http\Requests\UpdateJobOfferRequest;
@@ -15,6 +17,8 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: 'Job Offers', description: "Gestion des offres d'emploi")]
 class JobOffersController extends Controller
 {
+    use AuthorizesOwnership;
+
     private const RELATIONS = ['company', 'candidatures'];
 
     public function __construct(private readonly JobOfferService $jobOfferService) {}
@@ -178,6 +182,12 @@ class JobOffersController extends Controller
             abort(404, "JobOffer with id {$id} not found");
         }
 
+        $actingUser = $request->user();
+        $this->authorizeOwnerOrAdmin(
+            $actingUser,
+            $actingUser?->role === UserRole::ENTERPRISE && $actingUser->company_id === $jobOffer->company_id
+        );
+
         $updated = $this->jobOfferService->update($jobOffer, $request->validated());
 
         return new JobOfferResource($updated);
@@ -200,13 +210,19 @@ class JobOffersController extends Controller
             new OA\Response(response: 404, description: 'Offre introuvable'),
         ]
     )]
-    public function destroy(string $id)
+    public function destroy(string $id, Request $request)
     {
         $jobOffer = JobOffer::find($id);
 
         if (! $jobOffer) {
             abort(404, 'JobOffer not found');
         }
+
+        $actingUser = $request->user();
+        $this->authorizeOwnerOrAdmin(
+            $actingUser,
+            $actingUser?->role === UserRole::ENTERPRISE && $actingUser->company_id === $jobOffer->company_id
+        );
 
         $this->jobOfferService->remove($jobOffer);
 
