@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CompanyResource;
 use App\Models\Company;
-use App\Services\Admin\AdminBookmarkService;
 use App\Services\Admin\AdminReportingService;
+use App\Services\BookmarkService;
 use App\Services\CompanyService;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
@@ -23,7 +23,7 @@ class AdminCompaniesController extends Controller
     public function __construct(
         private readonly CompanyService $companyService,
         private readonly AdminReportingService $adminReportingService,
-        private readonly AdminBookmarkService $adminBookmarkService,
+        private readonly BookmarkService $bookmarkService,
     ) {}
 
     /**
@@ -223,9 +223,9 @@ class AdminCompaniesController extends Controller
             new OA\Response(response: 403, description: 'Rôle ADMIN requis'),
         ]
     )]
-    public function follow(string $companyId)
+    public function follow(string $companyId, Request $request)
     {
-        $this->adminBookmarkService->followCompany($companyId);
+        $this->bookmarkService->followCompany($companyId, $request->user()->id);
 
         return ApiResponse::success(null);
     }
@@ -249,11 +249,37 @@ class AdminCompaniesController extends Controller
             new OA\Response(response: 403, description: 'Rôle ADMIN requis'),
         ]
     )]
-    public function unfollow(string $companyId)
+    public function unfollow(string $companyId, Request $request)
     {
-        $this->adminBookmarkService->unfollowCompany($companyId);
+        $this->bookmarkService->unfollowCompany($companyId, $request->user()->id);
 
         return ApiResponse::success(null);
+    }
+
+    #[OA\Get(
+        path: '/me/followed-companies',
+        tags: ['Admin Companies'],
+        summary: "Liste des identifiants d'entreprises suivies par l'utilisateur courant",
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "Identifiants des entreprises suivies",
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'success', type: 'boolean', example: true),
+                    new OA\Property(
+                        property: 'data',
+                        properties: [new OA\Property(property: 'companyIds', type: 'array', items: new OA\Items(type: 'string', format: 'uuid'))],
+                        type: 'object'
+                    ),
+                ])
+            ),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+        ]
+    )]
+    public function followedCompanies(Request $request)
+    {
+        return ApiResponse::success(['companyIds' => $this->bookmarkService->followedCompanyIds($request->user()->id)]);
     }
 
     #[OA\Get(

@@ -9,7 +9,7 @@ use App\Services\SubscriptionService;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
-#[OA\Tag(name: 'Subscriptions', description: "Plans d'abonnement, souscription et paiement Wave")]
+#[OA\Tag(name: 'Subscriptions', description: "Plans d'abonnement, souscription et paiement Kkiapay")]
 class SubscriptionsController extends Controller
 {
     public function __construct(private readonly SubscriptionService $subscriptionService) {}
@@ -148,13 +148,13 @@ class SubscriptionsController extends Controller
 
     /*
     |----------------------------------------------------------------------
-    | WAVE CHECKOUT
+    | KKIAPAY CHECKOUT
     |----------------------------------------------------------------------
     */
     #[OA\Post(
         path: '/subscriptions/checkout',
         tags: ['Subscriptions'],
-        summary: 'Crée une session de paiement Wave pour un plan payant',
+        summary: "Valide un plan payant et fournit montant/référence pour le widget de paiement Kkiapay",
         security: [['bearerAuth' => []]],
         requestBody: new OA\RequestBody(
             required: true,
@@ -163,12 +163,11 @@ class SubscriptionsController extends Controller
         responses: [
             new OA\Response(
                 response: 200,
-                description: 'Session de paiement créée',
+                description: 'Informations à transmettre au widget Kkiapay',
                 content: new OA\JsonContent(properties: [
-                    new OA\Property(property: 'waveUrl', type: 'string', nullable: true),
-                    new OA\Property(property: 'sessionId', type: 'string', nullable: true),
+                    new OA\Property(property: 'amount', type: 'integer'),
+                    new OA\Property(property: 'currency', type: 'string', example: 'XOF'),
                     new OA\Property(property: 'clientReference', type: 'string'),
-                    new OA\Property(property: 'expiresAt', type: 'string', nullable: true),
                 ])
             ),
             new OA\Response(response: 400, description: 'Plan gratuit (utiliser /subscribe directement)'),
@@ -182,12 +181,12 @@ class SubscriptionsController extends Controller
     }
 
     #[OA\Get(
-        path: '/subscriptions/checkout/verify/{sessionId}',
+        path: '/subscriptions/checkout/verify/{transactionId}',
         tags: ['Subscriptions'],
-        summary: 'Vérifie une session de paiement Wave et active (ou retourne) l\'abonnement correspondant',
+        summary: "Vérifie une transaction Kkiapay et active (ou retourne) l'abonnement correspondant",
         security: [['bearerAuth' => []]],
         parameters: [
-            new OA\Parameter(name: 'sessionId', in: 'path', required: true, schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'transactionId', in: 'path', required: true, schema: new OA\Schema(type: 'string')),
             new OA\Parameter(name: 'userId', in: 'query', schema: new OA\Schema(type: 'string', format: 'uuid')),
             new OA\Parameter(name: 'planId', in: 'query', schema: new OA\Schema(type: 'string', format: 'uuid')),
         ],
@@ -197,10 +196,10 @@ class SubscriptionsController extends Controller
             new OA\Response(response: 401, description: 'Non authentifié'),
         ]
     )]
-    public function verifyCheckout(string $sessionId, Request $request)
+    public function verifyCheckout(string $transactionId, Request $request)
     {
         return $this->subscriptionService->verifyCheckout(
-            $sessionId,
+            $transactionId,
             $request->query('userId'),
             $request->query('planId'),
         );
@@ -265,5 +264,53 @@ class SubscriptionsController extends Controller
         $limit = (int) $request->query('limit', 20);
 
         return $this->subscriptionService->adminAll($page, $limit);
+    }
+
+    #[OA\Get(
+        path: '/subscriptions/admin/revenue-trend',
+        tags: ['Subscriptions'],
+        summary: "Revenu mensuel des abonnements sur les N derniers mois (Rôle ADMIN requis)",
+        security: [['bearerAuth' => []]],
+        parameters: [new OA\Parameter(name: 'months', in: 'query', schema: new OA\Schema(type: 'integer', default: 6))],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Points de la série',
+                content: new OA\JsonContent(type: 'array', items: new OA\Items(properties: [
+                    new OA\Property(property: 'month', type: 'string'),
+                    new OA\Property(property: 'value', type: 'number', format: 'float'),
+                ], type: 'object'))
+            ),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+            new OA\Response(response: 403, description: 'Rôle ADMIN requis'),
+        ]
+    )]
+    public function adminRevenueTrend(Request $request)
+    {
+        return response()->json($this->subscriptionService->adminRevenueTrend((int) $request->query('months', 6)));
+    }
+
+    #[OA\Get(
+        path: '/subscriptions/admin/subscriptions-trend',
+        tags: ['Subscriptions'],
+        summary: "Nombre de nouveaux abonnements par mois sur les N derniers mois (Rôle ADMIN requis)",
+        security: [['bearerAuth' => []]],
+        parameters: [new OA\Parameter(name: 'months', in: 'query', schema: new OA\Schema(type: 'integer', default: 6))],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Points de la série',
+                content: new OA\JsonContent(type: 'array', items: new OA\Items(properties: [
+                    new OA\Property(property: 'month', type: 'string'),
+                    new OA\Property(property: 'value', type: 'integer'),
+                ], type: 'object'))
+            ),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+            new OA\Response(response: 403, description: 'Rôle ADMIN requis'),
+        ]
+    )]
+    public function adminSubscriptionsTrend(Request $request)
+    {
+        return response()->json($this->subscriptionService->adminSubscriptionsTrend((int) $request->query('months', 6)));
     }
 }

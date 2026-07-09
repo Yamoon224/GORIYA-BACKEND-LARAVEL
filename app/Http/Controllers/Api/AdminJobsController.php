@@ -8,8 +8,8 @@ use App\Http\Resources\JobOfferResource;
 use App\Models\Candidature;
 use App\Models\JobOffer;
 use App\Services\Admin\AdminActionService;
-use App\Services\Admin\AdminBookmarkService;
 use App\Services\Admin\AdminReportingService;
+use App\Services\BookmarkService;
 use App\Services\CandidatureService;
 use App\Services\JobOfferService;
 use App\Support\ApiResponse;
@@ -29,7 +29,7 @@ class AdminJobsController extends Controller
         private readonly JobOfferService $jobOfferService,
         private readonly CandidatureService $candidatureService,
         private readonly AdminReportingService $adminReportingService,
-        private readonly AdminBookmarkService $adminBookmarkService,
+        private readonly BookmarkService $bookmarkService,
         private readonly AdminActionService $adminActionService,
     ) {}
 
@@ -256,7 +256,7 @@ class AdminJobsController extends Controller
     )]
     public function saveJob(string $jobId, Request $request)
     {
-        $this->adminBookmarkService->saveJob($jobId, $request->user()->id);
+        $this->bookmarkService->saveJob($jobId, $request->user()->id);
 
         return ApiResponse::success(null);
     }
@@ -282,9 +282,35 @@ class AdminJobsController extends Controller
     )]
     public function unsaveJob(string $jobId, Request $request)
     {
-        $this->adminBookmarkService->unsaveJob($jobId, $request->user()->id);
+        $this->bookmarkService->unsaveJob($jobId, $request->user()->id);
 
         return ApiResponse::success(null);
+    }
+
+    #[OA\Get(
+        path: '/me/saved-jobs',
+        tags: ['Admin Jobs & Candidatures'],
+        summary: "Liste des identifiants d'offres sauvegardées par l'utilisateur courant",
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "Identifiants des offres sauvegardées",
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'success', type: 'boolean', example: true),
+                    new OA\Property(
+                        property: 'data',
+                        properties: [new OA\Property(property: 'jobIds', type: 'array', items: new OA\Items(type: 'string', format: 'uuid'))],
+                        type: 'object'
+                    ),
+                ])
+            ),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+        ]
+    )]
+    public function savedJobsList(Request $request)
+    {
+        return ApiResponse::success(['jobIds' => $this->bookmarkService->savedJobIds($request->user()->id)]);
     }
 
     #[OA\Get(

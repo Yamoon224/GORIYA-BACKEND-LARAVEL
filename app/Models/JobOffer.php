@@ -35,6 +35,8 @@ class JobOffer extends Model
         'end_date',
         'applicants',
         'company_id',
+        'image',
+        'remote',
     ];
 
     /**
@@ -51,6 +53,7 @@ class JobOffer extends Model
             'publish_date' => 'date',
             'end_date' => 'date',
             'requirements' => 'array',
+            'remote' => 'boolean',
         ];
     }
 

@@ -103,6 +103,75 @@ class AuthController extends Controller
     }
 
     #[OA\Post(
+        path: '/auth/otp/request',
+        tags: ['Auth'],
+        summary: "Envoie (ou renvoie) un code OTP par email à un utilisateur existant",
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['email'],
+                properties: [
+                    new OA\Property(property: 'email', type: 'string', format: 'email'),
+                    new OA\Property(property: 'purpose', type: 'string', nullable: true, example: 'EMAIL_VERIFICATION'),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Code envoyé'),
+            new OA\Response(response: 404, description: 'Utilisateur introuvable'),
+            new OA\Response(response: 429, description: 'Trop de demandes, réessaie plus tard'),
+        ]
+    )]
+    public function requestOtp(Request $request)
+    {
+        $data = $request->validate([
+            'email' => ['required', 'email'],
+            'purpose' => ['nullable', 'string'],
+        ]);
+
+        return response()->json($this->authService->requestOtp($data['email'], $data['purpose'] ?? 'EMAIL_VERIFICATION'));
+    }
+
+    #[OA\Post(
+        path: '/auth/otp/verify',
+        tags: ['Auth'],
+        summary: "Vérifie un code OTP reçu par email et retourne un JWT",
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['email', 'code'],
+                properties: [
+                    new OA\Property(property: 'email', type: 'string', format: 'email'),
+                    new OA\Property(property: 'code', type: 'string'),
+                    new OA\Property(property: 'purpose', type: 'string', nullable: true, example: 'EMAIL_VERIFICATION'),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Code vérifié',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'access_token', type: 'string'),
+                    new OA\Property(property: 'user', ref: '#/components/schemas/User'),
+                ])
+            ),
+            new OA\Response(response: 401, description: 'Code invalide ou expiré'),
+            new OA\Response(response: 404, description: 'Utilisateur introuvable'),
+        ]
+    )]
+    public function verifyOtp(Request $request)
+    {
+        $data = $request->validate([
+            'email' => ['required', 'email'],
+            'code' => ['required', 'string'],
+            'purpose' => ['nullable', 'string'],
+        ]);
+
+        return response()->json($this->authService->verifyOtp($data['email'], $data['code'], $data['purpose'] ?? 'EMAIL_VERIFICATION'));
+    }
+
+    #[OA\Post(
         path: '/auth/google',
         tags: ['Auth'],
         summary: "Connexion/inscription via Google (crée l'utilisateur s'il n'existe pas)",

@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\UserRole;
+use App\Enums\UserStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Services\OtpService;
 use App\Services\UserService;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
@@ -16,7 +18,10 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: 'Users', description: 'Gestion des utilisateurs (candidats)')]
 class UsersController extends Controller
 {
-    public function __construct(private readonly UserService $userService) {}
+    public function __construct(
+        private readonly UserService $userService,
+        private readonly OtpService $otpService,
+    ) {}
 
     /*
     |----------------------------------------------------------------------
@@ -38,10 +43,10 @@ class UsersController extends Controller
         responses: [
             new OA\Response(
                 response: 201,
-                description: 'Utilisateur créé',
+                description: "Utilisateur créé — un code OTP est envoyé par email, aucun token de session n'est délivré tant qu'il n'est pas vérifié via POST /auth/otp/verify",
                 content: new OA\JsonContent(properties: [
                     new OA\Property(property: 'user', ref: '#/components/schemas/User'),
-                    new OA\Property(property: 'accessToken', type: 'string'),
+                    new OA\Property(property: 'requiresOtp', type: 'boolean', example: true),
                 ])
             ),
             new OA\Response(response: 422, description: 'Validation échouée'),
@@ -51,9 +56,11 @@ class UsersController extends Controller
     {
         $result = $this->userService->create($request->validated(), $request->file('avatar'));
 
+        $this->otpService->send($result['user']);
+
         return response()->json([
             'user' => new UserResource($result['user']),
-            'accessToken' => $result['accessToken'],
+            'requiresOtp' => true,
         ], 201);
     }
 
@@ -138,6 +145,41 @@ class UsersController extends Controller
         );
 
         return ApiResponse::paginated($paginator);
+    }
+
+    /*
+    |----------------------------------------------------------------------
+    | STATS (réservé aux admins)
+    |----------------------------------------------------------------------
+    */
+    #[OA\Get(
+        path: '/users/stats',
+        tags: ['Users'],
+        summary: 'Statistiques agrégées des utilisateurs (rôle ADMIN requis)',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Statistiques',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'totalUsers', type: 'integer'),
+                    new OA\Property(property: 'enterprises', type: 'integer'),
+                    new OA\Property(property: 'activeUsers', type: 'integer'),
+                    new OA\Property(property: 'newUsers', type: 'integer', description: 'Inscrits ce mois-ci'),
+                ])
+            ),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+            new OA\Response(response: 403, description: 'Rôle ADMIN requis'),
+        ]
+    )]
+    public function stats()
+    {
+        return response()->json([
+            'totalUsers' => User::count(),
+            'enterprises' => User::where('role', UserRole::ENTERPRISE)->count(),
+            'activeUsers' => User::where('status', UserStatus::ACTIVE)->count(),
+            'newUsers' => User::where('created_at', '>=', now()->startOfMonth())->count(),
+        ]);
     }
 
     /*

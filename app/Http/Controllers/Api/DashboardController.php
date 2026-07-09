@@ -9,10 +9,12 @@ use OpenApi\Attributes as OA;
 
 /**
  * Mirroir de backend/src/dashboard — statistiques agrégées pour le tableau
- * de bord admin. Purement en lecture, aucune écriture. Logique dans
- * App\Services\DashboardService (partagée avec AdminDashboardController).
+ * de bord, scopées au rôle de l'appelant (étudiant/entreprise/admin).
+ * Purement en lecture, aucune écriture. Logique dans
+ * App\Services\DashboardService (partagée avec AdminDashboardController, qui
+ * reste global/admin-only).
  */
-#[OA\Tag(name: 'Dashboard', description: 'Statistiques agrégées pour le tableau de bord admin (Rôle ADMIN requis)')]
+#[OA\Tag(name: 'Dashboard', description: "Statistiques agrégées pour le tableau de bord, scopées à l'utilisateur courant")]
 class DashboardController extends Controller
 {
     public function __construct(private readonly DashboardService $dashboardService) {}
@@ -20,7 +22,7 @@ class DashboardController extends Controller
     #[OA\Get(
         path: '/dashboard/stats',
         tags: ['Dashboard'],
-        summary: 'Statistiques agrégées du tableau de bord (Rôle ADMIN requis)',
+        summary: 'Statistiques agrégées du tableau de bord',
         security: [['bearerAuth' => []]],
         parameters: [
             new OA\Parameter(name: 'start', in: 'query', schema: new OA\Schema(type: 'string', format: 'date-time')),
@@ -99,20 +101,19 @@ class DashboardController extends Controller
                 ])
             ),
             new OA\Response(response: 401, description: 'Non authentifié'),
-            new OA\Response(response: 403, description: 'Rôle ADMIN requis'),
         ]
     )]
     public function stats(Request $request)
     {
         return response()->json(
-            $this->dashboardService->getStats($request->query('start'), $request->query('end'))
+            $this->dashboardService->getStatsForUser($request->user(), $request->query('start'), $request->query('end'))
         );
     }
 
     #[OA\Get(
         path: '/dashboard/performance',
         tags: ['Dashboard'],
-        summary: "Série temporelle du nombre de candidatures ('week', 'month' ou 'year', Rôle ADMIN requis)",
+        summary: "Série temporelle du nombre de candidatures ('week', 'month' ou 'year')",
         security: [['bearerAuth' => []]],
         parameters: [
             new OA\Parameter(name: 'period', in: 'query', schema: new OA\Schema(type: 'string', enum: ['week', 'month', 'year'])),
@@ -131,7 +132,6 @@ class DashboardController extends Controller
                 )
             ),
             new OA\Response(response: 401, description: 'Non authentifié'),
-            new OA\Response(response: 403, description: 'Rôle ADMIN requis'),
         ]
     )]
     public function performance(Request $request)
@@ -142,7 +142,7 @@ class DashboardController extends Controller
     #[OA\Get(
         path: '/dashboard/recent-applications',
         tags: ['Dashboard'],
-        summary: 'Candidatures les plus récentes (Rôle ADMIN requis)',
+        summary: 'Candidatures les plus récentes',
         security: [['bearerAuth' => []]],
         parameters: [
             new OA\Parameter(name: 'limit', in: 'query', schema: new OA\Schema(type: 'integer', default: 5)),
@@ -175,18 +175,17 @@ class DashboardController extends Controller
                 )
             ),
             new OA\Response(response: 401, description: 'Non authentifié'),
-            new OA\Response(response: 403, description: 'Rôle ADMIN requis'),
         ]
     )]
     public function recentApplications(Request $request)
     {
-        return $this->dashboardService->getRecentApplications((int) $request->query('limit', 5));
+        return $this->dashboardService->getRecentApplications((int) $request->query('limit', 5), $request->user());
     }
 
     #[OA\Get(
         path: '/dashboard/recommended-jobs',
         tags: ['Dashboard'],
-        summary: "Offres d'emploi actives les plus récentes (Rôle ADMIN requis)",
+        summary: "Offres d'emploi actives les plus récentes",
         security: [['bearerAuth' => []]],
         parameters: [
             new OA\Parameter(name: 'limit', in: 'query', schema: new OA\Schema(type: 'integer', default: 6)),
@@ -221,7 +220,6 @@ class DashboardController extends Controller
                 )
             ),
             new OA\Response(response: 401, description: 'Non authentifié'),
-            new OA\Response(response: 403, description: 'Rôle ADMIN requis'),
         ]
     )]
     public function recommendedJobs(Request $request)
@@ -232,7 +230,7 @@ class DashboardController extends Controller
     #[OA\Get(
         path: '/dashboard/profile-views',
         tags: ['Dashboard'],
-        summary: "Historique des vues de profil sur N jours (stub — aucun tracking réel n'existe, toujours 0. Rôle ADMIN requis)",
+        summary: "Historique des vues de profil sur N jours (stub — aucun tracking réel n'existe, toujours 0)",
         security: [['bearerAuth' => []]],
         parameters: [
             new OA\Parameter(name: 'days', in: 'query', schema: new OA\Schema(type: 'integer', default: 30)),
@@ -254,7 +252,6 @@ class DashboardController extends Controller
                 ])
             ),
             new OA\Response(response: 401, description: 'Non authentifié'),
-            new OA\Response(response: 403, description: 'Rôle ADMIN requis'),
         ]
     )]
     public function profileViews(Request $request)

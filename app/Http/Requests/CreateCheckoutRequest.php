@@ -7,12 +7,10 @@ use OpenApi\Attributes as OA;
 
 #[OA\Schema(
     schema: 'CreateCheckoutRequest',
-    required: ['userId', 'planId', 'successUrl', 'errorUrl'],
+    required: ['userId', 'planId'],
     properties: [
         new OA\Property(property: 'userId', type: 'string', format: 'uuid'),
         new OA\Property(property: 'planId', type: 'string', format: 'uuid'),
-        new OA\Property(property: 'successUrl', type: 'string'),
-        new OA\Property(property: 'errorUrl', type: 'string'),
     ]
 )]
 class CreateCheckoutRequest extends FormRequest
@@ -30,8 +28,6 @@ class CreateCheckoutRequest extends FormRequest
         return [
             'userId' => ['required', 'uuid'],
             'planId' => ['required', 'uuid'],
-            'successUrl' => ['required', 'string'],
-            'errorUrl' => ['required', 'string'],
         ];
     }
 }

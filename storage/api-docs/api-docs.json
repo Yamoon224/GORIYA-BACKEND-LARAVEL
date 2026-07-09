@@ -2583,6 +2583,222 @@
                 ]
             }
         },
+        "/admin/audit-logs/paginate": {
+            "get": {
+                "tags": [
+                    "Admin Audit Logs"
+                ],
+                "summary": "Recherche paginée du journal d'audit (rôle ADMIN requis)",
+                "operationId": "10ba58fa3c236ddc10e311b88c56f237",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 1
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "description": "Filtre sur le nom/l'email de l'auteur",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "userId",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "action",
+                        "in": "query",
+                        "description": "ex: created, updated, deleted, login, login_failed, logout",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "auditableType",
+                        "in": "query",
+                        "description": "Classe du modèle concerné (ex: App\\Models\\Company)",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "auditableId",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "dateFrom",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "dateTo",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Page de résultats",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/AuditLog"
+                                            }
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/PaginationMeta"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "403": {
+                        "description": "Rôle ADMIN requis"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/audit-logs/actions": {
+            "get": {
+                "tags": [
+                    "Admin Audit Logs"
+                ],
+                "summary": "Liste des types d'action déjà journalisés (pour filtre) (rôle ADMIN requis)",
+                "operationId": "bd1e79088174fffd4cd4b5d2d4e9395c",
+                "responses": {
+                    "200": {
+                        "description": "Types d'action distincts",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "403": {
+                        "description": "Rôle ADMIN requis"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/audit-logs/{id}": {
+            "get": {
+                "tags": [
+                    "Admin Audit Logs"
+                ],
+                "summary": "Détail d'une entrée du journal d'audit (rôle ADMIN requis)",
+                "operationId": "dc4910ca270168588f46752879e8de3f",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Entrée trouvée",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/AuditLog"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "403": {
+                        "description": "Rôle ADMIN requis"
+                    },
+                    "404": {
+                        "description": "Entrée introuvable"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/admin/auth/login": {
             "post": {
                 "tags": [
@@ -2974,7 +3190,7 @@
                 "tags": [
                     "Admin Auth"
                 ],
-                "summary": "Met à jour le profil de l'admin courant (pas de FormRequest, champs libres transmis tels quels)",
+                "summary": "Met à jour le profil de l'admin courant (name/email/password uniquement)",
                 "operationId": "b6dbff75b832648ca9548ff4035ce00b",
                 "requestBody": {
                     "content": {
@@ -2993,28 +3209,6 @@
                                     "password": {
                                         "type": "string",
                                         "format": "password",
-                                        "nullable": true
-                                    },
-                                    "role": {
-                                        "type": "string",
-                                        "nullable": true,
-                                        "enum": [
-                                            "ADMIN",
-                                            "USER",
-                                            "ENTREPRISE"
-                                        ]
-                                    },
-                                    "status": {
-                                        "type": "string",
-                                        "nullable": true,
-                                        "enum": [
-                                            "ACTIVE",
-                                            "INACTIVE"
-                                        ]
-                                    },
-                                    "companyId": {
-                                        "type": "string",
-                                        "format": "uuid",
                                         "nullable": true
                                     }
                                 },
@@ -3562,6 +3756,53 @@
                     },
                     "403": {
                         "description": "Rôle ADMIN requis"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/me/followed-companies": {
+            "get": {
+                "tags": [
+                    "Admin Companies"
+                ],
+                "summary": "Liste des identifiants d'entreprises suivies par l'utilisateur courant",
+                "operationId": "1e538ad2f6479c1d5314d0bb617043a1",
+                "responses": {
+                    "200": {
+                        "description": "Identifiants des entreprises suivies",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "companyIds": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string",
+                                                        "format": "uuid"
+                                                    }
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
                     }
                 },
                 "security": [
@@ -4950,6 +5191,53 @@
                     },
                     "403": {
                         "description": "Rôle ADMIN requis"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/me/saved-jobs": {
+            "get": {
+                "tags": [
+                    "Admin Jobs & Candidatures"
+                ],
+                "summary": "Liste des identifiants d'offres sauvegardées par l'utilisateur courant",
+                "operationId": "8b8f9975f029fb605dadf669db7d59d6",
+                "responses": {
+                    "200": {
+                        "description": "Identifiants des offres sauvegardées",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "jobIds": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string",
+                                                        "format": "uuid"
+                                                    }
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
                     }
                 },
                 "security": [
@@ -8927,6 +9215,109 @@
                 ]
             }
         },
+        "/analytics/monthly-activity": {
+            "get": {
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "CVs analysés et entretiens réalisés par mois sur les N derniers mois (Rôle ADMIN requis)",
+                "operationId": "1a390f16704149c097c85526aa648d92",
+                "parameters": [
+                    {
+                        "name": "months",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 6
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Activité mensuelle",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "month": {
+                                                "type": "string"
+                                            },
+                                            "cv": {
+                                                "type": "integer"
+                                            },
+                                            "entretiens": {
+                                                "type": "integer"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "403": {
+                        "description": "Rôle ADMIN requis"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/analytics/user-distribution": {
+            "get": {
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "Répartition des utilisateurs par rôle (Rôle ADMIN requis)",
+                "operationId": "969e5d94b3335c9982d6f8a83864240d",
+                "responses": {
+                    "200": {
+                        "description": "Répartition",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "name": {
+                                                "type": "string"
+                                            },
+                                            "value": {
+                                                "type": "integer"
+                                            },
+                                            "color": {
+                                                "type": "string",
+                                                "example": "#6366f1"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "403": {
+                        "description": "Rôle ADMIN requis"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/analytics/export": {
             "get": {
                 "tags": [
@@ -10672,7 +11063,7 @@
                 "tags": [
                     "Dashboard"
                 ],
-                "summary": "Statistiques agrégées du tableau de bord (Rôle ADMIN requis)",
+                "summary": "Statistiques agrégées du tableau de bord",
                 "operationId": "06b55ec316b401263ae54a499fc977ad",
                 "parameters": [
                     {
@@ -10855,9 +11246,6 @@
                     },
                     "401": {
                         "description": "Non authentifié"
-                    },
-                    "403": {
-                        "description": "Rôle ADMIN requis"
                     }
                 },
                 "security": [
@@ -10872,7 +11260,7 @@
                 "tags": [
                     "Dashboard"
                 ],
-                "summary": "Série temporelle du nombre de candidatures ('week', 'month' ou 'year', Rôle ADMIN requis)",
+                "summary": "Série temporelle du nombre de candidatures ('week', 'month' ou 'year')",
                 "operationId": "9a9fbcd1b6c68152d26268ee370b3435",
                 "parameters": [
                     {
@@ -10916,9 +11304,6 @@
                     },
                     "401": {
                         "description": "Non authentifié"
-                    },
-                    "403": {
-                        "description": "Rôle ADMIN requis"
                     }
                 },
                 "security": [
@@ -10933,7 +11318,7 @@
                 "tags": [
                     "Dashboard"
                 ],
-                "summary": "Candidatures les plus récentes (Rôle ADMIN requis)",
+                "summary": "Candidatures les plus récentes",
                 "operationId": "55c7f452c686bb496d0a54fc3775403c",
                 "parameters": [
                     {
@@ -11023,9 +11408,6 @@
                     },
                     "401": {
                         "description": "Non authentifié"
-                    },
-                    "403": {
-                        "description": "Rôle ADMIN requis"
                     }
                 },
                 "security": [
@@ -11040,7 +11422,7 @@
                 "tags": [
                     "Dashboard"
                 ],
-                "summary": "Offres d'emploi actives les plus récentes (Rôle ADMIN requis)",
+                "summary": "Offres d'emploi actives les plus récentes",
                 "operationId": "2e1bcdca8fd44c9df06ae49fe9777c3b",
                 "parameters": [
                     {
@@ -11140,9 +11522,6 @@
                     },
                     "401": {
                         "description": "Non authentifié"
-                    },
-                    "403": {
-                        "description": "Rôle ADMIN requis"
                     }
                 },
                 "security": [
@@ -11157,7 +11536,7 @@
                 "tags": [
                     "Dashboard"
                 ],
-                "summary": "Historique des vues de profil sur N jours (stub — aucun tracking réel n'existe, toujours 0. Rôle ADMIN requis)",
+                "summary": "Historique des vues de profil sur N jours (stub — aucun tracking réel n'existe, toujours 0)",
                 "operationId": "92da03c642f3d05f206f8b04a3b6b79e",
                 "parameters": [
                     {
@@ -11204,9 +11583,6 @@
                     },
                     "401": {
                         "description": "Non authentifié"
-                    },
-                    "403": {
-                        "description": "Rôle ADMIN requis"
                     }
                 },
                 "security": [
@@ -12268,6 +12644,448 @@
                 ]
             }
         },
+        "/messages/conversations": {
+            "get": {
+                "tags": [
+                    "Messages"
+                ],
+                "summary": "Liste des conversations de l'utilisateur courant",
+                "operationId": "0b35c5e81526caddc87708cbf28e9e3f",
+                "responses": {
+                    "200": {
+                        "description": "Liste des conversations",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "id": {
+                                                "type": "string",
+                                                "format": "uuid"
+                                            },
+                                            "name": {
+                                                "type": "string"
+                                            },
+                                            "role": {
+                                                "type": "string"
+                                            },
+                                            "lastMessageAt": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "nullable": true
+                                            },
+                                            "unreadCount": {
+                                                "type": "integer"
+                                            },
+                                            "lastMessage": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Messages"
+                ],
+                "summary": "Démarre (ou retrouve) la conversation liée à une candidature",
+                "operationId": "235adf8be3839ca6f7b51eb2b45a98d5",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "candidatureId"
+                                ],
+                                "properties": {
+                                    "candidatureId": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Conversation trouvée ou créée"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "403": {
+                        "description": "Pas autorisé pour cette candidature"
+                    },
+                    "404": {
+                        "description": "Candidature introuvable"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/messages/conversations/{conversationId}/messages": {
+            "get": {
+                "tags": [
+                    "Messages"
+                ],
+                "summary": "Messages d'une conversation",
+                "operationId": "2a6a3779cc6d99834c9e4f858bcce6e7",
+                "parameters": [
+                    {
+                        "name": "conversationId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Liste des messages",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "id": {
+                                                "type": "string",
+                                                "format": "uuid"
+                                            },
+                                            "content": {
+                                                "type": "string"
+                                            },
+                                            "createdAt": {
+                                                "type": "string",
+                                                "format": "date-time"
+                                            },
+                                            "senderId": {
+                                                "type": "string",
+                                                "format": "uuid"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "403": {
+                        "description": "Pas participant de cette conversation"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Messages"
+                ],
+                "summary": "Envoie un message dans une conversation",
+                "operationId": "eaef19f046743df69416fba3824d2ffc",
+                "parameters": [
+                    {
+                        "name": "conversationId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SendMessageRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Message envoyé"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "403": {
+                        "description": "Pas participant de cette conversation"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/messages/conversations/{conversationId}/read": {
+            "put": {
+                "tags": [
+                    "Messages"
+                ],
+                "summary": "Marque les messages reçus d'une conversation comme lus",
+                "operationId": "8cf2448641e5f0d8714bc03445200cfa",
+                "parameters": [
+                    {
+                        "name": "conversationId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Marqué comme lu"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "403": {
+                        "description": "Pas participant de cette conversation"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/notifications": {
+            "get": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Liste des notifications de l'utilisateur courant",
+                "operationId": "fbb8b6c4d0fed907f8d644c02f4960fe",
+                "responses": {
+                    "200": {
+                        "description": "Liste des notifications",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "id": {
+                                                "type": "string",
+                                                "format": "uuid"
+                                            },
+                                            "type": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "MESSAGE",
+                                                    "APPLICATION_STATUS",
+                                                    "SYSTEM"
+                                                ]
+                                            },
+                                            "title": {
+                                                "type": "string"
+                                            },
+                                            "body": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "isRead": {
+                                                "type": "boolean"
+                                            },
+                                            "createdAt": {
+                                                "type": "string",
+                                                "format": "date-time"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/notifications/{id}/read": {
+            "put": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Marque une notification comme lue",
+                "operationId": "589456fc9f41f70f31e2a63405f460e1",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Marquée comme lue"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "403": {
+                        "description": "N'appartient pas à l'utilisateur courant"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/notifications/read-all": {
+            "put": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Marque toutes les notifications de l'utilisateur courant comme lues",
+                "operationId": "6b2cffc5df3b6a841037cc9317d712d2",
+                "responses": {
+                    "200": {
+                        "description": "Toutes marquées comme lues"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/notifications/{id}": {
+            "delete": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Supprime une notification",
+                "operationId": "fe3b33519de2cb7f7558a99553ecb591",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Notification supprimée"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "403": {
+                        "description": "N'appartient pas à l'utilisateur courant"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/notifications/settings": {
+            "put": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Met à jour les préférences de notification",
+                "operationId": "895c184c044eea66681a1f4b00b2cccc",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "applications": {
+                                        "type": "boolean",
+                                        "nullable": true
+                                    },
+                                    "emplois": {
+                                        "type": "boolean",
+                                        "nullable": true
+                                    },
+                                    "recommandations": {
+                                        "type": "boolean",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Préférences mises à jour"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/portfolios": {
             "get": {
                 "tags": [
@@ -13155,7 +13973,7 @@
                 "tags": [
                     "Subscriptions"
                 ],
-                "summary": "Crée une session de paiement Wave pour un plan payant",
+                "summary": "Valide un plan payant et fournit montant/référence pour le widget de paiement Kkiapay",
                 "operationId": "9ce111ac3ab83f3286b4589928b80014",
                 "requestBody": {
                     "required": true,
@@ -13169,25 +13987,20 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Session de paiement créée",
+                        "description": "Informations à transmettre au widget Kkiapay",
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "properties": {
-                                        "waveUrl": {
-                                            "type": "string",
-                                            "nullable": true
+                                        "amount": {
+                                            "type": "integer"
                                         },
-                                        "sessionId": {
+                                        "currency": {
                                             "type": "string",
-                                            "nullable": true
+                                            "example": "XOF"
                                         },
                                         "clientReference": {
                                             "type": "string"
-                                        },
-                                        "expiresAt": {
-                                            "type": "string",
-                                            "nullable": true
                                         }
                                     },
                                     "type": "object"
@@ -13212,16 +14025,16 @@
                 ]
             }
         },
-        "/subscriptions/checkout/verify/{sessionId}": {
+        "/subscriptions/checkout/verify/{transactionId}": {
             "get": {
                 "tags": [
                     "Subscriptions"
                 ],
-                "summary": "Vérifie une session de paiement Wave et active (ou retourne) l'abonnement correspondant",
-                "operationId": "92368b5e379251b81d2d931c2edb2b3d",
+                "summary": "Vérifie une transaction Kkiapay et active (ou retourne) l'abonnement correspondant",
+                "operationId": "4d2bebad63ed13d82b046dfa83b4efdc",
                 "parameters": [
                     {
-                        "name": "sessionId",
+                        "name": "transactionId",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -13363,6 +14176,113 @@
                                         }
                                     },
                                     "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "403": {
+                        "description": "Rôle ADMIN requis"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/subscriptions/admin/revenue-trend": {
+            "get": {
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Revenu mensuel des abonnements sur les N derniers mois (Rôle ADMIN requis)",
+                "operationId": "be2fe69dab7fa733f39c5e3a4e9f6597",
+                "parameters": [
+                    {
+                        "name": "months",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 6
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Points de la série",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "month": {
+                                                "type": "string"
+                                            },
+                                            "value": {
+                                                "type": "number",
+                                                "format": "float"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "403": {
+                        "description": "Rôle ADMIN requis"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/subscriptions/admin/subscriptions-trend": {
+            "get": {
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Nombre de nouveaux abonnements par mois sur les N derniers mois (Rôle ADMIN requis)",
+                "operationId": "1ed1e02dcc7945f64f2493198aba1a1c",
+                "parameters": [
+                    {
+                        "name": "months",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 6
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Points de la série",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "month": {
+                                                "type": "string"
+                                            },
+                                            "value": {
+                                                "type": "integer"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
                                 }
                             }
                         }
@@ -13569,6 +14489,53 @@
                                 }
                             }
                         }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/users/stats": {
+            "get": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Statistiques agrégées des utilisateurs (rôle ADMIN requis)",
+                "operationId": "067151d1d877309bf55d3ad8757f16e2",
+                "responses": {
+                    "200": {
+                        "description": "Statistiques",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "totalUsers": {
+                                            "type": "integer"
+                                        },
+                                        "enterprises": {
+                                            "type": "integer"
+                                        },
+                                        "activeUsers": {
+                                            "type": "integer"
+                                        },
+                                        "newUsers": {
+                                            "description": "Inscrits ce mois-ci",
+                                            "type": "integer"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "403": {
+                        "description": "Rôle ADMIN requis"
                     }
                 },
                 "security": [
@@ -13825,9 +14792,7 @@
             "CreateCheckoutRequest": {
                 "required": [
                     "userId",
-                    "planId",
-                    "successUrl",
-                    "errorUrl"
+                    "planId"
                 ],
                 "properties": {
                     "userId": {
@@ -13837,12 +14802,6 @@
                     "planId": {
                         "type": "string",
                         "format": "uuid"
-                    },
-                    "successUrl": {
-                        "type": "string"
-                    },
-                    "errorUrl": {
-                        "type": "string"
                     }
                 },
                 "type": "object"
@@ -14305,6 +15264,17 @@
                         "type": "string",
                         "format": "password",
                         "example": "password123"
+                    }
+                },
+                "type": "object"
+            },
+            "SendMessageRequest": {
+                "required": [
+                    "content"
+                ],
+                "properties": {
+                    "content": {
+                        "type": "string"
                     }
                 },
                 "type": "object"
@@ -14791,6 +15761,73 @@
                         "type": "string",
                         "format": "binary",
                         "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "AuditLog": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "userId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "userName": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "userEmail": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "userRole": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "action": {
+                        "type": "string",
+                        "example": "updated"
+                    },
+                    "auditableType": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "auditableId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "oldValues": {
+                        "type": "object",
+                        "nullable": true
+                    },
+                    "newValues": {
+                        "type": "object",
+                        "nullable": true
+                    },
+                    "url": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "method": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "ipAddress": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "userAgent": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
                     }
                 },
                 "type": "object"
@@ -15575,6 +16612,10 @@
             "description": "Statistiques analytiques agrégées (rôle ADMIN requis)"
         },
         {
+            "name": "Admin Audit Logs",
+            "description": "Journal d'audit des actions effectuées dans le système (rôle ADMIN requis)"
+        },
+        {
             "name": "Admin Auth",
             "description": "Authentification et gestion du profil de l'espace admin"
         },
@@ -15636,7 +16677,7 @@
         },
         {
             "name": "Dashboard",
-            "description": "Statistiques agrégées pour le tableau de bord admin (Rôle ADMIN requis)"
+            "description": "Statistiques agrégées pour le tableau de bord, scopées à l'utilisateur courant"
         },
         {
             "name": "Interview Sessions",
@@ -15651,6 +16692,14 @@
             "description": "Gestion des résultats de matching candidat/offre"
         },
         {
+            "name": "Messages",
+            "description": "Messagerie entre candidats et entreprises"
+        },
+        {
+            "name": "Notifications",
+            "description": "Notifications de l'utilisateur courant (candidatures, messages)"
+        },
+        {
             "name": "Portfolios",
             "description": "Gestion des portfolios des candidats"
         },
@@ -15660,7 +16709,7 @@
         },
         {
             "name": "Subscriptions",
-            "description": "Plans d'abonnement, souscription et paiement Wave"
+            "description": "Plans d'abonnement, souscription et paiement Kkiapay"
         },
         {
             "name": "Users",

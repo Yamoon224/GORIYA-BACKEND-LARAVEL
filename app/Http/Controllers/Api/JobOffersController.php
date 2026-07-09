@@ -93,6 +93,13 @@ class JobOffersController extends Controller
             new OA\Parameter(name: 'status', in: 'query', schema: new OA\Schema(type: 'string', enum: ['ACTIVE', 'CLOSED', 'DRAFT'])),
             new OA\Parameter(name: 'companyId', in: 'query', schema: new OA\Schema(type: 'string', format: 'uuid')),
             new OA\Parameter(name: 'applicants', in: 'query', schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(name: 'search', in: 'query', schema: new OA\Schema(type: 'string'), description: 'Mot-clé libre (titre ou description)'),
+            new OA\Parameter(name: 'jobType', in: 'query', schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'experience', in: 'query', schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'hasSalary', in: 'query', schema: new OA\Schema(type: 'boolean')),
+            new OA\Parameter(name: 'remote', in: 'query', schema: new OA\Schema(type: 'boolean')),
+            new OA\Parameter(name: 'companySize', in: 'query', schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'sector', in: 'query', schema: new OA\Schema(type: 'string'), description: "Secteur de l'entreprise, fait office de catégorie d'emploi"),
         ],
         responses: [
             new OA\Response(
@@ -112,11 +119,18 @@ class JobOffersController extends Controller
 
         $paginator = $this->jobOfferService->paginate($page, $limit, [
             'title' => $request->query('title'),
+            'search' => $request->query('search'),
             'location' => $request->query('location'),
             'type' => $request->query('type'),
+            'jobType' => $request->query('jobType'),
+            'experience' => $request->query('experience'),
             'salary' => $request->query('salary'),
+            'hasSalary' => $request->query('hasSalary'),
+            'remote' => $request->query('remote'),
             'status' => $request->query('status'),
             'companyId' => $request->query('companyId'),
+            'companySize' => $request->query('companySize'),
+            'sector' => $request->query('sector'),
             'applicants' => $request->has('applicants') ? $request->query('applicants') : null,
         ]);
 
@@ -125,6 +139,31 @@ class JobOffersController extends Controller
         );
 
         return ApiResponse::paginated($paginator);
+    }
+
+    /*
+    |----------------------------------------------------------------------
+    | CATEGORIES — secteurs distincts des entreprises ayant publié au moins
+    | une offre, sert de taxonomie publique (pas de table Category dédiée).
+    |----------------------------------------------------------------------
+    */
+    #[OA\Get(
+        path: '/job-offers/categories',
+        tags: ['Job Offers'],
+        summary: "Liste des catégories d'emploi disponibles (secteurs d'entreprise distincts)",
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Catégories',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'data', type: 'array', items: new OA\Items(type: 'string')),
+                ])
+            ),
+        ]
+    )]
+    public function categories()
+    {
+        return ApiResponse::success($this->jobOfferService->categories());
     }
 
     /*
@@ -227,5 +266,41 @@ class JobOffersController extends Controller
         $this->jobOfferService->remove($jobOffer);
 
         return response()->json(['message' => 'JobOffer deleted successfully']);
+    }
+
+    /*
+    |----------------------------------------------------------------------
+    | MATCH — score de compatibilité IA candidat/offre à la demande (widget
+    | de la fiche offre côté Standard), pas de persistance.
+    |----------------------------------------------------------------------
+    */
+    #[OA\Get(
+        path: '/job-offers/{id}/match',
+        tags: ['Job Offers'],
+        summary: "Score de compatibilité IA entre l'utilisateur courant et cette offre",
+        security: [['bearerAuth' => []]],
+        parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Score calculé',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'matchingScore', type: 'integer'),
+                    new OA\Property(property: 'matchReasons', type: 'array', items: new OA\Items(type: 'string')),
+                ])
+            ),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+            new OA\Response(response: 404, description: 'Offre introuvable'),
+        ]
+    )]
+    public function match(string $id, Request $request)
+    {
+        $jobOffer = JobOffer::find($id);
+
+        if (! $jobOffer) {
+            abort(404, 'JobOffer not found');
+        }
+
+        return response()->json($this->jobOfferService->matchForUser($jobOffer, $request->user()));
     }
 }

@@ -26,5 +26,6 @@ class DatabaseSeeder extends Seeder
 
         $this->call(SubscriptionPlanSeeder::class);
         $this->call(GoriyaDemoSeeder::class);
+        $this->call(ArticleSeeder::class);
     }
 }

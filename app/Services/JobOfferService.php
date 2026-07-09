@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Contracts\AiAnalysisServiceInterface;
 use App\Http\Concerns\HandlesUniqueViolations;
 use App\Models\JobOffer;
+use App\Models\User;
 use App\Repositories\Contracts\CompanyRepositoryInterface;
 use App\Repositories\Contracts\JobOfferRepositoryInterface;
 use App\Services\Concerns\MapsFieldsToColumns;
@@ -23,6 +25,7 @@ class JobOfferService
     public function __construct(
         private readonly JobOfferRepositoryInterface $jobOfferRepository,
         private readonly CompanyRepositoryInterface $companyRepository,
+        private readonly AiAnalysisServiceInterface $aiAnalysisService,
     ) {}
 
     public function create(array $data): JobOffer
@@ -105,5 +108,34 @@ class JobOfferService
     public function remove(JobOffer $jobOffer): void
     {
         $this->jobOfferRepository->delete($jobOffer);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function categories(): array
+    {
+        return $this->jobOfferRepository->categories();
+    }
+
+    /**
+     * Score de compatibilité candidat/offre à la demande (widget public de la
+     * fiche offre) — même service IA que le matching déclenché côté admin,
+     * pas de persistance ici (juste un calcul affiché à l'utilisateur).
+     *
+     * @return array{matchingScore: int, matchReasons: list<string>}
+     */
+    public function matchForUser(JobOffer $jobOffer, User $user): array
+    {
+        $jobOffer->loadMissing('company');
+
+        return $this->aiAnalysisService->matchCandidateToJob(
+            ['name' => $user->name, 'email' => $user->email],
+            [
+                'title' => $jobOffer->title,
+                'company' => $jobOffer->company?->name ?? 'Entreprise',
+                'description' => $jobOffer->description,
+            ],
+        );
     }
 }

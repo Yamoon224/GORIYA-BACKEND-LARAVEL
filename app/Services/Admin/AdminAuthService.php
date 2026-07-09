@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Http\Resources\UserResource;
 use App\Repositories\Contracts\UserRepositoryInterface;
 use App\Services\AuditLogService;
+use App\Services\OtpService;
 use App\Services\UserService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
@@ -24,18 +25,12 @@ class AdminAuthService
         private readonly UserRepositoryInterface $userRepository,
         private readonly UserService $userService,
         private readonly AuditLogService $auditLogService,
+        private readonly OtpService $otpService,
     ) {}
 
     public function verifyOtp(string $email, string $code): array
     {
-        if ($code === '') {
-            abort(401, 'OTP invalide');
-        }
-
-        $user = $this->userRepository->findByEmail($email);
-        if (! $user) {
-            abort(404, 'Utilisateur introuvable');
-        }
+        $user = $this->otpService->verify($email, $code);
 
         return $this->buildTokenResponse($user->id);
     }

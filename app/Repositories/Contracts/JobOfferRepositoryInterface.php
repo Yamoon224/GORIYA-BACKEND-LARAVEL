@@ -21,4 +21,9 @@ interface JobOfferRepositoryInterface extends RepositoryInterface
      * @return Collection<int, \App\Models\JobOffer>
      */
     public function findAllWithCompany(): Collection;
+
+    /**
+     * @return list<string>
+     */
+    public function categories(): array;
 }

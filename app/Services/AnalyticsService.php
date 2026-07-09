@@ -106,6 +106,41 @@ class AnalyticsService
         ];
     }
 
+    /**
+     * @return array<int, array{month: string, cv: int, entretiens: int}>
+     */
+    public function getMonthlyActivity(int $months = 6): array
+    {
+        $now = now();
+        $monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+        $data = [];
+
+        for ($i = $months - 1; $i >= 0; $i--) {
+            $monthStart = $now->copy()->startOfMonth()->subMonths($i);
+            $monthEnd = $monthStart->copy()->endOfMonth();
+
+            $data[] = [
+                'month' => $monthNames[$monthStart->month - 1],
+                'cv' => CvAnalysis::whereBetween('upload_date', [$monthStart, $monthEnd])->count(),
+                'entretiens' => InterviewSession::whereBetween('created_at', [$monthStart, $monthEnd])->count(),
+            ];
+        }
+
+        return $data;
+    }
+
+    /**
+     * @return array<int, array{name: string, value: int, color: string}>
+     */
+    public function getUserTypeDistribution(): array
+    {
+        return [
+            ['name' => 'Candidats', 'value' => User::where('role', UserRole::USER)->count(), 'color' => '#6366f1'],
+            ['name' => 'Entreprises', 'value' => User::where('role', UserRole::ENTERPRISE)->count(), 'color' => '#22c55e'],
+            ['name' => 'Admins', 'value' => User::where('role', UserRole::ADMIN)->count(), 'color' => '#f59e0b'],
+        ];
+    }
+
     public function exportReport(?string $period): string
     {
         $cvCount = CvAnalysis::where('status', CVStatus::COMPLETED)->count();

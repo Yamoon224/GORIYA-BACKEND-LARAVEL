@@ -141,6 +141,55 @@ class AnalyticsController extends Controller
     }
 
     #[OA\Get(
+        path: '/analytics/monthly-activity',
+        tags: ['Analytics'],
+        summary: 'CVs analysés et entretiens réalisés par mois sur les N derniers mois (Rôle ADMIN requis)',
+        security: [['bearerAuth' => []]],
+        parameters: [new OA\Parameter(name: 'months', in: 'query', schema: new OA\Schema(type: 'integer', default: 6))],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Activité mensuelle',
+                content: new OA\JsonContent(type: 'array', items: new OA\Items(properties: [
+                    new OA\Property(property: 'month', type: 'string'),
+                    new OA\Property(property: 'cv', type: 'integer'),
+                    new OA\Property(property: 'entretiens', type: 'integer'),
+                ], type: 'object'))
+            ),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+            new OA\Response(response: 403, description: 'Rôle ADMIN requis'),
+        ]
+    )]
+    public function monthlyActivity(Request $request)
+    {
+        return response()->json($this->analyticsService->getMonthlyActivity((int) $request->query('months', 6)));
+    }
+
+    #[OA\Get(
+        path: '/analytics/user-distribution',
+        tags: ['Analytics'],
+        summary: 'Répartition des utilisateurs par rôle (Rôle ADMIN requis)',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Répartition',
+                content: new OA\JsonContent(type: 'array', items: new OA\Items(properties: [
+                    new OA\Property(property: 'name', type: 'string'),
+                    new OA\Property(property: 'value', type: 'integer'),
+                    new OA\Property(property: 'color', type: 'string', example: '#6366f1'),
+                ], type: 'object'))
+            ),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+            new OA\Response(response: 403, description: 'Rôle ADMIN requis'),
+        ]
+    )]
+    public function userDistribution()
+    {
+        return response()->json($this->analyticsService->getUserTypeDistribution());
+    }
+
+    #[OA\Get(
         path: '/analytics/export',
         tags: ['Analytics'],
         summary: "Exporte un rapport analytics au format CSV (le format 'pdf' produit aussi un fichier .csv — quirk réel de la source, Rôle ADMIN requis)",

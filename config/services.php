@@ -40,8 +40,11 @@ return [
         'model' => env('CLAUDE_MODEL', 'claude-haiku-4-5-20251001'),
     ],
 
-    'wave' => [
-        'key' => env('WAVE_API_KEY'),
+    'kkiapay' => [
+        'public_key' => env('KKIAPAY_PUBLIC_KEY'),
+        'private_key' => env('KKIAPAY_PRIVATE_KEY'),
+        'secret' => env('KKIAPAY_SECRET'),
+        'sandbox' => env('KKIAPAY_SANDBOX', true),
     ],
 
 ];

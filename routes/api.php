@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\AdminJobsController;
 use App\Http\Controllers\Api\AdminPlanningController;
 use App\Http\Controllers\Api\AdminPortfoliosController;
 use App\Http\Controllers\Api\AdminStudentsController;
+use App\Http\Controllers\Api\ArticlesController;
 use App\Http\Controllers\Api\AdminSystemController;
 use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\AnonymousUsageController;
@@ -22,6 +23,8 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\InterviewSessionsController;
 use App\Http\Controllers\Api\JobOffersController;
 use App\Http\Controllers\Api\MatchingResultsController;
+use App\Http\Controllers\Api\MessagesController;
+use App\Http\Controllers\Api\NotificationsController;
 use App\Http\Controllers\Api\PortfoliosController;
 use App\Http\Controllers\Api\ScoringResultsController;
 use App\Http\Controllers\Api\SubscriptionsController;
@@ -51,6 +54,8 @@ use Illuminate\Support\Facades\Route;
 // --- Auth ---
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/logout', [AuthController::class, 'logout']);
+Route::post('/auth/otp/request', [AuthController::class, 'requestOtp']);
+Route::post('/auth/otp/verify', [AuthController::class, 'verifyOtp']);
 Route::post('/auth/google', [AuthController::class, 'google']);
 Route::get('/auth/profile', [AuthController::class, 'profile'])->middleware('auth:api');
 Route::post('/auth/refresh', [AuthController::class, 'refresh'])->middleware('auth:api');
@@ -59,6 +64,7 @@ Route::post('/auth/refresh', [AuthController::class, 'refresh'])->middleware('au
 Route::post('/users', [UsersController::class, 'store']);
 Route::get('/users', [UsersController::class, 'index'])->middleware(['auth:api', 'role:ADMIN']);
 Route::get('/users/paginate', [UsersController::class, 'paginate'])->middleware(['auth:api', 'role:ADMIN']);
+Route::get('/users/stats', [UsersController::class, 'stats'])->middleware(['auth:api', 'role:ADMIN']);
 // NOTE: pas de restriction "propriétaire uniquement" sur show/update — limitation
 // héritée du backend NestJS (RolesGuard laisse passer tout utilisateur authentifié
 // ici), volontairement préservée pour la parité.
@@ -70,17 +76,36 @@ Route::delete('/users/{id}', [UsersController::class, 'destroy'])->middleware(['
 Route::get('/companies', [CompaniesController::class, 'index']);
 Route::get('/companies/paginate', [CompaniesController::class, 'paginate']);
 Route::get('/companies/{id}', [CompaniesController::class, 'show']);
-Route::post('/companies', [CompaniesController::class, 'store'])->middleware('auth:api');
+// Inscription publique (crée la company + son utilisateur ENTERPRISE) — pas
+// d'auth:api ici, symétrique avec POST /users (CreateCompanyRequest::authorize()
+// retourne déjà true sans conditions ; le middleware était incohérent avec le
+// flux de signup public réellement utilisé par le frontend entreprise).
+Route::post('/companies', [CompaniesController::class, 'store']);
 Route::patch('/companies/{id}', [CompaniesController::class, 'update'])->middleware('auth:api');
 Route::delete('/companies/{id}', [CompaniesController::class, 'destroy'])->middleware('auth:api');
 
 // --- Job Offers ---
 Route::get('/job-offers', [JobOffersController::class, 'index']);
 Route::get('/job-offers/paginate', [JobOffersController::class, 'paginate']);
+Route::get('/job-offers/categories', [JobOffersController::class, 'categories']);
 Route::get('/job-offers/{id}', [JobOffersController::class, 'show']);
 Route::post('/job-offers', [JobOffersController::class, 'store'])->middleware('auth:api');
 Route::patch('/job-offers/{id}', [JobOffersController::class, 'update'])->middleware('auth:api');
 Route::delete('/job-offers/{id}', [JobOffersController::class, 'destroy'])->middleware('auth:api');
+
+// Candidature/bookmark : réutilise AdminJobsController/AdminCompaniesController
+// (déjà scopés sur $request->user()->id, pas de logique propre à ADMIN) sans
+// exiger role:ADMIN — ce sont des actions candidat/utilisateur normales.
+Route::middleware('auth:api')->group(function () {
+    Route::get('/me/followed-companies', [AdminCompaniesController::class, 'followedCompanies']);
+    Route::get('/me/saved-jobs', [AdminJobsController::class, 'savedJobsList']);
+    Route::post('/job-offers/{jobId}/apply', [AdminJobsController::class, 'applyToJob']);
+    Route::post('/job-offers/{jobId}/save', [AdminJobsController::class, 'saveJob']);
+    Route::delete('/job-offers/{jobId}/save', [AdminJobsController::class, 'unsaveJob']);
+    Route::get('/job-offers/{id}/match', [JobOffersController::class, 'match']);
+    Route::post('/companies/{companyId}/follow', [AdminCompaniesController::class, 'follow']);
+    Route::delete('/companies/{companyId}/follow', [AdminCompaniesController::class, 'unfollow']);
+});
 
 // --- Portfolios ---
 Route::get('/portfolios', [PortfoliosController::class, 'index']);
@@ -89,6 +114,14 @@ Route::get('/portfolios/{id}', [PortfoliosController::class, 'show']);
 Route::post('/portfolios', [PortfoliosController::class, 'store'])->middleware('auth:api');
 Route::patch('/portfolios/{id}', [PortfoliosController::class, 'update'])->middleware('auth:api');
 Route::delete('/portfolios/{id}', [PortfoliosController::class, 'destroy'])->middleware('auth:api');
+
+// --- Articles (blog Goriya) ---
+Route::get('/admin/articles/paginate', [ArticlesController::class, 'adminPaginate'])->middleware(['auth:api', 'role:ADMIN']);
+Route::get('/articles', [ArticlesController::class, 'index']);
+Route::get('/articles/{slug}', [ArticlesController::class, 'show']);
+Route::post('/articles', [ArticlesController::class, 'store'])->middleware(['auth:api', 'role:ADMIN']);
+Route::patch('/articles/{id}', [ArticlesController::class, 'update'])->middleware(['auth:api', 'role:ADMIN']);
+Route::delete('/articles/{id}', [ArticlesController::class, 'destroy'])->middleware(['auth:api', 'role:ADMIN']);
 
 // --- Candidatures (aucune route publique, contrairement aux deux précédents) ---
 Route::middleware('auth:api')->group(function () {
@@ -150,16 +183,35 @@ Route::post('/subscriptions/subscribe', [SubscriptionsController::class, 'subscr
 Route::get('/subscriptions/me/{userId}', [SubscriptionsController::class, 'mySubscription'])->middleware('auth:api');
 Route::delete('/subscriptions/me/{userId}', [SubscriptionsController::class, 'cancel'])->middleware('auth:api');
 Route::post('/subscriptions/checkout', [SubscriptionsController::class, 'checkout'])->middleware('auth:api');
-Route::get('/subscriptions/checkout/verify/{sessionId}', [SubscriptionsController::class, 'verifyCheckout'])->middleware('auth:api');
+Route::get('/subscriptions/checkout/verify/{transactionId}', [SubscriptionsController::class, 'verifyCheckout'])->middleware('auth:api');
 Route::get('/subscriptions/admin/stats', [SubscriptionsController::class, 'adminStats'])->middleware(['auth:api', 'role:ADMIN']);
 Route::get('/subscriptions/admin/all', [SubscriptionsController::class, 'adminAll'])->middleware(['auth:api', 'role:ADMIN']);
+Route::get('/subscriptions/admin/revenue-trend', [SubscriptionsController::class, 'adminRevenueTrend'])->middleware(['auth:api', 'role:ADMIN']);
+Route::get('/subscriptions/admin/subscriptions-trend', [SubscriptionsController::class, 'adminSubscriptionsTrend'])->middleware(['auth:api', 'role:ADMIN']);
 
 // --- Anonymous Usage (entièrement public) ---
 Route::post('/anonymous-usage/consume', [AnonymousUsageController::class, 'consume']);
 Route::get('/anonymous-usage/status', [AnonymousUsageController::class, 'status']);
 
-// --- Dashboard (admin uniquement) ---
-Route::middleware(['auth:api', 'role:ADMIN'])->group(function () {
+// --- Messages & Notifications (réel, scopé à l'utilisateur courant — sans
+// rapport avec /admin/messages|notifications qui restent un stub Cache) ---
+Route::middleware('auth:api')->group(function () {
+    Route::get('/messages/conversations', [MessagesController::class, 'conversations']);
+    Route::post('/messages/conversations', [MessagesController::class, 'createConversation']);
+    Route::get('/messages/conversations/{conversationId}/messages', [MessagesController::class, 'messages']);
+    Route::post('/messages/conversations/{conversationId}/messages', [MessagesController::class, 'store']);
+    Route::put('/messages/conversations/{conversationId}/read', [MessagesController::class, 'markRead']);
+
+    Route::get('/notifications', [NotificationsController::class, 'index']);
+    Route::put('/notifications/read-all', [NotificationsController::class, 'markAllRead']);
+    Route::put('/notifications/settings', [NotificationsController::class, 'updateSettings']);
+    Route::put('/notifications/{id}/read', [NotificationsController::class, 'markRead']);
+    Route::delete('/notifications/{id}', [NotificationsController::class, 'destroy']);
+});
+
+// --- Dashboard (scopé au rôle de l'utilisateur authentifié — étudiant/
+// entreprise/admin ; voir DashboardService::getStatsForUser()) ---
+Route::middleware('auth:api')->group(function () {
     Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
     Route::get('/dashboard/performance', [DashboardController::class, 'performance']);
     Route::get('/dashboard/recent-applications', [DashboardController::class, 'recentApplications']);
@@ -173,6 +225,8 @@ Route::middleware(['auth:api', 'role:ADMIN'])->group(function () {
     Route::get('/analytics/evolution', [AnalyticsController::class, 'evolution']);
     Route::get('/analytics/activity', [AnalyticsController::class, 'activity']);
     Route::get('/analytics/kpis', [AnalyticsController::class, 'kpis']);
+    Route::get('/analytics/monthly-activity', [AnalyticsController::class, 'monthlyActivity']);
+    Route::get('/analytics/user-distribution', [AnalyticsController::class, 'userDistribution']);
     Route::get('/analytics/export', [AnalyticsController::class, 'export']);
 });
 

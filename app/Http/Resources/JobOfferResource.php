@@ -25,6 +25,8 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'publishDate', type: 'string', format: 'date'),
         new OA\Property(property: 'endDate', type: 'string', format: 'date'),
         new OA\Property(property: 'applicants', type: 'integer'),
+        new OA\Property(property: 'image', type: 'string', nullable: true),
+        new OA\Property(property: 'remote', type: 'boolean'),
         new OA\Property(
             property: 'company',
             type: 'object',
@@ -32,6 +34,9 @@ use OpenApi\Attributes as OA;
             properties: [
                 new OA\Property(property: 'id', type: 'string', format: 'uuid'),
                 new OA\Property(property: 'name', type: 'string'),
+                new OA\Property(property: 'logo', type: 'string', nullable: true),
+                new OA\Property(property: 'coverImage', type: 'string', nullable: true),
+                new OA\Property(property: 'sector', type: 'string', nullable: true),
             ]
         ),
         new OA\Property(property: 'createdAt', type: 'string', format: 'date-time'),
@@ -59,9 +64,14 @@ class JobOfferResource extends JsonResource
             'publishDate' => $this->publish_date,
             'endDate' => $this->end_date,
             'applicants' => $this->applicants,
+            'image' => $this->image,
+            'remote' => (bool) $this->remote,
             'company' => $this->company ? [
                 'id' => $this->company->id,
                 'name' => $this->company->name,
+                'logo' => $this->company->logo,
+                'coverImage' => $this->company->cover_image,
+                'sector' => $this->company->sector,
             ] : null,
             'createdAt' => $this->created_at,
             'updatedAt' => $this->updated_at,

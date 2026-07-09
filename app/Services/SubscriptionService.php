@@ -70,7 +70,11 @@ class SubscriptionService
     }
 
     /**
-     * @return array{waveUrl: ?string, sessionId: ?string, clientReference: string, expiresAt: mixed}
+     * Kkiapay initie le paiement côté client (widget JS + clé publique) — le
+     * backend se contente ici de valider le plan et de fournir le montant et
+     * la référence que le frontend transmettra au widget.
+     *
+     * @return array{amount: int, currency: string, clientReference: string}
      */
     public function checkout(array $data): array
     {
@@ -82,36 +86,23 @@ class SubscriptionService
             abort(400, 'Ce plan est gratuit, utilisez /subscribe directement');
         }
 
-        // XOF n'a pas de sous-unité décimale — le montant doit être une
-        // chaîne d'entier.
-        $amount = (string) (int) round((float) $plan->price);
+        // XOF n'a pas de sous-unité décimale — le montant doit être un entier.
+        $amount = (int) round((float) $plan->price);
         $clientReference = "{$data['userId']}_{$data['planId']}_".(int) round(microtime(true) * 1000);
 
-        $fullSuccess = "{$data['successUrl']}?ref={$clientReference}&userId={$data['userId']}&planId={$data['planId']}";
-        $fullError = "{$data['errorUrl']}?planId={$data['planId']}";
-
-        $session = $this->paymentGateway->createCheckoutSession([
+        return [
             'amount' => $amount,
             'currency' => 'XOF',
-            'successUrl' => $fullSuccess,
-            'errorUrl' => $fullError,
             'clientReference' => $clientReference,
-        ]);
-
-        return [
-            'waveUrl' => $session['wave_launch_url'] ?? null,
-            'sessionId' => $session['id'] ?? null,
-            'clientReference' => $clientReference,
-            'expiresAt' => $session['when_expires'] ?? null,
         ];
     }
 
-    public function verifyCheckout(string $sessionId, ?string $userId, ?string $planId): UserSubscriptionResource
+    public function verifyCheckout(string $transactionId, ?string $userId, ?string $planId): UserSubscriptionResource
     {
-        $session = $this->paymentGateway->getCheckoutSession($sessionId);
+        $transaction = $this->paymentGateway->verifyTransaction($transactionId);
 
-        if (($session['payment_status'] ?? null) !== 'succeeded') {
-            $status = $session['payment_status'] ?? 'inconnu';
+        if (($transaction['status'] ?? null) !== 'SUCCESS') {
+            $status = $transaction['status'] ?? 'inconnu';
             abort(400, "Paiement non confirmé (statut: {$status})");
         }
 
@@ -156,6 +147,49 @@ class SubscriptionService
         );
 
         return ApiResponse::paginated($paginator);
+    }
+
+    /**
+     * @return array<int, array{month: string, value: float}>
+     */
+    public function adminRevenueTrend(int $months = 6): array
+    {
+        return $this->monthlyTrend($months, fn ($start, $end) => (float) UserSubscription::query()
+            ->whereBetween('start_date', [$start, $end])
+            ->join('subscription_plans', 'subscription_plans.id', '=', 'user_subscriptions.plan_id')
+            ->sum('subscription_plans.price'));
+    }
+
+    /**
+     * @return array<int, array{month: string, value: int}>
+     */
+    public function adminSubscriptionsTrend(int $months = 6): array
+    {
+        return $this->monthlyTrend($months, fn ($start, $end) => UserSubscription::query()
+            ->whereBetween('start_date', [$start, $end])
+            ->count());
+    }
+
+    /**
+     * @return array<int, array{month: string, value: int|float}>
+     */
+    private function monthlyTrend(int $months, \Closure $aggregate): array
+    {
+        $now = now();
+        $monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+        $trend = [];
+
+        for ($i = $months - 1; $i >= 0; $i--) {
+            $monthStart = $now->copy()->startOfMonth()->subMonths($i);
+            $monthEnd = $monthStart->copy()->endOfMonth();
+
+            $trend[] = [
+                'month' => $monthNames[$monthStart->month - 1],
+                'value' => $aggregate($monthStart, $monthEnd),
+            ];
+        }
+
+        return $trend;
     }
 
     /*

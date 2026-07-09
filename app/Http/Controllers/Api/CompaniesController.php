@@ -10,6 +10,7 @@ use App\Http\Requests\UpdateCompanyRequest;
 use App\Http\Resources\CompanyResource;
 use App\Models\Company;
 use App\Services\CompanyService;
+use App\Services\OtpService;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
@@ -19,7 +20,10 @@ class CompaniesController extends Controller
 {
     use AuthorizesOwnership;
 
-    public function __construct(private readonly CompanyService $companyService) {}
+    public function __construct(
+        private readonly CompanyService $companyService,
+        private readonly OtpService $otpService,
+    ) {}
 
     /*
     |----------------------------------------------------------------------
@@ -31,7 +35,6 @@ class CompaniesController extends Controller
         path: '/companies',
         tags: ['Companies'],
         summary: "Inscription publique d'une entreprise (crée la company et son utilisateur ENTREPRISE associé)",
-        security: [['bearerAuth' => []]],
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\MediaType(
@@ -42,14 +45,13 @@ class CompaniesController extends Controller
         responses: [
             new OA\Response(
                 response: 201,
-                description: 'Entreprise créée',
+                description: "Entreprise créée — un code OTP est envoyé par email, aucun token de session n'est délivré tant qu'il n'est pas vérifié via POST /auth/otp/verify",
                 content: new OA\JsonContent(properties: [
                     new OA\Property(property: 'company', ref: '#/components/schemas/Company'),
                     new OA\Property(property: 'user', type: 'object'),
-                    new OA\Property(property: 'accessToken', type: 'string'),
+                    new OA\Property(property: 'requiresOtp', type: 'boolean', example: true),
                 ])
             ),
-            new OA\Response(response: 401, description: 'Non authentifié'),
             new OA\Response(response: 422, description: 'Validation échouée'),
         ]
     )]
@@ -60,10 +62,12 @@ class CompaniesController extends Controller
             'coverImage' => $request->file('coverImage'),
         ]);
 
+        $this->otpService->send($result['user']);
+
         return response()->json([
             'company' => new CompanyResource($result['company']),
             'user' => $result['user']->toArray(), // 'password' est déjà dans $hidden
-            'accessToken' => $result['accessToken'],
+            'requiresOtp' => true,
         ], 201);
     }
 

@@ -16,9 +16,12 @@ class CandidatureService
 {
     use HandlesUniqueViolations, MapsFieldsToColumns;
 
-    private const RELATIONS = ['user', 'jobOffer'];
+    private const RELATIONS = ['user', 'jobOffer', 'jobOffer.company'];
 
-    public function __construct(private readonly CandidatureRepositoryInterface $candidatureRepository) {}
+    public function __construct(
+        private readonly CandidatureRepositoryInterface $candidatureRepository,
+        private readonly NotificationService $notificationService,
+    ) {}
 
     /*
     |----------------------------------------------------------------------
@@ -48,7 +51,10 @@ class CandidatureService
             $this->abortOnUniqueViolation($e, []);
         }
 
-        return $candidature->fresh(self::RELATIONS);
+        $fresh = $candidature->fresh(self::RELATIONS);
+        $this->notificationService->notifyNewApplication($fresh);
+
+        return $fresh;
     }
 
     public function update(Candidature $candidature, array $data): Candidature
@@ -63,13 +69,21 @@ class CandidatureService
             'jobOfferId' => 'job_offer_id',
         ]);
 
+        $oldStatus = $candidature->status?->value ?? $candidature->status;
+
         try {
             $this->candidatureRepository->update($candidature, $mapped);
         } catch (QueryException $e) {
             $this->abortOnUniqueViolation($e, []);
         }
 
-        return $candidature->fresh(self::RELATIONS);
+        $fresh = $candidature->fresh(self::RELATIONS);
+
+        if (array_key_exists('status', $mapped) && $mapped['status'] !== $oldStatus) {
+            $this->notificationService->notifyApplicationStatusChanged($fresh);
+        }
+
+        return $fresh;
     }
 
     public function paginate(int $page, int $limit, array $filters = []): LengthAwarePaginator

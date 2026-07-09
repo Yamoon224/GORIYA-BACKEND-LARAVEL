@@ -5,6 +5,7 @@ namespace App\Repositories\Eloquent;
 use App\Models\JobOffer;
 use App\Repositories\Contracts\JobOfferRepositoryInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
 class JobOfferRepository extends BaseRepository implements JobOfferRepositoryInterface
@@ -26,20 +27,51 @@ class JobOfferRepository extends BaseRepository implements JobOfferRepositoryInt
         if ($title = $filters['title'] ?? null) {
             $query->where('title', 'ilike', "%{$title}%");
         }
+        if ($search = $filters['search'] ?? null) {
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'ilike', "%{$search}%")
+                    ->orWhere('description', 'ilike', "%{$search}%");
+            });
+        }
         if ($location = $filters['location'] ?? null) {
             $query->where('location', 'ilike', "%{$location}%");
         }
         if ($type = $filters['type'] ?? null) {
-            $query->where('type', $type);
+            $this->whereInOrEqual($query, 'type', $type);
+        }
+        if ($jobType = $filters['jobType'] ?? null) {
+            $this->whereInOrEqual($query, 'type', $jobType);
+        }
+        if ($experience = $filters['experience'] ?? null) {
+            $this->whereInOrEqual($query, 'experience', $experience);
         }
         if ($salary = $filters['salary'] ?? null) {
             $query->where('salary', 'ilike', "%{$salary}%");
+        }
+        if (filter_var($filters['hasSalary'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            $query->whereNotNull('salary')->where('salary', '!=', '');
+        }
+        if (filter_var($filters['remote'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            $query->where('remote', true);
         }
         if ($status = $filters['status'] ?? null) {
             $query->where('status', $status);
         }
         if ($companyId = $filters['companyId'] ?? null) {
             $query->where('company_id', $companyId);
+        }
+        if ($companySize = $filters['companySize'] ?? null) {
+            $sizes = is_array($companySize) ? $companySize : [$companySize];
+            $query->whereHas('company', function ($q) use ($sizes) {
+                $q->where(function ($q2) use ($sizes) {
+                    foreach ($sizes as $size) {
+                        $q2->orWhere('company_size', 'ilike', "%{$size}%");
+                    }
+                });
+            });
+        }
+        if ($sector = $filters['sector'] ?? null) {
+            $query->whereHas('company', fn ($q) => $q->where('sector', $sector));
         }
         if (array_key_exists('applicants', $filters) && $filters['applicants'] !== null) {
             $query->where('applicants', $filters['applicants']);
@@ -50,6 +82,20 @@ class JobOfferRepository extends BaseRepository implements JobOfferRepositoryInt
         return $query->paginate($limit, ['*'], 'page', $page);
     }
 
+    /**
+     * @param  string|array<int, string>  $value
+     */
+    private function whereInOrEqual(Builder $query, string $column, string|array $value): void
+    {
+        if (is_array($value)) {
+            $query->whereIn($column, $value);
+
+            return;
+        }
+
+        $query->where($column, $value);
+    }
+
     public function findByCompany(string $companyId): Collection
     {
         return JobOffer::where('company_id', $companyId)->with('company')->get();
@@ -58,5 +104,26 @@ class JobOfferRepository extends BaseRepository implements JobOfferRepositoryInt
     public function findAllWithCompany(): Collection
     {
         return JobOffer::with('company')->get();
+    }
+
+    /**
+     * Secteurs distincts des entreprises ayant au moins une offre active —
+     * sert de taxonomie "catégories d'emploi" côté public (il n'existe pas
+     * de table Category dédiée, le secteur de la Company en tient lieu,
+     * cohérent avec /admin/companies/sectors et /admin/job-offers/sectors).
+     *
+     * @return list<string>
+     */
+    public function categories(): array
+    {
+        return JobOffer::query()
+            ->join('companies', 'companies.id', '=', 'job_offers.company_id')
+            ->whereNotNull('companies.sector')
+            ->where('companies.sector', '!=', '')
+            ->distinct()
+            ->orderBy('companies.sector')
+            ->pluck('companies.sector')
+            ->values()
+            ->all();
     }
 }

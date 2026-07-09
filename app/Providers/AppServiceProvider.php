@@ -5,7 +5,7 @@ namespace App\Providers;
 use App\Contracts\AiAnalysisServiceInterface;
 use App\Contracts\PaymentGatewayInterface;
 use App\Services\AnthropicService;
-use App\Services\WaveService;
+use App\Services\KkiapayService;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\ServiceProvider;
 
@@ -16,10 +16,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Frontières vers les intégrations externes (Wave, Anthropic) — pas
-        // des repositories, donc bindées ici plutôt que dans
+        // Frontières vers les intégrations externes (Kkiapay, Anthropic) —
+        // pas des repositories, donc bindées ici plutôt que dans
         // RepositoryServiceProvider (clarté sémantique).
-        $this->app->bind(PaymentGatewayInterface::class, WaveService::class);
+        $this->app->bind(PaymentGatewayInterface::class, KkiapayService::class);
         $this->app->bind(AiAnalysisServiceInterface::class, AnthropicService::class);
     }
 

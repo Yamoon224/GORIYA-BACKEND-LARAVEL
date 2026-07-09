@@ -20,7 +20,7 @@ Ce dépôt est un **portage Laravel** du backend historique NestJS de Goriya, av
 - **Offres d'emploi & candidatures** : publication, recherche filtrée/paginée, suivi de statut
 - **Portfolios** candidats
 - **IA** : analyse de CV, scoring, matching, simulation d'entretien
-- **Abonnements** : plans candidats/entreprises, paiement Wave
+- **Abonnements** : plans candidats/entreprises, paiement Kkiapay
 - **Back-office admin** : dashboard, analytics, planning, messagerie, recherche, paramètres
 - **Documentation API interactive** (Swagger UI)
 

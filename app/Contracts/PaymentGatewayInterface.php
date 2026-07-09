@@ -4,19 +4,22 @@ namespace App\Contracts;
 
 /**
  * Frontière vers le fournisseur de paiement mobile money. Implémentée par
- * WaveService — permet aux consommateurs (SubscriptionService) de dépendre
- * d'un contrat plutôt que du SDK/HTTP client Wave concret.
+ * KkiapayService — permet aux consommateurs (SubscriptionService) de dépendre
+ * d'un contrat plutôt que du SDK/HTTP client Kkiapay concret.
+ *
+ * Kkiapay initie le paiement côté client (widget JS avec la clé publique) —
+ * le serveur n'a donc qu'à vérifier/rembourser une transaction déjà effectuée,
+ * contrairement au flux Wave précédent (création de session hébergée).
  */
 interface PaymentGatewayInterface
 {
     /**
-     * @param  array{amount: string, currency: string, successUrl: string, errorUrl: string, clientReference?: string}  $params
      * @return array<string, mixed>
      */
-    public function createCheckoutSession(array $params): array;
+    public function verifyTransaction(string $transactionId): array;
 
     /**
      * @return array<string, mixed>
      */
-    public function getCheckoutSession(string $sessionId): array;
+    public function refundTransaction(string $transactionId): array;
 }

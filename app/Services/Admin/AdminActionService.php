@@ -19,6 +19,7 @@ use App\Repositories\Contracts\JobOfferRepositoryInterface;
 use App\Repositories\Contracts\MatchingResultRepositoryInterface;
 use App\Repositories\Contracts\ScoringResultRepositoryInterface;
 use App\Repositories\Contracts\UserRepositoryInterface;
+use App\Services\NotificationService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -41,6 +42,7 @@ class AdminActionService
         private readonly ScoringResultRepositoryInterface $scoringResultRepository,
         private readonly CvAnalysisRepositoryInterface $cvAnalysisRepository,
         private readonly AiAnalysisServiceInterface $aiAnalysisService,
+        private readonly NotificationService $notificationService,
     ) {}
 
     public function createJobApplication(string $userId, string $jobId): CandidatureResource
@@ -64,7 +66,10 @@ class AdminActionService
 
         $jobOffer->increment('applicants');
 
-        return new CandidatureResource($candidature->fresh(['user', 'jobOffer']));
+        $fresh = $candidature->fresh(['user', 'jobOffer.company']);
+        $this->notificationService->notifyNewApplication($fresh);
+
+        return new CandidatureResource($fresh);
     }
 
     public function createInterviewSimulation(string $candidateId, string $position): InterviewSessionResource

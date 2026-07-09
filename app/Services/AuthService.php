@@ -21,6 +21,7 @@ class AuthService
     public function __construct(
         private readonly UserRepositoryInterface $userRepository,
         private readonly AuditLogService $auditLogService,
+        private readonly OtpService $otpService,
     ) {}
 
     /**
@@ -88,6 +89,37 @@ class AuthService
     public function refresh(): string
     {
         return auth('api')->refresh();
+    }
+
+    /**
+     * @return array{message: string}
+     */
+    public function requestOtp(string $email, string $purpose = 'EMAIL_VERIFICATION'): array
+    {
+        $user = $this->userRepository->findByEmail($email);
+        if (! $user) {
+            abort(404, 'Utilisateur introuvable');
+        }
+
+        $this->otpService->send($user, $purpose);
+
+        return ['message' => 'Code envoyé par email'];
+    }
+
+    /**
+     * @return array{access_token: string, user: UserResource}
+     */
+    public function verifyOtp(string $email, string $code, string $purpose = 'EMAIL_VERIFICATION'): array
+    {
+        $user = $this->otpService->verify($email, $code, $purpose);
+
+        $token = auth('api')->login($user);
+        $fullUser = $this->userRepository->findOrFail($user->id);
+        $fullUser->load('company');
+
+        $this->auditLogService->log('login', $fullUser, actor: $fullUser);
+
+        return ['access_token' => $token, 'user' => new UserResource($fullUser)];
     }
 
     /**
