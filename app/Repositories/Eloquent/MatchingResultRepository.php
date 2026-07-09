@@ -22,16 +22,16 @@ class MatchingResultRepository extends BaseRepository implements MatchingResultR
         $query = MatchingResult::query();
 
         if ($candidateName = $filters['candidateName'] ?? null) {
-            $query->where('candidate_name', 'ilike', "%{$candidateName}%");
+            $query->whereILike('candidate_name', $candidateName);
         }
         if ($candidateEmail = $filters['candidateEmail'] ?? null) {
-            $query->where('candidate_email', 'ilike', "%{$candidateEmail}%");
+            $query->whereILike('candidate_email', $candidateEmail);
         }
         if ($position = $filters['position'] ?? null) {
-            $query->where('position', 'ilike', "%{$position}%");
+            $query->whereILike('position', $position);
         }
         if ($company = $filters['company'] ?? null) {
-            $query->where('company', 'ilike', "%{$company}%");
+            $query->whereILike('company', $company);
         }
         if (array_key_exists('matchingScore', $filters) && $filters['matchingScore'] !== null) {
             $query->where('matching_score', $filters['matchingScore']);

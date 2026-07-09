@@ -25,10 +25,10 @@ class PortfolioRepository extends BaseRepository implements PortfolioRepositoryI
         $query = Portfolio::query()->with('user');
 
         if ($title = $filters['title'] ?? null) {
-            $query->where('title', 'ilike', "%{$title}%");
+            $query->whereILike('title', $title);
         }
         if ($description = $filters['description'] ?? null) {
-            $query->where('description', 'ilike', "%{$description}%");
+            $query->whereILike('description', $description);
         }
 
         $skills = $filters['skills'] ?? null;

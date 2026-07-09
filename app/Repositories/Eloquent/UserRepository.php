@@ -23,10 +23,10 @@ class UserRepository extends BaseRepository implements UserRepositoryInterface
         $query = User::query()->with('company');
 
         if ($name = $filters['name'] ?? null) {
-            $query->where('name', 'ilike', "%{$name}%");
+            $query->whereILike('name', $name);
         }
         if ($email = $filters['email'] ?? null) {
-            $query->where('email', 'ilike', "%{$email}%");
+            $query->whereILike('email', $email);
         }
         if ($role = $filters['role'] ?? null) {
             $query->where('role', $role);
@@ -38,7 +38,7 @@ class UserRepository extends BaseRepository implements UserRepositoryInterface
             $query->whereDate('registration_date', $registrationDate);
         }
         if ($companyName = $filters['companyName'] ?? null) {
-            $query->whereHas('company', fn ($q) => $q->where('name', 'ilike', "%{$companyName}%"));
+            $query->whereHas('company', fn ($q) => $q->whereILike('name', $companyName));
         }
         if ($companyId = $filters['companyId'] ?? null) {
             $query->where('company_id', $companyId);

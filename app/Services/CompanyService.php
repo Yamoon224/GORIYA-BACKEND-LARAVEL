@@ -153,6 +153,27 @@ class CompanyService
         return $this->companyRepository->paginate($page, $limit, $filters);
     }
 
+    /**
+     * Secteurs distincts (avec nombre d'entreprises), pour alimenter le
+     * filtre "Secteur d'activité" public — évite une liste de secteurs
+     * codée en dur côté frontend qui ne correspond pas forcément aux
+     * valeurs réelles en base.
+     *
+     * @return list<array{name: string, count: int}>
+     */
+    public function sectors(): array
+    {
+        return Company::query()
+            ->whereNotNull('sector')
+            ->where('sector', '!=', '')
+            ->selectRaw('sector as name, count(*) as count')
+            ->groupBy('sector')
+            ->orderByDesc('count')
+            ->get()
+            ->map(fn ($row) => ['name' => $row->name, 'count' => (int) $row->count])
+            ->all();
+    }
+
     public function remove(Company $company): void
     {
         if ($company->logo) {

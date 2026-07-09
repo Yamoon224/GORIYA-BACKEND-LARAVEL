@@ -75,6 +75,7 @@ Route::delete('/users/{id}', [UsersController::class, 'destroy'])->middleware(['
 // --- Companies ---
 Route::get('/companies', [CompaniesController::class, 'index']);
 Route::get('/companies/paginate', [CompaniesController::class, 'paginate']);
+Route::get('/companies/sectors', [CompaniesController::class, 'sectors']);
 Route::get('/companies/{id}', [CompaniesController::class, 'show']);
 // Inscription publique (crée la company + son utilisateur ENTERPRISE) — pas
 // d'auth:api ici, symétrique avec POST /users (CreateCompanyRequest::authorize()

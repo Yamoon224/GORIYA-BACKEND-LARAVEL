@@ -23,13 +23,13 @@ class InterviewSessionRepository extends BaseRepository implements InterviewSess
         $query = InterviewSession::query();
 
         if ($candidateName = $filters['candidateName'] ?? null) {
-            $query->where('candidate_name', 'ilike', "%{$candidateName}%");
+            $query->whereILike('candidate_name', $candidateName);
         }
         if ($candidateEmail = $filters['candidateEmail'] ?? null) {
-            $query->where('candidate_email', 'ilike', "%{$candidateEmail}%");
+            $query->whereILike('candidate_email', $candidateEmail);
         }
         if ($position = $filters['position'] ?? null) {
-            $query->where('position', 'ilike', "%{$position}%");
+            $query->whereILike('position', $position);
         }
         if (array_key_exists('duration', $filters) && $filters['duration'] !== null) {
             $query->where('duration', $filters['duration']);

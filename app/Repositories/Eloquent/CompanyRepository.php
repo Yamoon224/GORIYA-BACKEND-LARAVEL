@@ -22,28 +22,28 @@ class CompanyRepository extends BaseRepository implements CompanyRepositoryInter
         $query = Company::query();
 
         if ($name = $filters['name'] ?? null) {
-            $query->where('name', 'ilike', "%{$name}%");
+            $query->whereILike('name', $name);
         }
         if ($sector = $filters['sector'] ?? null) {
-            $query->where('sector', 'ilike', "%{$sector}%");
+            $query->whereILike('sector', $sector);
         }
         if ($country = $filters['country'] ?? null) {
-            $query->where('country', 'ilike', "%{$country}%");
+            $query->whereILike('country', $country);
         }
         if ($city = $filters['city'] ?? null) {
-            $query->where('location', 'ilike', "%{$city}%");
+            $query->whereILike('location', $city);
         }
         if ($companySize = $filters['companySize'] ?? null) {
             $query->where('company_size', $companySize);
         }
         if ($email = $filters['email'] ?? null) {
-            $query->where('email', 'ilike', "%{$email}%");
+            $query->whereILike('email', $email);
         }
         if ($phone = $filters['phone'] ?? null) {
-            $query->where('phone', 'ilike', "%{$phone}%");
+            $query->whereILike('phone', $phone);
         }
         if ($website = $filters['website'] ?? null) {
-            $query->where('website', 'ilike', "%{$website}%");
+            $query->whereILike('website', $website);
         }
         if ($status = $filters['status'] ?? null) {
             $query->where('status', $status);

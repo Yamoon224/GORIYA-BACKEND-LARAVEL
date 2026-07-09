@@ -26,7 +26,7 @@ class CalendarEventRepository extends BaseRepository implements CalendarEventRep
         $query = CalendarEvent::query();
 
         if ($title = $filters['title'] ?? null) {
-            $query->where('title', 'ilike', "%{$title}%");
+            $query->whereILike('title', $title);
         }
         if ($type = $filters['type'] ?? null) {
             $query->where('type', $type);
@@ -45,7 +45,7 @@ class CalendarEventRepository extends BaseRepository implements CalendarEventRep
         }
 
         if ($location = $filters['location'] ?? null) {
-            $query->where('location', 'ilike', "%{$location}%");
+            $query->whereILike('location', $location);
         }
         if ($status = $filters['status'] ?? null) {
             $query->where('status', $status);

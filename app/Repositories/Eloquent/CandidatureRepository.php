@@ -23,10 +23,10 @@ class CandidatureRepository extends BaseRepository implements CandidatureReposit
         $query = Candidature::query()->with(self::RELATIONS);
 
         if ($candidateName = $filters['candidateName'] ?? null) {
-            $query->where('candidate_name', 'ilike', "%{$candidateName}%");
+            $query->whereILike('candidate_name', $candidateName);
         }
         if ($candidateEmail = $filters['candidateEmail'] ?? null) {
-            $query->where('candidate_email', 'ilike', "%{$candidateEmail}%");
+            $query->whereILike('candidate_email', $candidateEmail);
         }
         if ($status = $filters['status'] ?? null) {
             $query->where('status', $status);

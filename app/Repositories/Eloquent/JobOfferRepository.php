@@ -25,16 +25,16 @@ class JobOfferRepository extends BaseRepository implements JobOfferRepositoryInt
         $query = JobOffer::query()->with(self::RELATIONS);
 
         if ($title = $filters['title'] ?? null) {
-            $query->where('title', 'ilike', "%{$title}%");
+            $query->whereILike('title', $title);
         }
         if ($search = $filters['search'] ?? null) {
             $query->where(function ($q) use ($search) {
-                $q->where('title', 'ilike', "%{$search}%")
-                    ->orWhere('description', 'ilike', "%{$search}%");
+                $q->whereILike('title', $search)
+                    ->orWhereILike('description', $search);
             });
         }
         if ($location = $filters['location'] ?? null) {
-            $query->where('location', 'ilike', "%{$location}%");
+            $query->whereILike('location', $location);
         }
         if ($type = $filters['type'] ?? null) {
             $this->whereInOrEqual($query, 'type', $type);
@@ -46,7 +46,7 @@ class JobOfferRepository extends BaseRepository implements JobOfferRepositoryInt
             $this->whereInOrEqual($query, 'experience', $experience);
         }
         if ($salary = $filters['salary'] ?? null) {
-            $query->where('salary', 'ilike', "%{$salary}%");
+            $query->whereILike('salary', $salary);
         }
         if (filter_var($filters['hasSalary'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
             $query->whereNotNull('salary')->where('salary', '!=', '');
@@ -65,7 +65,7 @@ class JobOfferRepository extends BaseRepository implements JobOfferRepositoryInt
             $query->whereHas('company', function ($q) use ($sizes) {
                 $q->where(function ($q2) use ($sizes) {
                     foreach ($sizes as $size) {
-                        $q2->orWhere('company_size', 'ilike', "%{$size}%");
+                        $q2->orWhereILike('company_size', $size);
                     }
                 });
             });

@@ -156,6 +156,28 @@ class CompaniesController extends Controller
         return ApiResponse::paginated($paginator);
     }
 
+    #[OA\Get(
+        path: '/companies/sectors',
+        tags: ['Companies'],
+        summary: "Secteurs d'activité distincts (avec nombre d'entreprises)",
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Liste des secteurs',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'data', type: 'array', items: new OA\Items(properties: [
+                        new OA\Property(property: 'name', type: 'string'),
+                        new OA\Property(property: 'count', type: 'integer'),
+                    ], type: 'object')),
+                ])
+            ),
+        ]
+    )]
+    public function sectors()
+    {
+        return ApiResponse::success($this->companyService->sectors());
+    }
+
     /*
     |----------------------------------------------------------------------
     | FIND ONE
