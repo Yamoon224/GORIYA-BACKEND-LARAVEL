@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\MessagesController;
 use App\Http\Controllers\Api\NotificationsController;
 use App\Http\Controllers\Api\PitchController;
 use App\Http\Controllers\Api\PortfoliosController;
+use App\Http\Controllers\Api\PresentationsController;
 use App\Http\Controllers\Api\ScoringResultsController;
 use App\Http\Controllers\Api\SubscriptionsController;
 use App\Http\Controllers\Api\UsersController;
@@ -188,6 +189,16 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/pitches/{id}/video', [PitchController::class, 'storeVideo']);
     Route::post('/pitches/{id}/send', [PitchController::class, 'sendToRecruiter']);
     Route::delete('/pitches/{id}', [PitchController::class, 'destroy']);
+});
+
+// --- Presentations (Créateur de Présentations & Schémas IA — aucune route
+// publique, scopé à l'utilisateur authentifié comme Research/Pitches) ---
+Route::middleware('auth:api')->group(function () {
+    Route::get('/presentations', [PresentationsController::class, 'index']);
+    Route::post('/presentations', [PresentationsController::class, 'store']);
+    Route::get('/presentations/{id}/export-pptx', [PresentationsController::class, 'exportPptx']);
+    Route::get('/presentations/{id}', [PresentationsController::class, 'show']);
+    Route::delete('/presentations/{id}', [PresentationsController::class, 'destroy']);
 });
 
 // --- CV Analysis (aucune route publique) ---
