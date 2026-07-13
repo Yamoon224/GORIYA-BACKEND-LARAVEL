@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\JobOffersController;
 use App\Http\Controllers\Api\MatchingResultsController;
 use App\Http\Controllers\Api\MessagesController;
 use App\Http\Controllers\Api\NotificationsController;
+use App\Http\Controllers\Api\PitchController;
 use App\Http\Controllers\Api\PortfoliosController;
 use App\Http\Controllers\Api\ScoringResultsController;
 use App\Http\Controllers\Api\SubscriptionsController;
@@ -176,6 +177,17 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/research/{id}', [CompanyResearchController::class, 'show']);
     Route::patch('/research/{id}/favorite', [CompanyResearchController::class, 'toggleFavorite']);
     Route::delete('/research/{id}', [CompanyResearchController::class, 'destroy']);
+});
+
+// --- Pitches (Pitch Goriya — aucune route publique, scopé à l'utilisateur
+// authentifié comme Research/CvAnalysis) ---
+Route::middleware('auth:api')->group(function () {
+    Route::get('/pitches', [PitchController::class, 'index']);
+    Route::post('/pitches', [PitchController::class, 'store']);
+    Route::get('/pitches/{id}', [PitchController::class, 'show']);
+    Route::post('/pitches/{id}/video', [PitchController::class, 'storeVideo']);
+    Route::post('/pitches/{id}/send', [PitchController::class, 'sendToRecruiter']);
+    Route::delete('/pitches/{id}', [PitchController::class, 'destroy']);
 });
 
 // --- CV Analysis (aucune route publique) ---

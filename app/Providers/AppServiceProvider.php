@@ -5,6 +5,8 @@ namespace App\Providers;
 use App\Contracts\AiAnalysisServiceInterface;
 use App\Contracts\CompanyResearchServiceInterface;
 use App\Contracts\PaymentGatewayInterface;
+use App\Contracts\PitchAiServiceInterface;
+use App\Services\AnthropicPitchService;
 use App\Services\AnthropicResearchService;
 use App\Services\AnthropicService;
 use App\Services\PaymentGatewayManager;
@@ -31,6 +33,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(PaymentGatewayInterface::class, PaymentGatewayManager::class);
         $this->app->bind(AiAnalysisServiceInterface::class, AnthropicService::class);
         $this->app->bind(CompanyResearchServiceInterface::class, AnthropicResearchService::class);
+        $this->app->bind(PitchAiServiceInterface::class, AnthropicPitchService::class);
     }
 
     /**
