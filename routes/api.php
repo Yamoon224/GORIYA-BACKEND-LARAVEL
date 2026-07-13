@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CalendarEventsController;
 use App\Http\Controllers\Api\CandidaturesController;
 use App\Http\Controllers\Api\CompaniesController;
+use App\Http\Controllers\Api\CompanyResearchController;
 use App\Http\Controllers\Api\CvAnalysisController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\InterviewSessionsController;
@@ -165,6 +166,16 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/scoring-results', [ScoringResultsController::class, 'store']);
     Route::patch('/scoring-results/{id}', [ScoringResultsController::class, 'update']);
     Route::delete('/scoring-results/{id}', [ScoringResultsController::class, 'destroy']);
+});
+
+// --- Research (Goriya IA Research — aucune route publique, historique scopé
+// à l'utilisateur authentifié comme CvAnalysis/InterviewSessions) ---
+Route::middleware('auth:api')->group(function () {
+    Route::get('/research', [CompanyResearchController::class, 'index']);
+    Route::post('/research', [CompanyResearchController::class, 'store']);
+    Route::get('/research/{id}', [CompanyResearchController::class, 'show']);
+    Route::patch('/research/{id}/favorite', [CompanyResearchController::class, 'toggleFavorite']);
+    Route::delete('/research/{id}', [CompanyResearchController::class, 'destroy']);
 });
 
 // --- CV Analysis (aucune route publique) ---
