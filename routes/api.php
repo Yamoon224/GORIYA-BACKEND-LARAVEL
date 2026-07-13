@@ -179,6 +179,7 @@ Route::middleware('auth:api')->group(function () {
 
 // --- Subscriptions ---
 Route::get('/subscriptions/plans', [SubscriptionsController::class, 'plans']);
+Route::get('/subscriptions/payment-gateways', [SubscriptionsController::class, 'paymentGateways']);
 Route::get('/subscriptions/check/{userId}', [SubscriptionsController::class, 'check']);
 Route::post('/subscriptions/subscribe', [SubscriptionsController::class, 'subscribe'])->middleware('auth:api');
 Route::get('/subscriptions/me/{userId}', [SubscriptionsController::class, 'mySubscription'])->middleware('auth:api');

@@ -2,9 +2,8 @@
 
 namespace App\Services;
 
-use Anthropic\Client;
-use Anthropic\Messages\TextBlock;
 use App\Contracts\AiAnalysisServiceInterface;
+use App\Services\Concerns\InteractsWithClaude;
 use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpWord\Element\ListItem;
 use PhpOffice\PhpWord\Element\Text as WordText;
@@ -22,6 +21,8 @@ use Throwable;
  */
 class AnthropicService implements AiAnalysisServiceInterface
 {
+    use InteractsWithClaude;
+
     private const ANALYZE_CV_FALLBACK = [
         'score' => 70,
         'strengths' => [
@@ -56,21 +57,9 @@ class AnthropicService implements AiAnalysisServiceInterface
         ],
     ];
 
-    private ?Client $client = null;
-
-    private readonly string $model;
-
     public function __construct()
     {
-        $apiKey = config('services.anthropic.key');
-        $this->model = config('services.anthropic.model');
-
-        if ($apiKey) {
-            $this->client = new Client(apiKey: $apiKey);
-            Log::info("AnthropicService initialized with model {$this->model}");
-        } else {
-            Log::warning('ANTHROPIC_API_KEY not set — AI analysis will use intelligent fallback values');
-        }
+        $this->initClaudeClient();
     }
 
     /*
@@ -136,7 +125,7 @@ class AnthropicService implements AiAnalysisServiceInterface
     {
         $fallback = self::ANALYZE_CV_FALLBACK;
 
-        if (! $this->client) {
+        if (! $this->hasClaudeClient()) {
             return $fallback;
         }
 
@@ -153,7 +142,7 @@ Vous êtes un expert RH spécialisé dans l'analyse de CV. Analysez ce CV et ret
 
 Contenu du CV :
 ---
-{$this->truncate($cvText, 6000)}
+{$this->truncateForClaude($cvText, 6000)}
 ---
 
 Retournez UNIQUEMENT un objet JSON valide (sans markdown, sans texte avant ou après) avec exactement cette structure :
@@ -174,14 +163,14 @@ Critères d'évaluation du score :
 Répondez en français. Minimum 3 éléments par tableau. Soyez spécifique et actionnable.
 PROMPT;
 
-            $text = $this->requestText($prompt, 1024);
-            $parsed = $this->parseJson($text, $fallback);
+            $text = $this->requestClaudeText($prompt, 1024);
+            $parsed = $this->parseClaudeJson($text, $fallback);
 
             return [
                 'score' => max(0, min(100, (int) round((float) ($parsed['score'] ?? 70)))),
-                'strengths' => $this->ensureStringArray($parsed['strengths'] ?? null, $fallback['strengths']),
-                'improvements' => $this->ensureStringArray($parsed['improvements'] ?? null, $fallback['improvements']),
-                'recommendations' => $this->ensureStringArray($parsed['recommendations'] ?? null, $fallback['recommendations']),
+                'strengths' => $this->ensureClaudeStringArray($parsed['strengths'] ?? null, $fallback['strengths']),
+                'improvements' => $this->ensureClaudeStringArray($parsed['improvements'] ?? null, $fallback['improvements']),
+                'recommendations' => $this->ensureClaudeStringArray($parsed['recommendations'] ?? null, $fallback['recommendations']),
             ];
         } catch (Throwable $e) {
             Log::error('CV analysis failed: '.$e->getMessage());
@@ -199,7 +188,7 @@ PROMPT;
     {
         $fallback = self::SCORE_CANDIDATE_FALLBACK;
 
-        if (! $this->client) {
+        if (! $this->hasClaudeClient()) {
             return $fallback;
         }
 
@@ -225,8 +214,8 @@ Retournez UNIQUEMENT un objet JSON valide (sans markdown) :
 Basez votre évaluation sur les informations disponibles. Répondez en français.
 PROMPT;
 
-            $text = $this->requestText($prompt, 512);
-            $parsed = $this->parseJson($text, $fallback);
+            $text = $this->requestClaudeText($prompt, 512);
+            $parsed = $this->parseClaudeJson($text, $fallback);
             $criteria = is_array($parsed['criteria'] ?? null) ? $parsed['criteria'] : [];
 
             return [
@@ -254,13 +243,13 @@ PROMPT;
     {
         $fallback = self::MATCH_CANDIDATE_FALLBACK;
 
-        if (! $this->client) {
+        if (! $this->hasClaudeClient()) {
             return $fallback;
         }
 
         try {
             $descriptionBlock = ! empty($job['description'])
-                ? "Description du poste :\n".$this->truncate($job['description'], 1000)
+                ? "Description du poste :\n".$this->truncateForClaude($job['description'], 1000)
                 : '';
 
             $prompt = <<<PROMPT
@@ -280,76 +269,17 @@ Retournez UNIQUEMENT un objet JSON valide (sans markdown) :
 Répondez en français. Minimum 3 raisons.
 PROMPT;
 
-            $text = $this->requestText($prompt, 512);
-            $parsed = $this->parseJson($text, $fallback);
+            $text = $this->requestClaudeText($prompt, 512);
+            $parsed = $this->parseClaudeJson($text, $fallback);
 
             return [
                 'matchingScore' => max(0, min(100, (int) round((float) ($parsed['matchingScore'] ?? 70)))),
-                'matchReasons' => $this->ensureStringArray($parsed['matchReasons'] ?? null, $fallback['matchReasons']),
+                'matchReasons' => $this->ensureClaudeStringArray($parsed['matchReasons'] ?? null, $fallback['matchReasons']),
             ];
         } catch (Throwable $e) {
             Log::error('Matching analysis failed: '.$e->getMessage());
 
             return $fallback;
         }
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | HELPERS
-    |--------------------------------------------------------------------------
-    */
-    private function requestText(string $prompt, int $maxTokens): string
-    {
-        $response = $this->client->messages->create(
-            maxTokens: $maxTokens,
-            messages: [['role' => 'user', 'content' => $prompt]],
-            model: $this->model,
-        );
-
-        foreach ($response->content as $block) {
-            if ($block instanceof TextBlock) {
-                return $block->text;
-            }
-        }
-
-        return '';
-    }
-
-    private function truncate(string $text, int $length): string
-    {
-        return mb_substr($text, 0, $length);
-    }
-
-    private function parseJson(string $text, array $fallback): array
-    {
-        try {
-            $cleaned = trim(preg_replace('/```(?:json)?\s*|```/', '', $text));
-
-            if (! preg_match('/\{[\s\S]*\}/', $cleaned, $matches)) {
-                return $fallback;
-            }
-
-            $decoded = json_decode($matches[0], true);
-
-            return is_array($decoded) ? $decoded : $fallback;
-        } catch (Throwable $e) {
-            Log::error('JSON parse failed for Claude response: '.mb_substr($text, 0, 200));
-
-            return $fallback;
-        }
-    }
-
-    /**
-     * @param  array<int, string>  $fallback
-     * @return array<int, string>
-     */
-    private function ensureStringArray(mixed $value, array $fallback): array
-    {
-        if (! is_array($value) || count($value) === 0) {
-            return $fallback;
-        }
-
-        return array_values(array_filter(array_map('strval', $value), fn ($item) => $item !== ''));
     }
 }

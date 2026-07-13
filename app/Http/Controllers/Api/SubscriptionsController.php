@@ -39,6 +39,26 @@ class SubscriptionsController extends Controller
         return $this->subscriptionService->plans($request->query('userType'));
     }
 
+    #[OA\Get(
+        path: '/subscriptions/payment-gateways',
+        tags: ['Subscriptions'],
+        summary: 'Gateways de paiement actifs (le frontend choisit lequel proposer)',
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Gateways actifs',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'enabledGateways', type: 'array', items: new OA\Items(type: 'string')),
+                    new OA\Property(property: 'defaultGateway', type: 'string'),
+                ])
+            ),
+        ]
+    )]
+    public function paymentGateways()
+    {
+        return $this->subscriptionService->paymentGateways();
+    }
+
     /*
     |----------------------------------------------------------------------
     | SUBSCRIBE
@@ -189,6 +209,7 @@ class SubscriptionsController extends Controller
             new OA\Parameter(name: 'transactionId', in: 'path', required: true, schema: new OA\Schema(type: 'string')),
             new OA\Parameter(name: 'userId', in: 'query', schema: new OA\Schema(type: 'string', format: 'uuid')),
             new OA\Parameter(name: 'planId', in: 'query', schema: new OA\Schema(type: 'string', format: 'uuid')),
+            new OA\Parameter(name: 'gateway', in: 'query', description: 'kkiapay|wave|stripe — déduit de la Transaction si omis', schema: new OA\Schema(type: 'string')),
         ],
         responses: [
             new OA\Response(response: 200, description: 'Abonnement actif (existant ou nouvellement créé)', content: new OA\JsonContent(ref: '#/components/schemas/UserSubscription')),
@@ -202,6 +223,7 @@ class SubscriptionsController extends Controller
             $transactionId,
             $request->query('userId'),
             $request->query('planId'),
+            $request->query('gateway'),
         );
     }
 

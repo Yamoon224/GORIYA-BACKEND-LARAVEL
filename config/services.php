@@ -47,4 +47,31 @@ return [
         'sandbox' => env('KKIAPAY_SANDBOX', true),
     ],
 
+    'wave' => [
+        'key' => env('WAVE_API_KEY'),
+    ],
+
+    'stripe' => [
+        'secret' => env('STRIPE_SECRET_KEY'),
+        'public_key' => env('STRIPE_PUBLIC_KEY'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Payment Gateways
+    |--------------------------------------------------------------------------
+    |
+    | Liste des gateways réellement actifs en production, résolue par
+    | PaymentGatewayManager. Wave et Stripe sont implémentés (voir
+    | WaveService/StripeService) mais volontairement absents de la liste par
+    | défaut tant que le besoin business n'est pas confirmé — activables sans
+    | déploiement de code via PAYMENT_ENABLED_GATEWAYS="kkiapay,stripe".
+    |
+    */
+    'payment' => [
+        'enabled_gateways' => array_filter(explode(',', env('PAYMENT_ENABLED_GATEWAYS', 'kkiapay'))),
+        'default_gateway' => env('PAYMENT_DEFAULT_GATEWAY', 'kkiapay'),
+    ],
+
 ];

@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
-use App\Contracts\PaymentGatewayInterface;
+use App\Contracts\HostedCheckoutGatewayInterface;
 use App\Enums\BillingPeriod;
 use App\Enums\SubscriptionStatus;
+use App\Enums\TransactionStatus;
 use App\Http\Resources\SubscriptionPlanResource;
 use App\Http\Resources\UserSubscriptionResource;
+use App\Models\Transaction;
 use App\Models\UserSubscription;
 use App\Repositories\Contracts\SubscriptionPlanRepositoryInterface;
 use App\Repositories\Contracts\UserSubscriptionRepositoryInterface;
@@ -16,18 +18,34 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 /**
  * Mirroir de backend/src/subscriptions/subscriptions.service.ts. Extrait de
  * SubscriptionsController pour cohérence avec le reste du port.
+ *
+ * Dépend directement de PaymentGatewayManager (pas seulement de
+ * PaymentGatewayInterface) car checkout()/verifyCheckout() doivent choisir
+ * explicitement le gateway demandé par le frontend (resolve()), pas juste
+ * appeler le gateway par défaut.
  */
 class SubscriptionService
 {
     public function __construct(
         private readonly SubscriptionPlanRepositoryInterface $subscriptionPlanRepository,
         private readonly UserSubscriptionRepositoryInterface $userSubscriptionRepository,
-        private readonly PaymentGatewayInterface $paymentGateway,
+        private readonly PaymentGatewayManager $paymentGatewayManager,
     ) {}
 
     public function plans(?string $userType): AnonymousResourceCollection
     {
         return SubscriptionPlanResource::collection($this->subscriptionPlanRepository->findActive($userType));
+    }
+
+    /**
+     * @return array{enabledGateways: array<int, string>, defaultGateway: string}
+     */
+    public function paymentGateways(): array
+    {
+        return [
+            'enabledGateways' => $this->paymentGatewayManager->enabledGateways(),
+            'defaultGateway' => $this->paymentGatewayManager->defaultGatewayName(),
+        ];
     }
 
     public function subscribe(string $userId, string $planId): UserSubscriptionResource
@@ -70,11 +88,12 @@ class SubscriptionService
     }
 
     /**
-     * Kkiapay initie le paiement côté client (widget JS + clé publique) — le
-     * backend se contente ici de valider le plan et de fournir le montant et
-     * la référence que le frontend transmettra au widget.
+     * Kkiapay (widget client) : le backend fournit juste montant + référence.
+     * Wave/Stripe (session hébergée) : le backend crée la session et renvoie
+     * l'URL de redirection. Dans les deux cas, une Transaction PENDING est
+     * tracée pour l'audit/la reprise — voir verifyCheckout().
      *
-     * @return array{amount: int, currency: string, clientReference: string}
+     * @return array<string, mixed>
      */
     public function checkout(array $data): array
     {
@@ -86,20 +105,50 @@ class SubscriptionService
             abort(400, 'Ce plan est gratuit, utilisez /subscribe directement');
         }
 
+        $gatewayName = $data['gateway'] ?? $this->paymentGatewayManager->defaultGatewayName();
+        $currency = $data['currency'] ?? 'XOF';
         // XOF n'a pas de sous-unité décimale — le montant doit être un entier.
-        $amount = (int) round((float) $plan->price);
+        $amount = $currency === 'XOF' ? (int) round((float) $plan->price) : (float) $plan->price;
         $clientReference = "{$data['userId']}_{$data['planId']}_".(int) round(microtime(true) * 1000);
 
+        if ($this->paymentGatewayManager->supportsHostedCheckout($gatewayName)) {
+            /** @var HostedCheckoutGatewayInterface $gateway */
+            $gateway = $this->paymentGatewayManager->resolve($gatewayName);
+            $session = $gateway->createCheckoutSession([
+                'amount' => $amount,
+                'currency' => $currency,
+                'successUrl' => $data['successUrl'] ?? config('app.url'),
+                'errorUrl' => $data['errorUrl'] ?? config('app.url'),
+                'clientReference' => $clientReference,
+            ]);
+
+            $this->recordTransaction($data['userId'], $data['planId'], $gatewayName, $session['sessionId'], $amount, $currency);
+
+            return [
+                'gateway' => $gatewayName,
+                'checkoutUrl' => $session['checkoutUrl'],
+                'sessionId' => $session['sessionId'],
+            ];
+        }
+
+        $this->recordTransaction($data['userId'], $data['planId'], $gatewayName, $clientReference, $amount, $currency);
+
         return [
+            'gateway' => $gatewayName,
             'amount' => $amount,
-            'currency' => 'XOF',
+            'currency' => $currency,
             'clientReference' => $clientReference,
         ];
     }
 
-    public function verifyCheckout(string $transactionId, ?string $userId, ?string $planId): UserSubscriptionResource
+    public function verifyCheckout(string $transactionId, ?string $userId, ?string $planId, ?string $gateway = null): UserSubscriptionResource
     {
-        $transaction = $this->paymentGateway->verifyTransaction($transactionId);
+        $gatewayName = $gateway
+            ?? Transaction::query()->where('gateway_transaction_id', $transactionId)->value('gateway')
+            ?? $this->paymentGatewayManager->defaultGatewayName();
+
+        $transaction = $this->paymentGatewayManager->resolve($gatewayName)->verifyTransaction($transactionId);
+        $this->markTransactionResult($transactionId, $transaction);
 
         if (($transaction['status'] ?? null) !== 'SUCCESS') {
             $status = $transaction['status'] ?? 'inconnu';
@@ -220,5 +269,37 @@ class SubscriptionService
             'end_date' => $endDate,
             'auto_renew' => false,
         ]);
+    }
+
+    private function recordTransaction(string $userId, string $planId, string $gateway, string $gatewayTransactionId, int|float $amount, string $currency): void
+    {
+        Transaction::create([
+            'user_id' => $userId,
+            'plan_id' => $planId,
+            'gateway' => $gateway,
+            'gateway_transaction_id' => $gatewayTransactionId,
+            'amount' => $amount,
+            'currency' => $currency,
+            'status' => TransactionStatus::PENDING,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     */
+    private function markTransactionResult(string $gatewayTransactionId, array $result): void
+    {
+        $status = match ($result['status'] ?? null) {
+            'SUCCESS' => TransactionStatus::SUCCESS,
+            'PENDING' => TransactionStatus::PENDING,
+            default => TransactionStatus::FAILED,
+        };
+
+        // Instance update (pas Builder::update() en masse) pour que le cast
+        // 'array' de raw_payload soit bien encodé en JSON avant écriture.
+        Transaction::query()
+            ->where('gateway_transaction_id', $gatewayTransactionId)
+            ->first()
+            ?->update(['status' => $status, 'raw_payload' => $result]);
     }
 }

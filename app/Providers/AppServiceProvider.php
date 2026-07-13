@@ -5,7 +5,7 @@ namespace App\Providers;
 use App\Contracts\AiAnalysisServiceInterface;
 use App\Contracts\PaymentGatewayInterface;
 use App\Services\AnthropicService;
-use App\Services\KkiapayService;
+use App\Services\PaymentGatewayManager;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\ServiceProvider;
@@ -17,10 +17,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Frontières vers les intégrations externes (Kkiapay, Anthropic) —
+        // Frontières vers les intégrations externes (paiement, Anthropic) —
         // pas des repositories, donc bindées ici plutôt que dans
         // RepositoryServiceProvider (clarté sémantique).
-        $this->app->bind(PaymentGatewayInterface::class, KkiapayService::class);
+        //
+        // PaymentGatewayManager résout Kkiapay/Wave/Stripe par nom selon
+        // config('services.payment.enabled_gateways') — voir sa docblock.
+        // SubscriptionService dépend directement de la classe concrète (pas
+        // seulement de l'interface) pour accéder à resolve().
+        $this->app->singleton(PaymentGatewayManager::class);
+        $this->app->bind(PaymentGatewayInterface::class, PaymentGatewayManager::class);
         $this->app->bind(AiAnalysisServiceInterface::class, AnthropicService::class);
     }
 
