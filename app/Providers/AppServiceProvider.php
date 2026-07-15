@@ -3,10 +3,12 @@
 namespace App\Providers;
 
 use App\Contracts\AiAnalysisServiceInterface;
+use App\Contracts\ChatAiServiceInterface;
 use App\Contracts\CompanyResearchServiceInterface;
 use App\Contracts\PaymentGatewayInterface;
 use App\Contracts\PitchAiServiceInterface;
 use App\Contracts\PresentationAiServiceInterface;
+use App\Services\AnthropicChatService;
 use App\Services\AnthropicPitchService;
 use App\Services\AnthropicPresentationService;
 use App\Services\AnthropicResearchService;
@@ -37,6 +39,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(CompanyResearchServiceInterface::class, AnthropicResearchService::class);
         $this->app->bind(PitchAiServiceInterface::class, AnthropicPitchService::class);
         $this->app->bind(PresentationAiServiceInterface::class, AnthropicPresentationService::class);
+        $this->app->bind(ChatAiServiceInterface::class, AnthropicChatService::class);
     }
 
     /**

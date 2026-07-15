@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\AnonymousUsageController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CalendarEventsController;
 use App\Http\Controllers\Api\CandidaturesController;
+use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\CompaniesController;
 use App\Http\Controllers\Api\CompanyResearchController;
 use App\Http\Controllers\Api\CvAnalysisController;
@@ -199,6 +200,16 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/presentations/{id}/export-pptx', [PresentationsController::class, 'exportPptx']);
     Route::get('/presentations/{id}', [PresentationsController::class, 'show']);
     Route::delete('/presentations/{id}', [PresentationsController::class, 'destroy']);
+});
+
+// --- Chat (GORIYA Chat — aucune route publique, scopé à l'utilisateur
+// authentifié comme Research/Pitches/Presentations) ---
+Route::middleware('auth:api')->group(function () {
+    Route::get('/chat/threads', [ChatController::class, 'index']);
+    Route::post('/chat/threads', [ChatController::class, 'store']);
+    Route::get('/chat/threads/{id}', [ChatController::class, 'show']);
+    Route::post('/chat/threads/{id}/messages', [ChatController::class, 'sendMessage']);
+    Route::delete('/chat/threads/{id}', [ChatController::class, 'destroy']);
 });
 
 // --- CV Analysis (aucune route publique) ---

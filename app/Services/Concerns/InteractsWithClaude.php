@@ -55,6 +55,32 @@ trait InteractsWithClaude
         return '';
     }
 
+    /**
+     * Variante multi-tour avec system prompt — pour requestClaudeText(), le
+     * "prompt" unique suffit (analyse ponctuelle) ; ici l'appelant fournit
+     * l'historique complet (GORIYA Chat) et un system prompt distinct, non
+     * mélangé aux messages (l'API Messages n'a pas de rôle "system").
+     *
+     * @param  array<int, array{role: string, content: string}>  $messages
+     */
+    protected function requestClaudeChat(array $messages, int $maxTokens, ?string $system = null): string
+    {
+        $response = $this->claudeClient->messages->create(
+            maxTokens: $maxTokens,
+            messages: $messages,
+            model: $this->claudeModel,
+            system: $system,
+        );
+
+        foreach ($response->content as $block) {
+            if ($block instanceof TextBlock) {
+                return $block->text;
+            }
+        }
+
+        return '';
+    }
+
     protected function truncateForClaude(string $text, int $length): string
     {
         return mb_substr($text, 0, $length);
