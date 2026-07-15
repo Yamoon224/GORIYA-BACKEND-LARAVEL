@@ -4,6 +4,7 @@ namespace App\Services\Concerns;
 
 use Anthropic\Client;
 use Anthropic\Messages\TextBlock;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -84,6 +85,23 @@ trait InteractsWithClaude
     protected function truncateForClaude(string $text, int $length): string
     {
         return mb_substr($text, 0, $length);
+    }
+
+    /**
+     * Instruction de langue à ajouter en fin de prompt — lit
+     * App::getLocale(), résolue par requête par le middleware SetLocale.
+     * Remplace les "Répondez en français." en dur historiquement présents
+     * dans chaque service Anthropic* (V2A/V2B), qui ignoraient la locale de
+     * l'utilisateur même quand FR n'était pas sa préférence.
+     */
+    protected function localizedInstruction(): string
+    {
+        return match (App::getLocale()) {
+            'en' => 'Respond in English.',
+            'pt' => 'Responda em português.',
+            'ar' => 'أجب باللغة العربية.',
+            default => 'Répondez en français.',
+        };
     }
 
     /**

@@ -21,6 +21,7 @@ class CandidatureService
     public function __construct(
         private readonly CandidatureRepositoryInterface $candidatureRepository,
         private readonly NotificationService $notificationService,
+        private readonly WebhookService $webhookService,
     ) {}
 
     /*
@@ -81,6 +82,16 @@ class CandidatureService
 
         if (array_key_exists('status', $mapped) && $mapped['status'] !== $oldStatus) {
             $this->notificationService->notifyApplicationStatusChanged($fresh);
+
+            if ($companyId = $fresh->jobOffer?->company_id) {
+                $this->webhookService->dispatch($companyId, 'candidature.status_updated', [
+                    'candidatureId' => $fresh->id,
+                    'status' => $mapped['status'],
+                    'candidateName' => $fresh->candidate_name,
+                    'candidateEmail' => $fresh->candidate_email,
+                    'jobOfferId' => $fresh->job_offer_id,
+                ]);
+            }
         }
 
         return $fresh;

@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Contracts\AvatarGenerationServiceInterface;
 use App\Contracts\PitchAiServiceInterface;
 use App\Enums\PitchFormat;
 use App\Enums\PitchStatus;
+use App\Jobs\PollAvatarRenderJob;
 use App\Jobs\ProcessPitchVideoJob;
 use App\Models\Candidature;
 use App\Models\JobOffer;
@@ -24,6 +26,7 @@ class PitchService
     public function __construct(
         private readonly PitchAiServiceInterface $pitchAi,
         private readonly CandidatureService $candidatureService,
+        private readonly AvatarGenerationServiceInterface $avatarService,
     ) {}
 
     public function listFor(User $user): Collection
@@ -107,6 +110,69 @@ class PitchService
         $candidature->update(['pitch_id' => $pitch->id]);
 
         return $candidature->fresh(['jobOffer', 'jobOffer.company', 'pitch']);
+    }
+
+    /**
+     * Studio IA — lance le rendu d'un avatar animé lisant le script du
+     * pitch (déjà généré, texte ou vidéo) à partir de la photo de profil de
+     * l'utilisateur (User::avatar, réutilisé tel quel — pas de nouvelle
+     * entité Avatar/upload dédié pour ce MVP). Rendu asynchrone : le statut
+     * repasse à READY (ou FAILED) via PollAvatarRenderJob, qui peuple
+     * ensuite Pitch::video_path avec le résultat du fournisseur.
+     */
+    public function renderAvatarVideo(Pitch $pitch, User $user): Pitch
+    {
+        $sourcePhotoUrl = $this->resolveAvatarUrl($user);
+        if (! $sourcePhotoUrl) {
+            abort(400, "Configurez d'abord une photo de profil avant de générer un avatar animé");
+        }
+        if (! $pitch->content) {
+            abort(400, "Ce pitch n'a pas de script à faire lire par l'avatar");
+        }
+
+        $talkId = $this->avatarService->createTalk($sourcePhotoUrl, $pitch->content);
+
+        $pitch->update([
+            'avatar_talk_id' => $talkId,
+            'status' => PitchStatus::PROCESSING,
+        ]);
+
+        PollAvatarRenderJob::dispatch($pitch->id)->delay(now()->addSeconds(10));
+
+        return $pitch->fresh();
+    }
+
+    /**
+     * User::avatar est soit un chemin relatif sur le disque `public`
+     * ("/avatars/x.png", cas normal — voir UserService::storeAvatar()),
+     * soit déjà une URL externe complète (connexion Google — voir
+     * AuthService::googleAuth()). D-ID doit pouvoir la récupérer par HTTP,
+     * donc les deux cas doivent aboutir à une URL absolue fetchable.
+     */
+    private function resolveAvatarUrl(User $user): ?string
+    {
+        if (! $user->avatar) {
+            return null;
+        }
+
+        if (str_starts_with($user->avatar, 'http://') || str_starts_with($user->avatar, 'https://')) {
+            return $user->avatar;
+        }
+
+        return rtrim(config('app.url'), '/').'/storage'.$user->avatar;
+    }
+
+    /**
+     * Opt-in explicite pour l'affichage sur le Profil Public GORIYA — voir
+     * PublicProfileService::showPublic(), qui ne remonte que les pitchs
+     * vidéo (format VIDEO) marqués is_public=true. Basculer ce flag sur un
+     * pitch texte est inoffensif mais sans effet (non exposé publiquement).
+     */
+    public function toggleVisibility(Pitch $pitch): Pitch
+    {
+        $pitch->update(['is_public' => ! $pitch->is_public]);
+
+        return $pitch;
     }
 
     public function delete(Pitch $pitch): void

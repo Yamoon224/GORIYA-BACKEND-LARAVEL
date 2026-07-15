@@ -27,4 +27,23 @@ interface AiAnalysisServiceInterface
      * @return array{matchingScore: int, matchReasons: array<int, string>}
      */
     public function matchCandidateToJob(array $candidate, array $job): array;
+
+    /**
+     * Génère un test de compétences techniques/comportementales à
+     * administrer par le recruteur — voir CandidateAssessment::skills_test.
+     *
+     * @return array{questions: array<int, array{question: string, type: string}>}
+     */
+    public function generateSkillsTest(string $position): array;
+
+    /**
+     * @return array{score: int, strengths: array<int, string>, concerns: array<int, string>, feedback: string}
+     */
+    public function analyzeSoftSkills(string $candidateName, string $exchangeNotes): array;
+
+    /**
+     * @param  array<int, array{name: string, overallScore: int}>  $candidates
+     * @return array{ranking: array<int, array{name: string, rank: int, reason: string}>}
+     */
+    public function compareCandidates(array $candidates): array;
 }

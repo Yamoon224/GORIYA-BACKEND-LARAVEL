@@ -8,6 +8,7 @@ use App\Enums\CandidatureStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Candidature extends Model
 {
@@ -55,5 +56,10 @@ class Candidature extends Model
     public function pitch(): BelongsTo
     {
         return $this->belongsTo(Pitch::class);
+    }
+
+    public function assessment(): HasOne
+    {
+        return $this->hasOne(CandidateAssessment::class);
     }
 }

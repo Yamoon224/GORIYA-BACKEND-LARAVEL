@@ -14,24 +14,41 @@ use App\Http\Controllers\Api\ArticlesController;
 use App\Http\Controllers\Api\AdminSystemController;
 use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\AnonymousUsageController;
+use App\Http\Controllers\Api\ApiClientsController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CalendarEventsController;
+use App\Http\Controllers\Api\CallSessionsController;
+use App\Http\Controllers\Api\CandidateAssessmentsController;
 use App\Http\Controllers\Api\CandidaturesController;
+use App\Http\Controllers\Api\CareerDashboardController;
 use App\Http\Controllers\Api\ChatController;
+use App\Http\Controllers\Api\CommunitiesController;
 use App\Http\Controllers\Api\CompaniesController;
 use App\Http\Controllers\Api\CompanyResearchController;
+use App\Http\Controllers\Api\ConnectionsController;
+use App\Http\Controllers\Api\CoursesController;
 use App\Http\Controllers\Api\CvAnalysisController;
+use App\Http\Controllers\Api\DeviceTokensController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\EmployeeSurveysController;
+use App\Http\Controllers\Api\EnrollmentsController;
+use App\Http\Controllers\Api\External\ExternalCandidateAssessmentsController;
+use App\Http\Controllers\Api\External\ExternalCandidaturesController;
+use App\Http\Controllers\Api\External\ExternalJobOffersController;
 use App\Http\Controllers\Api\InterviewSessionsController;
 use App\Http\Controllers\Api\JobOffersController;
+use App\Http\Controllers\Api\LunionMeetWebhookController;
 use App\Http\Controllers\Api\MatchingResultsController;
 use App\Http\Controllers\Api\MessagesController;
 use App\Http\Controllers\Api\NotificationsController;
 use App\Http\Controllers\Api\PitchController;
 use App\Http\Controllers\Api\PortfoliosController;
+use App\Http\Controllers\Api\PostsController;
 use App\Http\Controllers\Api\PresentationsController;
+use App\Http\Controllers\Api\PublicProfileController;
 use App\Http\Controllers\Api\ScoringResultsController;
 use App\Http\Controllers\Api\SubscriptionsController;
+use App\Http\Controllers\Api\UserLocaleController;
 use App\Http\Controllers\Api\UsersController;
 use Illuminate\Support\Facades\Route;
 
@@ -112,6 +129,11 @@ Route::middleware('auth:api')->group(function () {
     Route::delete('/companies/{companyId}/follow', [AdminCompaniesController::class, 'unfollow']);
 });
 
+// --- Public Profiles (Profil Public GORIYA) ---
+Route::get('/profile/me', [PublicProfileController::class, 'me'])->middleware('auth:api');
+Route::patch('/profile/me', [PublicProfileController::class, 'update'])->middleware('auth:api');
+Route::get('/profiles/{slug}', [PublicProfileController::class, 'show']);
+
 // --- Portfolios ---
 Route::get('/portfolios', [PortfoliosController::class, 'index']);
 Route::get('/portfolios/paginate', [PortfoliosController::class, 'paginate']);
@@ -119,6 +141,95 @@ Route::get('/portfolios/{id}', [PortfoliosController::class, 'show']);
 Route::post('/portfolios', [PortfoliosController::class, 'store'])->middleware('auth:api');
 Route::patch('/portfolios/{id}', [PortfoliosController::class, 'update'])->middleware('auth:api');
 Route::delete('/portfolios/{id}', [PortfoliosController::class, 'destroy'])->middleware('auth:api');
+
+// --- GORIYA Connect : Connections, Communities, Posts ---
+Route::middleware('auth:api')->group(function () {
+    Route::post('/users/{userId}/follow', [ConnectionsController::class, 'follow']);
+    Route::delete('/users/{userId}/follow', [ConnectionsController::class, 'unfollow']);
+    Route::get('/me/locale', [UserLocaleController::class, 'show']);
+    Route::patch('/me/locale', [UserLocaleController::class, 'update']);
+    Route::get('/me/followers', [ConnectionsController::class, 'followers']);
+    Route::get('/me/following', [ConnectionsController::class, 'following']);
+    Route::get('/me/recommendations/people', [ConnectionsController::class, 'peopleRecommendations']);
+    Route::get('/me/recommendations/job-offers', [ConnectionsController::class, 'jobOfferRecommendations']);
+    Route::get('/me/recommendations/communities', [CommunitiesController::class, 'recommendations']);
+
+    Route::post('/communities', [CommunitiesController::class, 'store']);
+    Route::post('/communities/{id}/join', [CommunitiesController::class, 'join']);
+    Route::delete('/communities/{id}/join', [CommunitiesController::class, 'leave']);
+
+    Route::get('/posts/feed', [PostsController::class, 'feed']);
+    Route::post('/posts', [PostsController::class, 'store']);
+    Route::post('/posts/{id}/like', [PostsController::class, 'toggleLike']);
+    Route::delete('/posts/{id}', [PostsController::class, 'destroy']);
+});
+
+// --- Communities (lecture publique — vitrine, comme Portfolios) ---
+Route::get('/communities', [CommunitiesController::class, 'index']);
+Route::get('/communities/{id}', [CommunitiesController::class, 'show']);
+
+// --- API B2B : gestion des identifiants/webhooks (JWT entreprise) ---
+Route::middleware('auth:api')->group(function () {
+    Route::get('/api-clients', [ApiClientsController::class, 'index']);
+    Route::post('/api-clients', [ApiClientsController::class, 'store']);
+    Route::delete('/api-clients/{id}', [ApiClientsController::class, 'destroy']);
+    Route::get('/api-clients/{id}/webhooks', [ApiClientsController::class, 'webhooks']);
+    Route::post('/api-clients/{id}/webhooks', [ApiClientsController::class, 'storeWebhook']);
+    Route::delete('/api-clients/{id}/webhooks/{webhookId}', [ApiClientsController::class, 'destroyWebhook']);
+});
+
+// --- API B2B : namespace externe (authentification par clé, PAS de JWT —
+// voir EnsureValidApiKey. Rate limiting dynamique par client, voir
+// AppServiceProvider::boot()/RateLimiter::for('api-client')) ---
+Route::prefix('external/v1')->middleware(['auth.apikey', 'throttle:api-client'])->group(function () {
+    Route::get('/candidatures', [ExternalCandidaturesController::class, 'index']);
+    Route::get('/candidatures/{id}', [ExternalCandidaturesController::class, 'show']);
+    Route::patch('/candidatures/{id}/status', [ExternalCandidaturesController::class, 'updateStatus']);
+    Route::get('/candidatures/{candidatureId}/assessment', [ExternalCandidateAssessmentsController::class, 'show']);
+    Route::get('/job-offers', [ExternalJobOffersController::class, 'index']);
+});
+
+// --- GORIYA Call : visioconférence (lunion.meet) — pas de route publique,
+// rejoindre une session ne demande que de connaître son id (pas de liste
+// d'invités/ACL dédiée pour ce MVP, voir CallSessionService) ---
+Route::middleware('auth:api')->group(function () {
+    Route::get('/calls', [CallSessionsController::class, 'index']);
+    Route::post('/calls', [CallSessionsController::class, 'store']);
+    Route::get('/calls/{id}', [CallSessionsController::class, 'show']);
+    Route::post('/calls/{id}/join', [CallSessionsController::class, 'join']);
+    Route::post('/calls/{id}/end', [CallSessionsController::class, 'end']);
+});
+
+// --- GORIYA Call : réception des webhooks lunion.meet (authentifié par
+// signature HMAC, pas par JWT — voir LunionMeetWebhookController) ---
+Route::post('/webhooks/lunion-meet', [LunionMeetWebhookController::class, 'handle']);
+
+// --- Courses (Section Formation — catalogue public, gestion admin) ---
+Route::get('/courses', [CoursesController::class, 'index']);
+Route::get('/courses/paginate', [CoursesController::class, 'paginate']);
+Route::get('/courses/{id}', [CoursesController::class, 'show']);
+Route::post('/courses', [CoursesController::class, 'store'])->middleware(['auth:api', 'role:ADMIN']);
+Route::delete('/courses/{id}', [CoursesController::class, 'destroy'])->middleware(['auth:api', 'role:ADMIN']);
+
+// --- Enrollments (progression + certificats, scopé à l'utilisateur) ---
+Route::middleware('auth:api')->group(function () {
+    Route::get('/enrollments', [EnrollmentsController::class, 'index']);
+    Route::post('/courses/{courseId}/enroll', [EnrollmentsController::class, 'enroll']);
+    Route::patch('/enrollments/{id}/progress', [EnrollmentsController::class, 'updateProgress']);
+    Route::get('/enrollments/{id}/certificate', [EnrollmentsController::class, 'downloadCertificate']);
+});
+
+// --- Employee Surveys (évaluation anonyme des employés — réservé aux
+// comptes rattachés à une entreprise, vérifié dans le contrôleur) ---
+Route::middleware('auth:api')->group(function () {
+    Route::get('/employee-surveys', [EmployeeSurveysController::class, 'index']);
+    Route::post('/employee-surveys', [EmployeeSurveysController::class, 'store']);
+    Route::get('/employee-surveys/{id}', [EmployeeSurveysController::class, 'show']);
+    Route::patch('/employee-surveys/{id}/status', [EmployeeSurveysController::class, 'updateStatus']);
+    Route::get('/employee-surveys/{id}/stats', [EmployeeSurveysController::class, 'stats']);
+    Route::post('/employee-surveys/{id}/responses', [EmployeeSurveysController::class, 'submitResponse']);
+    Route::delete('/employee-surveys/{id}', [EmployeeSurveysController::class, 'destroy']);
+});
 
 // --- Articles (blog Goriya) ---
 Route::get('/admin/articles/paginate', [ArticlesController::class, 'adminPaginate'])->middleware(['auth:api', 'role:ADMIN']);
@@ -136,6 +247,15 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/candidatures', [CandidaturesController::class, 'store']);
     Route::patch('/candidatures/{id}', [CandidaturesController::class, 'update']);
     Route::delete('/candidatures/{id}', [CandidaturesController::class, 'destroy']);
+});
+
+// --- Candidate Assessments (Évaluation IA des Candidats — réservé à
+// l'entreprise propriétaire de l'offre, vérifié dans le contrôleur) ---
+Route::middleware('auth:api')->group(function () {
+    Route::post('/candidatures/{candidatureId}/assessment', [CandidateAssessmentsController::class, 'store']);
+    Route::get('/candidatures/{candidatureId}/assessment', [CandidateAssessmentsController::class, 'show']);
+    Route::get('/candidatures/{candidatureId}/assessment/report', [CandidateAssessmentsController::class, 'downloadReport']);
+    Route::get('/job-offers/{jobOfferId}/candidate-assessments/compare', [CandidateAssessmentsController::class, 'compare']);
 });
 
 // --- Calendar Events / Interview Sessions / Matching Results / Scoring Results
@@ -188,6 +308,8 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/pitches', [PitchController::class, 'store']);
     Route::get('/pitches/{id}', [PitchController::class, 'show']);
     Route::post('/pitches/{id}/video', [PitchController::class, 'storeVideo']);
+    Route::post('/pitches/{id}/avatar-video', [PitchController::class, 'renderAvatar']);
+    Route::patch('/pitches/{id}/visibility', [PitchController::class, 'toggleVisibility']);
     Route::post('/pitches/{id}/send', [PitchController::class, 'sendToRecruiter']);
     Route::delete('/pitches/{id}', [PitchController::class, 'destroy']);
 });
@@ -254,6 +376,9 @@ Route::middleware('auth:api')->group(function () {
     Route::put('/notifications/settings', [NotificationsController::class, 'updateSettings']);
     Route::put('/notifications/{id}/read', [NotificationsController::class, 'markRead']);
     Route::delete('/notifications/{id}', [NotificationsController::class, 'destroy']);
+
+    Route::post('/device-tokens', [DeviceTokensController::class, 'store']);
+    Route::delete('/device-tokens/{token}', [DeviceTokensController::class, 'destroy']);
 });
 
 // --- Dashboard (scopé au rôle de l'utilisateur authentifié — étudiant/
@@ -264,6 +389,8 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/dashboard/recent-applications', [DashboardController::class, 'recentApplications']);
     Route::get('/dashboard/recommended-jobs', [DashboardController::class, 'recommendedJobs']);
     Route::get('/dashboard/profile-views', [DashboardController::class, 'profileViews']);
+
+    Route::get('/career-dashboard', [CareerDashboardController::class, 'show']);
 });
 
 // --- Analytics (admin uniquement) ---

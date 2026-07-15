@@ -57,7 +57,7 @@ Vous êtes un coach en communication professionnelle. Rédigez un pitch oral per
 Candidat : {$profile['name']}
 {$jobBlock}
 
-Le pitch doit être clair, structuré (accroche, valeur ajoutée, appel à l'action) et percutant. Répondez uniquement avec le texte du pitch, en français, sans guillemets ni commentaire.
+Le pitch doit être clair, structuré (accroche, valeur ajoutée, appel à l'action) et percutant. Répondez uniquement avec le texte du pitch, sans guillemets ni commentaire. {$this->localizedInstruction()}
 PROMPT;
 
             $text = trim($this->requestClaudeText($prompt, 512));
@@ -90,8 +90,10 @@ Retournez UNIQUEMENT un objet JSON valide (sans markdown) :
   "clarte": <entier entre 0 et 100>,
   "impact": <entier entre 0 et 100>,
   "persuasion": <entier entre 0 et 100>,
-  "feedback": "<conseil concret d'amélioration en français, 1-2 phrases>"
+  "feedback": "<conseil concret d'amélioration, 1-2 phrases>"
 }
+
+{$this->localizedInstruction()}
 PROMPT;
 
             $text = $this->requestClaudeText($prompt, 512);

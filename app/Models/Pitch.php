@@ -35,6 +35,8 @@ class Pitch extends Model
         'video_path',
         'score',
         'status',
+        'is_public',
+        'avatar_talk_id',
     ];
 
     /**
@@ -49,6 +51,7 @@ class Pitch extends Model
             'format' => PitchFormat::class,
             'status' => PitchStatus::class,
             'score' => 'array',
+            'is_public' => 'boolean',
         ];
     }
 

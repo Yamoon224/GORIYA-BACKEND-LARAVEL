@@ -27,6 +27,7 @@ use OpenApi\Attributes as OA;
             ]
         ),
         new OA\Property(property: 'status', type: 'string', enum: ['DRAFT', 'PROCESSING', 'READY', 'FAILED']),
+        new OA\Property(property: 'isPublic', type: 'boolean', description: 'Affiché sur le Profil Public GORIYA si format=VIDEO'),
         new OA\Property(property: 'createdAt', type: 'string', format: 'date-time'),
     ]
 )]
@@ -46,6 +47,7 @@ class PitchResource extends JsonResource
             'videoPath' => $this->video_path,
             'score' => $this->score,
             'status' => $this->status,
+            'isPublic' => $this->is_public,
             'createdAt' => $this->created_at,
         ];
     }

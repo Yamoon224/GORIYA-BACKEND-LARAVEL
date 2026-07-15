@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
+use App\Contracts\PushNotificationServiceInterface;
 use App\Enums\CandidatureStatus;
 use App\Enums\NotificationType;
 use App\Enums\UserRole;
 use App\Models\Candidature;
 use App\Models\Conversation;
+use App\Models\DeviceToken;
 use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
@@ -16,6 +18,9 @@ use Illuminate\Support\Facades\Cache;
  * Notifications réelles par utilisateur — remplace le stub Cache global de
  * App\Services\Admin\AdminNotificationService pour les utilisateurs normaux
  * (candidats/entreprises), qui restent hors du périmètre /admin/notifications.
+ *
+ * Chaque Notification créée est aussi relayée en push (voir pushToUser()) —
+ * best-effort, ne bloque jamais la création de la notification in-app.
  */
 class NotificationService
 {
@@ -24,6 +29,8 @@ class NotificationService
         'emplois' => true,
         'recommandations' => true,
     ];
+
+    public function __construct(private readonly PushNotificationServiceInterface $pushService) {}
 
     public function listFor(User $user): Collection
     {
@@ -57,12 +64,17 @@ class NotificationService
 
     public function notifyNewMessage(User $recipient, Conversation $conversation, string $preview): void
     {
+        $title = 'Nouveau message';
+        $body = mb_strimwidth($preview, 0, 140, '…');
+
         Notification::create([
             'user_id' => $recipient->id,
             'type' => NotificationType::MESSAGE,
-            'title' => 'Nouveau message',
-            'body' => mb_strimwidth($preview, 0, 140, '…'),
+            'title' => $title,
+            'body' => $body,
         ]);
+
+        $this->pushToUser($recipient, $title, $body);
     }
 
     public function notifyApplicationStatusChanged(Candidature $candidature): void
@@ -78,13 +90,19 @@ class NotificationService
             : $candidature->status;
 
         $label = $labels[$statusValue] ?? 'a été mise à jour';
+        $title = 'Candidature mise à jour';
+        $body = "Ta candidature pour \"{$candidature->jobOffer?->title}\" {$label}.";
 
         Notification::create([
             'user_id' => $candidature->user_id,
             'type' => NotificationType::APPLICATION_STATUS,
-            'title' => 'Candidature mise à jour',
-            'body' => "Ta candidature pour \"{$candidature->jobOffer?->title}\" {$label}.",
+            'title' => $title,
+            'body' => $body,
         ]);
+
+        if ($candidature->user) {
+            $this->pushToUser($candidature->user, $title, $body);
+        }
     }
 
     public function notifyNewApplication(Candidature $candidature): void
@@ -98,13 +116,32 @@ class NotificationService
             ->where('role', UserRole::ENTERPRISE)
             ->get();
 
+        $title = 'Nouvelle candidature';
+        $body = "{$candidature->candidate_name} a postulé à \"{$candidature->jobOffer?->title}\".";
+
         foreach ($recipients as $recipient) {
             Notification::create([
                 'user_id' => $recipient->id,
                 'type' => NotificationType::APPLICATION_STATUS,
-                'title' => 'Nouvelle candidature',
-                'body' => "{$candidature->candidate_name} a postulé à \"{$candidature->jobOffer?->title}\".",
+                'title' => $title,
+                'body' => $body,
             ]);
+
+            $this->pushToUser($recipient, $title, $body);
         }
+    }
+
+    /**
+     * Best-effort : ne remonte jamais d'exception, la notification in-app
+     * fait déjà foi. Voir PushNotificationServiceInterface.
+     */
+    private function pushToUser(User $user, string $title, string $body): void
+    {
+        $tokens = DeviceToken::where('user_id', $user->id)->pluck('token')->all();
+        if ($tokens === []) {
+            return;
+        }
+
+        $this->pushService->sendToTokens($tokens, $title, $body);
     }
 }

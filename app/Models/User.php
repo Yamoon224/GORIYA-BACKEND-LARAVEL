@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Concerns\Auditable;
 use App\Concerns\HasUuid;
+use App\Enums\Locale;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use Database\Factories\UserFactory;
@@ -33,6 +34,7 @@ class User extends Authenticatable implements JWTSubject
         'avatar',
         'company_id',
         'registration_date',
+        'locale',
     ];
 
     /**
@@ -56,6 +58,7 @@ class User extends Authenticatable implements JWTSubject
             'status' => UserStatus::class,
             'registration_date' => 'datetime',
             'password' => 'hashed',
+            'locale' => Locale::class,
         ];
     }
 

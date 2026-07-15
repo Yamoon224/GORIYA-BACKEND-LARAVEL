@@ -57,6 +57,21 @@ class AnthropicService implements AiAnalysisServiceInterface
         ],
     ];
 
+    private const SKILLS_TEST_FALLBACK = [
+        'questions' => [
+            ['question' => 'Décrivez une réalisation professionnelle dont vous êtes fier(ère) et son impact concret.', 'type' => 'COMPORTEMENTAL'],
+            ['question' => 'Comment abordez-vous un problème technique que vous ne maîtrisez pas encore ?', 'type' => 'TECHNIQUE'],
+            ['question' => 'Racontez une situation de désaccord en équipe et comment vous l\'avez résolue.', 'type' => 'COMPORTEMENTAL'],
+        ],
+    ];
+
+    private const SOFT_SKILLS_FALLBACK = [
+        'score' => 70,
+        'strengths' => ['Communication claire', 'Capacité d\'adaptation'],
+        'concerns' => [],
+        'feedback' => 'Analyse indisponible actuellement — fournissez des notes d\'échange pour une évaluation détaillée.',
+    ];
+
     public function __construct()
     {
         $this->initClaudeClient();
@@ -160,7 +175,7 @@ Critères d'évaluation du score :
 - Formation et certifications (15%)
 - Structure et lisibilité générale (10%)
 
-Répondez en français. Minimum 3 éléments par tableau. Soyez spécifique et actionnable.
+{$this->localizedInstruction()} Minimum 3 éléments par tableau. Soyez spécifique et actionnable.
 PROMPT;
 
             $text = $this->requestClaudeText($prompt, 1024);
@@ -208,10 +223,10 @@ Retournez UNIQUEMENT un objet JSON valide (sans markdown) :
     "Experience": <entier entre 0 et 100>,
     "Communication": <entier entre 0 et 100>
   },
-  "feedback": "<texte de feedback général en français, 1-2 phrases>"
+  "feedback": "<texte de feedback général, 1-2 phrases>"
 }
 
-Basez votre évaluation sur les informations disponibles. Répondez en français.
+Basez votre évaluation sur les informations disponibles. {$this->localizedInstruction()}
 PROMPT;
 
             $text = $this->requestClaudeText($prompt, 512);
@@ -266,7 +281,7 @@ Retournez UNIQUEMENT un objet JSON valide (sans markdown) :
   "matchReasons": ["<raison spécifique 1>", "<raison spécifique 2>", "<raison spécifique 3>"]
 }
 
-Répondez en français. Minimum 3 raisons.
+{$this->localizedInstruction()} Minimum 3 raisons.
 PROMPT;
 
             $text = $this->requestClaudeText($prompt, 512);
@@ -281,5 +296,203 @@ PROMPT;
 
             return $fallback;
         }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | SKILLS TEST GENERATION (Évaluation IA des Candidats — V2B)
+    |--------------------------------------------------------------------------
+    */
+    public function generateSkillsTest(string $position): array
+    {
+        $fallback = self::SKILLS_TEST_FALLBACK;
+
+        if (! $this->hasClaudeClient()) {
+            return $fallback;
+        }
+
+        try {
+            $prompt = <<<PROMPT
+Vous êtes un expert RH. Générez un test d'évaluation pour le poste suivant : {$position}.
+
+Retournez UNIQUEMENT un objet JSON valide (sans markdown) :
+{
+  "questions": [
+    {"question": "<question technique ou comportementale>", "type": "TECHNIQUE ou COMPORTEMENTAL"}
+  ]
+}
+
+5 à 8 questions, mélange de technique et comportemental pertinent pour ce poste. {$this->localizedInstruction()}
+PROMPT;
+
+            $text = $this->requestClaudeText($prompt, 1024);
+            $parsed = $this->parseClaudeJson($text, $fallback);
+
+            return ['questions' => $this->sanitizeSkillsTestQuestions($parsed['questions'] ?? null, $fallback['questions'])];
+        } catch (Throwable $e) {
+            Log::error('Skills test generation failed: '.$e->getMessage());
+
+            return $fallback;
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | SOFT SKILLS ANALYSIS (Évaluation IA des Candidats — V2B)
+    |--------------------------------------------------------------------------
+    */
+    public function analyzeSoftSkills(string $candidateName, string $exchangeNotes): array
+    {
+        $fallback = self::SOFT_SKILLS_FALLBACK;
+
+        if (! $this->hasClaudeClient() || trim($exchangeNotes) === '') {
+            return $fallback;
+        }
+
+        try {
+            $prompt = <<<PROMPT
+Vous êtes un psychologue du travail. Analysez les soft skills de ce candidat à partir des notes d'échange fournies.
+
+Candidat : {$candidateName}
+Notes d'échange :
+---
+{$this->truncateForClaude($exchangeNotes, 3000)}
+---
+
+Retournez UNIQUEMENT un objet JSON valide (sans markdown) :
+{
+  "score": <entier entre 0 et 100>,
+  "strengths": ["<point fort 1>", "<point fort 2>"],
+  "concerns": ["<point de vigilance 1>"],
+  "feedback": "<synthèse, 1-2 phrases>"
+}
+
+Minimum 2 points forts. {$this->localizedInstruction()}
+PROMPT;
+
+            $text = $this->requestClaudeText($prompt, 768);
+            $parsed = $this->parseClaudeJson($text, $fallback);
+
+            return [
+                'score' => max(0, min(100, (int) round((float) ($parsed['score'] ?? 70)))),
+                'strengths' => $this->ensureClaudeStringArray($parsed['strengths'] ?? null, $fallback['strengths']),
+                'concerns' => $this->ensureClaudeStringArray($parsed['concerns'] ?? null, $fallback['concerns']),
+                'feedback' => (string) ($parsed['feedback'] ?? $fallback['feedback']),
+            ];
+        } catch (Throwable $e) {
+            Log::error('Soft skills analysis failed: '.$e->getMessage());
+
+            return $fallback;
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CANDIDATE COMPARISON (Évaluation IA des Candidats — V2B)
+    |--------------------------------------------------------------------------
+    */
+    public function compareCandidates(array $candidates): array
+    {
+        if (count($candidates) < 2) {
+            return ['ranking' => []];
+        }
+
+        $fallback = [
+            'ranking' => collect($candidates)
+                ->sortByDesc('overallScore')
+                ->values()
+                ->map(fn (array $c, int $i) => ['name' => $c['name'], 'rank' => $i + 1, 'reason' => 'Classé par score global'])
+                ->all(),
+        ];
+
+        if (! $this->hasClaudeClient()) {
+            return $fallback;
+        }
+
+        try {
+            $list = collect($candidates)
+                ->map(fn (array $c) => "- {$c['name']} : score global {$c['overallScore']}/100")
+                ->implode("\n");
+
+            $prompt = <<<PROMPT
+Vous êtes un expert RH. Classez ces candidats du meilleur au moins bon pour un même poste, à partir de leurs scores globaux.
+
+{$list}
+
+Retournez UNIQUEMENT un objet JSON valide (sans markdown) :
+{
+  "ranking": [
+    {"name": "<nom exact fourni>", "rank": <entier, 1 = meilleur>, "reason": "<justification courte>"}
+  ]
+}
+
+Classez tous les candidats fournis, sans en omettre. {$this->localizedInstruction()}
+PROMPT;
+
+            $text = $this->requestClaudeText($prompt, 1024);
+            $parsed = $this->parseClaudeJson($text, $fallback);
+
+            $ranking = $this->sanitizeRanking($parsed['ranking'] ?? null, $candidates);
+
+            return ['ranking' => $ranking !== [] ? $ranking : $fallback['ranking']];
+        } catch (Throwable $e) {
+            Log::error('Candidate comparison failed: '.$e->getMessage());
+
+            return $fallback;
+        }
+    }
+
+    /**
+     * @param  array<int, array{question: string, type: string}>  $fallback
+     * @return array<int, array{question: string, type: string}>
+     */
+    private function sanitizeSkillsTestQuestions(mixed $value, array $fallback): array
+    {
+        if (! is_array($value) || count($value) === 0) {
+            return $fallback;
+        }
+
+        $questions = [];
+        foreach ($value as $item) {
+            if (! is_array($item) || empty($item['question'])) {
+                continue;
+            }
+
+            $type = strtoupper((string) ($item['type'] ?? 'TECHNIQUE'));
+            $questions[] = [
+                'question' => (string) $item['question'],
+                'type' => in_array($type, ['TECHNIQUE', 'COMPORTEMENTAL'], true) ? $type : 'TECHNIQUE',
+            ];
+        }
+
+        return $questions !== [] ? $questions : $fallback;
+    }
+
+    /**
+     * @param  array<int, array{name: string, overallScore: int}>  $candidates
+     * @return array<int, array{name: string, rank: int, reason: string}>
+     */
+    private function sanitizeRanking(mixed $value, array $candidates): array
+    {
+        if (! is_array($value)) {
+            return [];
+        }
+
+        $validNames = array_column($candidates, 'name');
+        $ranking = [];
+
+        foreach ($value as $item) {
+            if (! is_array($item) || empty($item['name']) || ! in_array($item['name'], $validNames, true)) {
+                continue;
+            }
+
+            $ranking[] = [
+                'name' => (string) $item['name'],
+                'rank' => max(1, (int) ($item['rank'] ?? count($ranking) + 1)),
+                'reason' => (string) ($item['reason'] ?? 'Classé par score global'),
+            ];
+        }
+
+        return $ranking;
     }
 }

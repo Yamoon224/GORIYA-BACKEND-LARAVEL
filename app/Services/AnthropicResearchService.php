@@ -56,7 +56,7 @@ Retournez UNIQUEMENT un objet JSON valide (sans markdown, sans texte avant ou ap
   "recommandations": ["<recommandation actionnable 1>", "<recommandation actionnable 2>", "<recommandation actionnable 3>"]
 }
 
-Basez-vous sur vos connaissances générales de l'entreprise et de son secteur. Si vous n'avez pas d'information fiable sur une entreprise précise, restez honnête et généraliste plutôt que d'inventer des faits. Répondez en français. Minimum 2 éléments par tableau.
+Basez-vous sur vos connaissances générales de l'entreprise et de son secteur. Si vous n'avez pas d'information fiable sur une entreprise précise, restez honnête et généraliste plutôt que d'inventer des faits. {$this->localizedInstruction()} Minimum 2 éléments par tableau.
 PROMPT;
 
             $text = $this->requestClaudeText($prompt, 1024);

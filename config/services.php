@@ -57,6 +57,29 @@ return [
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
 
+    // Push notifications (app mobile). Voir FcmPushNotificationService —
+    // sans compte de service configuré, no-op silencieux (log seulement).
+    'fcm' => [
+        'service_account_path' => env('FCM_SERVICE_ACCOUNT_PATH'),
+        'project_id' => env('FCM_PROJECT_ID'),
+    ],
+
+    // Studio IA — Avatar animé (Pitch Goriya). Voir DIdAvatarService.
+    'd_id' => [
+        'api_key' => env('D_ID_API_KEY'),
+        'base_url' => env('D_ID_BASE_URL', 'https://api.d-id.com'),
+    ],
+
+    // GORIYA Call — visioconférence (lunion.meet, SFU self-hosted Lunion-Lab,
+    // https://meet.lunion-lab.com/docs). Voir LunionMeetService. webhook_secret
+    // est le secret configuré côté dashboard lunion.meet pour cet endpoint
+    // (distinct de api_key), utilisé pour vérifier X-Lunion-Signature.
+    'lunion_meet' => [
+        'api_key' => env('LUNION_MEET_API_KEY'),
+        'base_url' => env('LUNION_MEET_BASE_URL', 'https://meet.lunion-lab.com/api/v1'),
+        'webhook_secret' => env('LUNION_MEET_WEBHOOK_SECRET'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Payment Gateways

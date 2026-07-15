@@ -135,6 +135,67 @@ class PitchController extends Controller
 
     /*
     |----------------------------------------------------------------------
+    | STUDIO IA — AVATAR ANIMÉ (rendu asynchrone via D-ID, voir
+    | PitchService::renderAvatarVideo() et PollAvatarRenderJob)
+    |----------------------------------------------------------------------
+    */
+    #[OA\Post(
+        path: '/pitches/{id}/avatar-video',
+        tags: ['Pitches'],
+        summary: "Génère un avatar animé (Studio IA) lisant le script du pitch",
+        security: [['bearerAuth' => []]],
+        parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [
+            new OA\Response(response: 200, description: 'Rendu lancé, statut PROCESSING', content: new OA\JsonContent(ref: '#/components/schemas/Pitch')),
+            new OA\Response(response: 400, description: 'Photo de profil ou script du pitch manquant'),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+            new OA\Response(response: 404, description: 'Pitch introuvable'),
+            new OA\Response(response: 502, description: 'Erreur du fournisseur D-ID'),
+        ]
+    )]
+    public function renderAvatar(string $id, Request $request)
+    {
+        $pitch = $this->pitchService->find($id, $request->user());
+
+        if (! $pitch) {
+            abort(404, 'Pitch not found');
+        }
+
+        $updated = $this->pitchService->renderAvatarVideo($pitch, $request->user());
+
+        return new PitchResource($updated);
+    }
+
+    /*
+    |----------------------------------------------------------------------
+    | VISIBILITÉ (opt-in pour affichage sur le Profil Public GORIYA)
+    |----------------------------------------------------------------------
+    */
+    #[OA\Patch(
+        path: '/pitches/{id}/visibility',
+        tags: ['Pitches'],
+        summary: 'Bascule la visibilité publique du pitch (Profil Public GORIYA)',
+        security: [['bearerAuth' => []]],
+        parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [
+            new OA\Response(response: 200, description: 'Visibilité mise à jour', content: new OA\JsonContent(ref: '#/components/schemas/Pitch')),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+            new OA\Response(response: 404, description: 'Pitch introuvable'),
+        ]
+    )]
+    public function toggleVisibility(string $id, Request $request)
+    {
+        $pitch = $this->pitchService->find($id, $request->user());
+
+        if (! $pitch) {
+            abort(404, 'Pitch not found');
+        }
+
+        return new PitchResource($this->pitchService->toggleVisibility($pitch));
+    }
+
+    /*
+    |----------------------------------------------------------------------
     | ENVOI AU RECRUTEUR (réutilise CandidatureService::create())
     |----------------------------------------------------------------------
     */

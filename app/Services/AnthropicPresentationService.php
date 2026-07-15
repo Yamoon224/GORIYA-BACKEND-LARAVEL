@@ -71,7 +71,7 @@ Retournez UNIQUEMENT un objet JSON valide (sans markdown) avec exactement cette 
   ]
 }
 
-Répondez en français. 5 à 8 slides, 2 à 4 puces courtes et concrètes par slide.
+{$this->localizedInstruction()} 5 à 8 slides, 2 à 4 puces courtes et concrètes par slide.
 PROMPT;
 
             $text = $this->requestClaudeText($prompt, 1536);
@@ -105,7 +105,7 @@ Retournez UNIQUEMENT un objet JSON valide (sans markdown) avec exactement cette 
   "edges": [{"from": "<id nœud source>", "to": "<id nœud cible>", "label": "<texte optionnel du lien>"}]
 }
 
-Répondez en français. 4 à 10 nœuds, chaque edge doit référencer des id présents dans nodes.
+{$this->localizedInstruction()} 4 à 10 nœuds, chaque edge doit référencer des id présents dans nodes.
 PROMPT;
 
             $text = $this->requestClaudeText($prompt, 1536);

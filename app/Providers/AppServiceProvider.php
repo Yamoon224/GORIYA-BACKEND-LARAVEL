@@ -3,19 +3,30 @@
 namespace App\Providers;
 
 use App\Contracts\AiAnalysisServiceInterface;
+use App\Contracts\AvatarGenerationServiceInterface;
 use App\Contracts\ChatAiServiceInterface;
 use App\Contracts\CompanyResearchServiceInterface;
+use App\Contracts\HrInsightsServiceInterface;
 use App\Contracts\PaymentGatewayInterface;
 use App\Contracts\PitchAiServiceInterface;
 use App\Contracts\PresentationAiServiceInterface;
+use App\Contracts\PushNotificationServiceInterface;
+use App\Contracts\VideoCallProviderInterface;
 use App\Services\AnthropicChatService;
+use App\Services\AnthropicHrInsightsService;
 use App\Services\AnthropicPitchService;
 use App\Services\AnthropicPresentationService;
 use App\Services\AnthropicResearchService;
 use App\Services\AnthropicService;
+use App\Services\DIdAvatarService;
+use App\Services\FcmPushNotificationService;
+use App\Services\LunionMeetService;
 use App\Services\PaymentGatewayManager;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -40,6 +51,10 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(PitchAiServiceInterface::class, AnthropicPitchService::class);
         $this->app->bind(PresentationAiServiceInterface::class, AnthropicPresentationService::class);
         $this->app->bind(ChatAiServiceInterface::class, AnthropicChatService::class);
+        $this->app->bind(AvatarGenerationServiceInterface::class, DIdAvatarService::class);
+        $this->app->bind(PushNotificationServiceInterface::class, FcmPushNotificationService::class);
+        $this->app->bind(HrInsightsServiceInterface::class, AnthropicHrInsightsService::class);
+        $this->app->bind(VideoCallProviderInterface::class, LunionMeetService::class);
     }
 
     /**
@@ -67,6 +82,17 @@ class AppServiceProvider extends ServiceProvider
         Builder::macro('orWhereILike', function (string $column, string $value) {
             /** @var Builder $this */
             return $this->orWhereRaw('LOWER('.$column.') LIKE ?', ['%'.mb_strtolower($value).'%']);
+        });
+
+        // Rate limiting par client API B2B (EnsureValidApiKey pose
+        // 'api_client' dans $request->attributes avant que ce limiteur ne
+        // s'exécute — voir la route /external/v1/* : middleware('auth.apikey')
+        // doit toujours précéder middleware('throttle:api-client')).
+        RateLimiter::for('api-client', function (Request $request) {
+            $client = $request->attributes->get('api_client');
+            $limit = $client?->rate_limit_per_minute ?? 60;
+
+            return Limit::perMinute($limit)->by($client?->id ?? $request->ip());
         });
     }
 }
