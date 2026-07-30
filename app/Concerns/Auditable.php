@@ -31,7 +31,9 @@ trait Auditable
         });
 
         static::deleted(function ($model) {
-            app(AuditLogService::class)->log('deleted', $model, $model->auditableAttributes(), []);
+            // Ne pas conserver le contenu du modèle supprimé (DCP) dans old_values :
+            // seule la preuve que la suppression a eu lieu (type, id, auteur, date) est journalisée.
+            app(AuditLogService::class)->log('deleted', $model, [], []);
         });
     }
 
