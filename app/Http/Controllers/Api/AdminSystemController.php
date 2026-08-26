@@ -482,7 +482,7 @@ class AdminSystemController extends Controller
                     new OA\Property(property: 'success', type: 'boolean', example: true),
                     new OA\Property(property: 'data', properties: [
                         new OA\Property(property: 'platformName', type: 'string', example: 'GORIYA'),
-                        new OA\Property(property: 'mainUrl', type: 'string', example: 'https://goriya-admin.vercel.app'),
+                        new OA\Property(property: 'mainUrl', type: 'string', example: 'https://admin.goriya.net'),
                         new OA\Property(property: 'supportEmail', type: 'string', format: 'email', example: 'support@goriya.app'),
                         new OA\Property(property: 'timezone', type: 'string', example: 'Africa/Abidjan'),
                         new OA\Property(property: 'description', type: 'string'),

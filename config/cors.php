@@ -22,9 +22,9 @@ return [
 
     // Même liste que backend/src/main.ts
     'allowed_origins' => [
-        'https://goriya-entreprise.vercel.app',
-        'https://goriya-standard.vercel.app',
-        'https://goriya-admin.vercel.app',
+        'https://entreprise.goriya.net',
+        'https://goriya.net',
+        'https://admin.goriya.net',
         'http://localhost:3000',
     ],
 

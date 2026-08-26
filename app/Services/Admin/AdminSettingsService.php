@@ -13,7 +13,7 @@ class AdminSettingsService
 {
     private const DEFAULT_SYSTEM_SETTINGS = [
         'platformName' => 'GORIYA',
-        'mainUrl' => 'https://goriya-admin.vercel.app',
+        'mainUrl' => 'https://admin.goriya.net',
         'supportEmail' => 'support@goriya.app',
         'timezone' => 'Africa/Abidjan',
         'description' => 'Administration de la plateforme Goriya',

@@ -8582,7 +8582,7 @@
                                                 },
                                                 "mainUrl": {
                                                     "type": "string",
-                                                    "example": "https://goriya-admin.vercel.app"
+                                                    "example": "https://admin.goriya.net"
                                                 },
                                                 "supportEmail": {
                                                     "type": "string",
