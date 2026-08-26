@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ config('app.name', 'Goriya') }} — API Backend</title>
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" href="/images/favicon.png">
+    <link rel="apple-touch-icon" href="/images/apple-icon.png">
     <style>
         :root {
             --brand: #0f6e5c;
@@ -66,12 +69,30 @@
             background: #22c55e;
             box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
         }
-        h1 {
-            font-size: 34px;
-            margin: 0 0 8px 0;
-            letter-spacing: -0.01em;
+        .logo-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: fit-content;
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 14px 24px;
+            margin: 0 auto 22px auto;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
         }
-        h1 span { color: var(--brand); }
+        .logo-wrap img {
+            height: 34px;
+            width: auto;
+            display: block;
+        }
+        .kicker {
+            font-size: 12.5px;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin: 0 0 8px 0;
+        }
         p.tagline {
             margin: 0 0 28px 0;
             font-size: 15.5px;
@@ -115,7 +136,11 @@
     <div class="card">
         <span class="badge"><span class="dot"></span>API en ligne</span>
 
-        <h1>Goriya<span>.</span> Backend</h1>
+        <div class="logo-wrap">
+            <img src="/images/goriya-logo.png" alt="Goriya">
+        </div>
+
+        <p class="kicker">Backend API</p>
         <p class="tagline">
             Le moteur API qui alimente la plateforme digitale de recrutement Goriya —
             application candidats, backoffice administrateur et espace entreprise.
