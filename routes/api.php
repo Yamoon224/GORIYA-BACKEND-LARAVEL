@@ -40,6 +40,7 @@ use App\Http\Controllers\Api\JobOffersController;
 use App\Http\Controllers\Api\LunionMeetWebhookController;
 use App\Http\Controllers\Api\MatchingResultsController;
 use App\Http\Controllers\Api\MessagesController;
+use App\Http\Controllers\Api\NewsletterController;
 use App\Http\Controllers\Api\NotificationsController;
 use App\Http\Controllers\Api\PitchController;
 use App\Http\Controllers\Api\PortfoliosController;
@@ -343,6 +344,9 @@ Route::middleware('auth:api')->group(function () {
     Route::patch('/cv-analysis/{id}', [CvAnalysisController::class, 'update']);
     Route::delete('/cv-analysis/{id}', [CvAnalysisController::class, 'destroy']);
 });
+
+// --- Newsletter (public) ---
+Route::post('/newsletter/subscribe', [NewsletterController::class, 'subscribe']);
 
 // --- Subscriptions ---
 Route::get('/subscriptions/plans', [SubscriptionsController::class, 'plans']);
