@@ -86,7 +86,7 @@ class AuthController extends Controller
     #[OA\Post(
         path: '/auth/refresh',
         tags: ['Auth'],
-        summary: 'Rafraîchit le JWT (invalide immédiatement l\'ancien token)',
+        summary: 'Rafraîchit le JWT à partir du token courant (Bearer), même expiré tant qu\'il reste dans la fenêtre refresh_ttl. L\'ancien token est invalidé.',
         security: [['bearerAuth' => []]],
         responses: [
             new OA\Response(
@@ -94,7 +94,7 @@ class AuthController extends Controller
                 description: 'Nouveau token émis',
                 content: new OA\JsonContent(properties: [new OA\Property(property: 'token', type: 'string')])
             ),
-            new OA\Response(response: 401, description: 'Non authentifié ou token déjà invalide'),
+            new OA\Response(response: 401, description: 'Token absent, corrompu, ou hors fenêtre refresh_ttl'),
         ]
     )]
     public function refresh()

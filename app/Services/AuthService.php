@@ -88,7 +88,14 @@ class AuthService
 
     public function refresh(): string
     {
-        return auth('api')->refresh();
+        // Pas de middleware auth:api sur la route : on tolère un token expiré
+        // tant qu'il reste dans la fenêtre refresh_ttl (rotation de session
+        // NextAuth côté front). Au-delà, ou token absent/corrompu → 401.
+        try {
+            return auth('api')->refresh();
+        } catch (JWTException) {
+            abort(401, 'Session expirée. Veuillez vous reconnecter.');
+        }
     }
 
     /**

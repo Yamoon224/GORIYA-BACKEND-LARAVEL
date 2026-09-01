@@ -232,7 +232,10 @@ return [
     |
     */
 
-    'blacklist_grace_period' => env('JWT_BLACKLIST_GRACE_PERIOD', 0),
+    // 60s : plusieurs requêtes/onglets du front (rotation de session NextAuth)
+    // peuvent présenter l'ancien token juste après un /auth/refresh — sans grâce,
+    // celles-ci échoueraient en 401 (token fraîchement blacklisté).
+    'blacklist_grace_period' => env('JWT_BLACKLIST_GRACE_PERIOD', 60),
 
     /*
     |--------------------------------------------------------------------------
