@@ -120,8 +120,8 @@ return [
     |
     */
     'payment' => [
-        'enabled_gateways' => array_filter(explode(',', env('PAYMENT_ENABLED_GATEWAYS', 'kkiapay'))),
-        'default_gateway' => env('PAYMENT_DEFAULT_GATEWAY', 'kkiapay'),
+        'enabled_gateways' => array_filter(explode(',', env('PAYMENT_ENABLED_GATEWAYS', 'paiementpro,kkiapay'))),
+        'default_gateway' => env('PAYMENT_DEFAULT_GATEWAY', 'paiementpro'),
     ],
 
 ];

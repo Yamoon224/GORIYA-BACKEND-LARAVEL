@@ -56,12 +56,12 @@ class PaymentGatewayManager implements PaymentGatewayInterface
      */
     public function enabledGateways(): array
     {
-        return config('services.payment.enabled_gateways', ['kkiapay']);
+        return config('services.payment.enabled_gateways', ['paiementpro', 'kkiapay']);
     }
 
     public function defaultGatewayName(): string
     {
-        return config('services.payment.default_gateway', 'kkiapay');
+        return config('services.payment.default_gateway', 'paiementpro');
     }
 
     public function verifyTransaction(string $transactionId): array
