@@ -13,6 +13,7 @@ use App\Services\CompanyService;
 use App\Services\OtpService;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use OpenApi\Attributes as OA;
 
 #[OA\Tag(name: 'Companies', description: 'Gestion des entreprises')]
@@ -62,7 +63,17 @@ class CompaniesController extends Controller
             'coverImage' => $request->file('coverImage'),
         ]);
 
-        $this->otpService->send($result['user']);
+        // L'envoi du mail ne doit jamais faire échouer l'inscription : le compte
+        // et le code OTP sont déjà persistés, l'utilisateur peut redemander un
+        // code via POST /auth/otp/request une fois le SMTP rétabli.
+        try {
+            $this->otpService->send($result['user']);
+        } catch (\Throwable $e) {
+            Log::error('Envoi du code OTP à l\'inscription entreprise échoué', [
+                'user_id' => $result['user']->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return response()->json([
             'company' => new CompanyResource($result['company']),

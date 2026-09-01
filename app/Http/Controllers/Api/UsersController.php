@@ -13,6 +13,7 @@ use App\Services\OtpService;
 use App\Services\UserService;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use OpenApi\Attributes as OA;
 
 #[OA\Tag(name: 'Users', description: 'Gestion des utilisateurs (candidats)')]
@@ -56,7 +57,17 @@ class UsersController extends Controller
     {
         $result = $this->userService->create($request->validated(), $request->file('avatar'));
 
-        $this->otpService->send($result['user']);
+        // L'envoi du mail ne doit jamais faire échouer l'inscription : le compte
+        // et le code OTP sont déjà persistés, l'utilisateur peut redemander un
+        // code via POST /auth/otp/request une fois le SMTP rétabli.
+        try {
+            $this->otpService->send($result['user']);
+        } catch (\Throwable $e) {
+            Log::error('Envoi du code OTP à l\'inscription échoué', [
+                'user_id' => $result['user']->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return response()->json([
             'user' => new UserResource($result['user']),
