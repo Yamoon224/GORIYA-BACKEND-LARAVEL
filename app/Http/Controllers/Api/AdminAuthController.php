@@ -364,7 +364,7 @@ class AdminAuthController extends Controller
         // s'auto-modifier ces champs par ce biais (utiliser la gestion admin dédiée).
         // Avant ce correctif, $request->all() transmettait tout tel quel, permettant
         // à n'importe quel utilisateur authentifié de s'auto-promouvoir ADMIN.
-        $data = $request->only(['name', 'email', 'password']);
+        $data = $request->only(['name', 'email', 'password', 'location']);
 
         return ApiResponse::success($this->adminAuthService->updateMyProfile($request->user()->id, $data));
     }
