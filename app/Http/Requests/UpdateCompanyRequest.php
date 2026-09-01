@@ -62,7 +62,7 @@ class UpdateCompanyRequest extends FormRequest
             'logo' => ['nullable', 'file', 'mimetypes:image/png,image/jpeg,image/jpg,image/webp'],
             'coverImage' => ['nullable', 'file', 'mimetypes:image/png,image/jpeg,image/jpg,image/webp'],
             'gallery' => ['nullable', 'array', 'max:12'],
-            'gallery.*' => ['file', 'mimetypes:image/png,image/jpeg,image/jpg,image/webp', 'max:4096'],
+            'gallery.*' => ['file', 'mimetypes:image/png,image/jpeg,image/jpg,image/webp', 'max:8192'],
             'removedGallery' => ['nullable', 'array'],
             'removedGallery.*' => ['string'],
         ];
