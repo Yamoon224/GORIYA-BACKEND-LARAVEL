@@ -384,6 +384,7 @@ Route::middleware('auth:api')->group(function () {
 
     Route::get('/notifications', [NotificationsController::class, 'index']);
     Route::put('/notifications/read-all', [NotificationsController::class, 'markAllRead']);
+    Route::get('/notifications/settings', [NotificationsController::class, 'settings']);
     Route::put('/notifications/settings', [NotificationsController::class, 'updateSettings']);
     Route::put('/notifications/{id}/read', [NotificationsController::class, 'markRead']);
     Route::delete('/notifications/{id}', [NotificationsController::class, 'destroy']);

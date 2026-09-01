@@ -112,6 +112,29 @@ class NotificationsController extends Controller
         return response()->json(['message' => 'Notification supprimée']);
     }
 
+    #[OA\Get(
+        path: '/notifications/settings',
+        tags: ['Notifications'],
+        summary: 'Préférences de notification de l\'utilisateur courant',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Préférences',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'applications', type: 'boolean'),
+                    new OA\Property(property: 'emplois', type: 'boolean'),
+                    new OA\Property(property: 'recommandations', type: 'boolean'),
+                ])
+            ),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+        ]
+    )]
+    public function settings(Request $request)
+    {
+        return response()->json($this->notificationService->getSettings($request->user()));
+    }
+
     #[OA\Put(
         path: '/notifications/settings',
         tags: ['Notifications'],

@@ -54,6 +54,17 @@ class NotificationService
     }
 
     /**
+     * @return array{applications: bool, emplois: bool, recommandations: bool}
+     */
+    public function getSettings(User $user): array
+    {
+        return array_merge(
+            self::DEFAULT_SETTINGS,
+            Cache::get("notification_settings:{$user->id}", [])
+        );
+    }
+
+    /**
      * @param  array{applications?: bool, emplois?: bool, recommandations?: bool}  $settings
      */
     public function updateSettings(User $user, array $settings): void
