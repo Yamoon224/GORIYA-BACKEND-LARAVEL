@@ -22,6 +22,7 @@ class AuthService
         private readonly UserRepositoryInterface $userRepository,
         private readonly AuditLogService $auditLogService,
         private readonly OtpService $otpService,
+        private readonly GoogleTokenVerifier $googleTokenVerifier,
     ) {}
 
     /**
@@ -130,32 +131,53 @@ class AuthService
     }
 
     /**
+     * @param  array{credential: string, allowSignup?: bool}  $data
      * @return array{access_token: string, user: UserResource, isNewUser: bool}
      */
     public function googleAuth(array $data): array
     {
-        $existingUser = $this->userRepository->findByEmail($data['email']);
+        $profile = $this->googleTokenVerifier->verify(
+            $data['credential'],
+            config('services.google.client_ids', []),
+        );
+
+        $existingUser = $this->userRepository->findByEmail($profile['email']);
 
         if ($existingUser) {
+            if ($existingUser->status === UserStatus::INACTIVE) {
+                abort(401, "Compte bloqué. Vous n'êtes pas autorisé à vous connecter. Veuillez contacter l'administrateur.");
+            }
+
             $token = auth('api')->login($existingUser);
             $fullUser = $this->userRepository->findOrFail($existingUser->id);
             $fullUser->load('company');
 
+            $this->auditLogService->log('login', $fullUser, [], ['provider' => 'google'], actor: $fullUser);
+
             return ['access_token' => $token, 'user' => new UserResource($fullUser), 'isNewUser' => false];
         }
 
+        // Certains fronts (espace entreprise) n'autorisent la connexion Google
+        // que pour un compte déjà existant — la création d'un compte entreprise
+        // passe par un autre parcours (choix d'offre, création de la société).
+        if (($data['allowSignup'] ?? true) === false) {
+            abort(404, "Aucun compte n'est associé à cette adresse Google.");
+        }
+
         $user = $this->userRepository->create([
-            'name' => $data['name'] ?: ($data['firstName'] ?? explode('@', $data['email'])[0]),
-            'email' => $data['email'],
+            'name' => $profile['name'] ?: ($profile['given_name'] ?? explode('@', $profile['email'])[0]),
+            'email' => $profile['email'],
             'password' => Str::uuid()->toString(),
             'role' => UserRole::USER,
             'status' => UserStatus::ACTIVE,
-            'avatar' => $data['picture'] ?? null,
+            'avatar' => $profile['picture'] ?? null,
         ]);
 
         $token = auth('api')->login($user);
         $fullUser = $this->userRepository->findOrFail($user->id);
         $fullUser->load('company');
+
+        $this->auditLogService->log('register', $fullUser, [], ['provider' => 'google'], actor: $fullUser);
 
         return ['access_token' => $token, 'user' => new UserResource($fullUser), 'isNewUser' => true];
     }

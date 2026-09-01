@@ -7,14 +7,10 @@ use OpenApi\Attributes as OA;
 
 #[OA\Schema(
     schema: 'GoogleAuthRequest',
-    required: ['googleId', 'email', 'name'],
+    required: ['credential'],
     properties: [
-        new OA\Property(property: 'googleId', type: 'string'),
-        new OA\Property(property: 'email', type: 'string', format: 'email'),
-        new OA\Property(property: 'name', type: 'string'),
-        new OA\Property(property: 'firstName', type: 'string', nullable: true),
-        new OA\Property(property: 'lastName', type: 'string', nullable: true),
-        new OA\Property(property: 'picture', type: 'string', nullable: true),
+        new OA\Property(property: 'credential', type: 'string', description: "ID token JWT renvoyé par Google Identity Services (champ `credential` du callback)"),
+        new OA\Property(property: 'allowSignup', type: 'boolean', default: true, description: "Si false, refuse la connexion quand aucun compte n'existe déjà pour cet email (utilisé par l'espace entreprise)"),
     ]
 )]
 class GoogleAuthRequest extends FormRequest
@@ -30,12 +26,18 @@ class GoogleAuthRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'googleId' => ['required', 'string'],
-            'email' => ['required', 'email'],
-            'name' => ['required', 'string'],
-            'firstName' => ['nullable', 'string'],
-            'lastName' => ['nullable', 'string'],
-            'picture' => ['nullable', 'string'],
+            'credential' => ['required', 'string'],
+            'allowSignup' => ['sometimes', 'boolean'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'credential.required' => 'Jeton Google manquant.',
         ];
     }
 }

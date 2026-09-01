@@ -18,6 +18,18 @@ return [
         'key' => env('POSTMARK_API_KEY'),
     ],
 
+    // Connexion / inscription via Google (Google Identity Services).
+    // GOOGLE_CLIENT_IDS : liste séparée par des virgules des « Client ID »
+    // OAuth 2.0 (type Web) autorisés — un par front qui envoie un jeton
+    // (candidats + espace entreprise). Le backend vérifie que l'`aud` du
+    // jeton Google fait partie de cette liste avant d'ouvrir une session.
+    'google' => [
+        'client_ids' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('GOOGLE_CLIENT_IDS', (string) env('GOOGLE_CLIENT_ID', '')))
+        ))),
+    ],
+
     'resend' => [
         'key' => env('RESEND_API_KEY'),
     ],

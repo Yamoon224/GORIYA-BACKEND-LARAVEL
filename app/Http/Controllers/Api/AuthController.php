@@ -174,7 +174,7 @@ class AuthController extends Controller
     #[OA\Post(
         path: '/auth/google',
         tags: ['Auth'],
-        summary: "Connexion/inscription via Google (crée l'utilisateur s'il n'existe pas)",
+        summary: "Connexion/inscription via Google : le jeton `credential` est vérifié côté serveur auprès de Google, puis l'utilisateur est créé s'il n'existe pas (sauf allowSignup=false)",
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(ref: '#/components/schemas/GoogleAuthRequest')
