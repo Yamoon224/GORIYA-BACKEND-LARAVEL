@@ -42,6 +42,23 @@ class AuthService
             abort(401, "Compte bloqué. Vous n'êtes pas autorisé à vous connecter. Veuillez contacter l'administrateur.");
         }
 
+        // Tant que l'email n'est pas vérifié via OTP, la connexion d'un compte
+        // candidat (USER) est refusée. Les comptes antérieurs à l'OTP ont été
+        // rétro-marqués vérifiés par la migration. On renvoie un code frais pour
+        // que l'utilisateur puisse finaliser sa vérification immédiatement.
+        if ($user->role === UserRole::USER && $user->email_verified_at === null) {
+            try {
+                $this->otpService->send($user);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error("Renvoi OTP au login non vérifié échoué", [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+            $this->auditLogService->log('login_failed', $user, [], ['email' => $email, 'reason' => 'email_not_verified'], actor: $user);
+            abort(403, 'EMAIL_NOT_VERIFIED');
+        }
+
         $token = auth('api')->login($user);
         $fullUser = $this->userRepository->findOrFail($user->id);
         $fullUser->load('company');
@@ -172,6 +189,10 @@ class AuthService
             'status' => UserStatus::ACTIVE,
             'avatar' => $profile['picture'] ?? null,
         ]);
+
+        // L'email est déjà vérifié par Google (claim email_verified contrôlé
+        // dans GoogleTokenVerifier) — pas d'OTP à repasser.
+        $user->forceFill(['email_verified_at' => now()])->save();
 
         $token = auth('api')->login($user);
         $fullUser = $this->userRepository->findOrFail($user->id);

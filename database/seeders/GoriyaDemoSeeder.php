@@ -133,6 +133,7 @@ class GoriyaDemoSeeder extends Seeder
                 'password' => Hash::make('password123'),
                 'role' => $role->value,
                 'status' => UserStatus::ACTIVE->value,
+                'email_verified_at' => $now,
                 'avatar' => 'https://i.pravatar.cc/150?u='.$id,
                 'registration_date' => $now,
                 'company_id' => $role === UserRole::ENTERPRISE ? IvorianData::randomItem($companies)['id'] : null,

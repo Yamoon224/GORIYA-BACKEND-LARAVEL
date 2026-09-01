@@ -21,9 +21,10 @@ class UserFactory extends Factory
     /**
      * Define the model's default state.
      *
-     * Pas de email_verified_at / remember_token : la table users custom
-     * (2026_07_02_134416_create_users_table.php) n'a pas ces colonnes du
-     * scaffolding Laravel par défaut.
+     * `email_verified_at` a été ajouté à la table par la migration
+     * 2026_07_09_100006 (vérification OTP). On le renseigne par défaut ici :
+     * un compte USER non vérifié ne peut plus se connecter (voir
+     * AuthService::login). Utiliser l'état `unverified()` pour l'inverse.
      *
      * @return array<string, mixed>
      */
@@ -35,6 +36,15 @@ class UserFactory extends Factory
             'password' => static::$password ??= Hash::make('password'),
             'role' => UserRole::USER,
             'status' => UserStatus::ACTIVE,
+            'email_verified_at' => now(),
         ];
+    }
+
+    /**
+     * Compte dont l'email n'a pas encore été vérifié via OTP.
+     */
+    public function unverified(): static
+    {
+        return $this->state(fn (array $attributes) => ['email_verified_at' => null]);
     }
 }

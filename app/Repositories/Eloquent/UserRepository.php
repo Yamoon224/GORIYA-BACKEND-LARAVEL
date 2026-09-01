@@ -65,7 +65,7 @@ class UserRepository extends BaseRepository implements UserRepositoryInterface
     public function findByEmailWithPassword(string $email): ?User
     {
         return User::where('email', $email)
-            ->select(['id', 'email', 'password', 'role', 'status', 'name'])
+            ->select(['id', 'email', 'password', 'role', 'status', 'name', 'email_verified_at'])
             ->first();
     }
 
