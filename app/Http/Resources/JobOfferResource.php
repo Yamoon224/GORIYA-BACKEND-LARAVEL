@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\MediaUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use OpenApi\Attributes as OA;
@@ -64,13 +65,13 @@ class JobOfferResource extends JsonResource
             'publishDate' => $this->publish_date,
             'endDate' => $this->end_date,
             'applicants' => $this->applicants,
-            'image' => $this->image,
+            'image' => MediaUrl::resolve($this->image),
             'remote' => (bool) $this->remote,
             'company' => $this->company ? [
                 'id' => $this->company->id,
                 'name' => $this->company->name,
-                'logo' => $this->company->logo,
-                'coverImage' => $this->company->cover_image,
+                'logo' => MediaUrl::resolve($this->company->logo),
+                'coverImage' => MediaUrl::resolve($this->company->cover_image),
                 'sector' => $this->company->sector,
             ] : null,
             'createdAt' => $this->created_at,

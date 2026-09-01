@@ -29,6 +29,7 @@ class Company extends Model
         'partnership_date',
         'company_size',
         'social_links',
+        'gallery',
         'country',
         'headquarters',
         'location',
@@ -49,6 +50,7 @@ class Company extends Model
             'creation_date' => 'date',
             'partnership_date' => 'date',
             'social_links' => 'array',
+            'gallery' => 'array',
         ];
     }
 

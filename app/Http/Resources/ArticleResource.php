@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\MediaUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use OpenApi\Attributes as OA;
@@ -35,7 +36,7 @@ class ArticleResource extends JsonResource
             'slug' => $this->slug,
             'excerpt' => $this->excerpt,
             'content' => $this->content,
-            'coverImage' => $this->cover_image,
+            'coverImage' => MediaUrl::resolve($this->cover_image),
             'authorName' => $this->author_name,
             'status' => $this->status->value,
             'publishedAt' => $this->published_at,

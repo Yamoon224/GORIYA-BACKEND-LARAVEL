@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\MediaUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use OpenApi\Attributes as OA;
@@ -17,6 +18,7 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'sector', type: 'string'),
         new OA\Property(property: 'logo', type: 'string', nullable: true),
         new OA\Property(property: 'coverImage', type: 'string', nullable: true),
+        new OA\Property(property: 'gallery', type: 'array', items: new OA\Items(type: 'string'), nullable: true),
         new OA\Property(property: 'about', type: 'string', nullable: true),
         new OA\Property(property: 'website', type: 'string', nullable: true),
         new OA\Property(property: 'creationDate', type: 'string', format: 'date', nullable: true),
@@ -44,8 +46,13 @@ class CompanyResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'sector' => $this->sector,
-            'logo' => $this->logo,
-            'coverImage' => $this->cover_image,
+            'logo' => MediaUrl::resolve($this->logo),
+            'coverImage' => MediaUrl::resolve($this->cover_image),
+            'gallery' => collect($this->gallery ?? [])
+                ->map(fn ($path) => MediaUrl::resolve($path))
+                ->filter()
+                ->values()
+                ->all(),
             'about' => $this->about,
             'website' => $this->website,
             'creationDate' => $this->creation_date,

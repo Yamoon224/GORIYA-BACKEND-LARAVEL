@@ -245,6 +245,7 @@ class CompaniesController extends Controller
         $updated = $this->companyService->update($company, $request->validated(), [
             'logo' => $request->file('logo'),
             'coverImage' => $request->file('coverImage'),
+            'gallery' => $request->file('gallery'),
         ]);
 
         return new CompanyResource($updated);

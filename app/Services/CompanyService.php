@@ -95,8 +95,11 @@ class CompanyService
         }
     }
 
+    /** Nombre maximum de photos dans la galerie d'une entreprise. */
+    private const MAX_GALLERY = 12;
+
     /**
-     * @param  array{logo?: UploadedFile, coverImage?: UploadedFile}  $files
+     * @param  array{logo?: UploadedFile, coverImage?: UploadedFile, gallery?: UploadedFile[]}  $files
      */
     public function update(Company $company, array $data, array $files = []): Company
     {
@@ -114,6 +117,11 @@ class CompanyService
                 $this->deleteCompanyFile($company->cover_image);
             }
             $mapped['cover_image'] = $this->storeCompanyFile($files['coverImage']);
+        }
+
+        $gallery = $this->syncGallery($company, $data, $files['gallery'] ?? null);
+        if ($gallery !== null) {
+            $mapped['gallery'] = $gallery;
         }
 
         if (array_key_exists('socialLinks', $data)) {
@@ -182,6 +190,9 @@ class CompanyService
         if ($company->cover_image) {
             $this->deleteCompanyFile($company->cover_image);
         }
+        foreach ($company->gallery ?? [] as $path) {
+            $this->deleteCompanyFile($path);
+        }
 
         $this->companyRepository->delete($company);
     }
@@ -214,11 +225,66 @@ class CompanyService
         $filename = Str::uuid().'.'.$file->getClientOriginalExtension();
         Storage::disk('public')->putFileAs('companies', $file, $filename);
 
-        return "/companies/{$filename}";
+        return "/storage/companies/{$filename}";
     }
 
     private function deleteCompanyFile(string $path): void
     {
         Storage::disk('public')->delete('companies/'.basename($path));
+    }
+
+    /**
+     * Reconstruit la galerie de l'entreprise : retire les entrées listées dans
+     * `removedGallery` (comparaison sur le nom de fichier), ajoute les nouveaux
+     * uploads, plafonne à self::MAX_GALLERY.
+     *
+     * @param  UploadedFile[]|UploadedFile|null  $uploads
+     * @return list<string>|null  null si aucun changement demandé
+     */
+    private function syncGallery(Company $company, array $data, mixed $uploads): ?array
+    {
+        $removed = $this->asList($data['removedGallery'] ?? null);
+        $uploads = $uploads === null ? [] : (is_array($uploads) ? $uploads : [$uploads]);
+
+        if (empty($removed) && empty($uploads)) {
+            return null;
+        }
+
+        $removedNames = array_map(fn ($p) => basename((string) $p), $removed);
+
+        $kept = collect($company->gallery ?? [])
+            ->reject(function (string $path) use ($removedNames) {
+                if (in_array(basename($path), $removedNames, true)) {
+                    $this->deleteCompanyFile($path);
+
+                    return true;
+                }
+
+                return false;
+            })
+            ->values()
+            ->all();
+
+        foreach ($uploads as $file) {
+            if ($file instanceof UploadedFile) {
+                $kept[] = $this->storeCompanyFile($file);
+            }
+        }
+
+        return array_slice($kept, 0, self::MAX_GALLERY);
+    }
+
+    /**
+     * Normalise une valeur multipart (`foo[]`) en liste PHP.
+     *
+     * @return list<string>
+     */
+    private function asList(mixed $value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        return array_values(array_filter(is_array($value) ? $value : [$value], fn ($v) => $v !== null && $v !== ''));
     }
 }

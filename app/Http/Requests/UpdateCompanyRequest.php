@@ -27,6 +27,8 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'partnershipDate', type: 'string', format: 'date'),
         new OA\Property(property: 'logo', type: 'string', format: 'binary', nullable: true, description: 'image/png, jpeg, jpg ou webp'),
         new OA\Property(property: 'coverImage', type: 'string', format: 'binary', nullable: true, description: 'image/png, jpeg, jpg ou webp'),
+        new OA\Property(property: 'gallery', type: 'array', items: new OA\Items(type: 'string', format: 'binary'), nullable: true, description: 'Photos à ajouter à la galerie (image/png, jpeg, jpg ou webp)'),
+        new OA\Property(property: 'removedGallery', type: 'array', items: new OA\Items(type: 'string'), nullable: true, description: 'URLs/chemins des photos de galerie à retirer'),
     ]
 )]
 class UpdateCompanyRequest extends FormRequest
@@ -59,6 +61,10 @@ class UpdateCompanyRequest extends FormRequest
             'partnershipDate' => ['sometimes', 'date'],
             'logo' => ['nullable', 'file', 'mimetypes:image/png,image/jpeg,image/jpg,image/webp'],
             'coverImage' => ['nullable', 'file', 'mimetypes:image/png,image/jpeg,image/jpg,image/webp'],
+            'gallery' => ['nullable', 'array', 'max:12'],
+            'gallery.*' => ['file', 'mimetypes:image/png,image/jpeg,image/jpg,image/webp', 'max:4096'],
+            'removedGallery' => ['nullable', 'array'],
+            'removedGallery.*' => ['string'],
         ];
     }
 }
