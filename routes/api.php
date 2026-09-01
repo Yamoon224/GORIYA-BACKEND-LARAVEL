@@ -42,6 +42,7 @@ use App\Http\Controllers\Api\MatchingResultsController;
 use App\Http\Controllers\Api\MessagesController;
 use App\Http\Controllers\Api\NewsletterController;
 use App\Http\Controllers\Api\NotificationsController;
+use App\Http\Controllers\Api\PaiementProWebhookController;
 use App\Http\Controllers\Api\PitchController;
 use App\Http\Controllers\Api\PortfoliosController;
 use App\Http\Controllers\Api\PostsController;
@@ -359,6 +360,10 @@ Route::get('/subscriptions/me/{userId}', [SubscriptionsController::class, 'mySub
 Route::delete('/subscriptions/me/{userId}', [SubscriptionsController::class, 'cancel'])->middleware('auth:api');
 Route::post('/subscriptions/checkout', [SubscriptionsController::class, 'checkout'])->middleware('auth:api');
 Route::get('/subscriptions/checkout/verify/{transactionId}', [SubscriptionsController::class, 'verifyCheckout'])->middleware('auth:api');
+// Notification serveur-à-serveur Paiement Pro — authentifiée par jeton d'URL +
+// recoupement de la Transaction (voir PaiementProWebhookController), pas par JWT.
+Route::post('/webhooks/paiementpro', [PaiementProWebhookController::class, 'handle']);
+Route::get('/webhooks/paiementpro', [PaiementProWebhookController::class, 'handle']);
 Route::get('/subscriptions/admin/stats', [SubscriptionsController::class, 'adminStats'])->middleware(['auth:api', 'role:ADMIN']);
 Route::get('/subscriptions/admin/all', [SubscriptionsController::class, 'adminAll'])->middleware(['auth:api', 'role:ADMIN']);
 Route::get('/subscriptions/admin/revenue-trend', [SubscriptionsController::class, 'adminRevenueTrend'])->middleware(['auth:api', 'role:ADMIN']);

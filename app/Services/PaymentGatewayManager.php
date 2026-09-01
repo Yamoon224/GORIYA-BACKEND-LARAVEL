@@ -25,6 +25,7 @@ class PaymentGatewayManager implements PaymentGatewayInterface
         'kkiapay' => KkiapayService::class,
         'wave' => WaveService::class,
         'stripe' => StripeService::class,
+        'paiementpro' => PaiementProService::class,
     ];
 
     public function __construct(private readonly Container $container) {}

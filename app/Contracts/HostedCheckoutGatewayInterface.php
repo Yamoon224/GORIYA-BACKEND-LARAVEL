@@ -9,14 +9,18 @@ namespace App\Contracts;
  * de Kkiapay où seul verifyTransaction()/refundTransaction() (voir
  * PaymentGatewayInterface) sont nécessaires côté serveur.
  *
- * Implémentée par WaveService. PaymentGatewayManager teste
- * `instanceof HostedCheckoutGatewayInterface` pour savoir si un gateway
- * nécessite ce flux avant d'appeler checkout().
+ * Implémentée par WaveService, StripeService et PaiementProService.
+ * PaymentGatewayManager teste `instanceof HostedCheckoutGatewayInterface` pour
+ * savoir si un gateway nécessite ce flux avant d'appeler checkout().
+ *
+ * Les clés `customer*` / `userId` / `planId` ne sont utilisées que par
+ * PaiementProService (Paiement Pro exige les coordonnées du payeur à
+ * l'initialisation) — Wave et Stripe les ignorent.
  */
 interface HostedCheckoutGatewayInterface
 {
     /**
-     * @param  array{amount: int|string, currency: string, successUrl: string, errorUrl: string, clientReference?: string}  $params
+     * @param  array{amount: int|string, currency: string, successUrl: string, errorUrl: string, clientReference?: string, customerEmail?: ?string, customerFirstName?: string, customerLastName?: string, customerPhone?: ?string, userId?: string, planId?: string}  $params
      * @return array{sessionId: string, checkoutUrl: string}
      */
     public function createCheckoutSession(array $params): array;

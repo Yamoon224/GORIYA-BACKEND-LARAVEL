@@ -209,7 +209,7 @@ class SubscriptionsController extends Controller
             new OA\Parameter(name: 'transactionId', in: 'path', required: true, schema: new OA\Schema(type: 'string')),
             new OA\Parameter(name: 'userId', in: 'query', schema: new OA\Schema(type: 'string', format: 'uuid')),
             new OA\Parameter(name: 'planId', in: 'query', schema: new OA\Schema(type: 'string', format: 'uuid')),
-            new OA\Parameter(name: 'gateway', in: 'query', description: 'kkiapay|wave|stripe — déduit de la Transaction si omis', schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'gateway', in: 'query', description: 'kkiapay|wave|stripe|paiementpro — déduit de la Transaction si omis', schema: new OA\Schema(type: 'string')),
         ],
         responses: [
             new OA\Response(response: 200, description: 'Abonnement actif (existant ou nouvellement créé)', content: new OA\JsonContent(ref: '#/components/schemas/UserSubscription')),

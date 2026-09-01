@@ -7,4 +7,5 @@ enum PaymentGateway: string
     case KKIAPAY = 'kkiapay';
     case WAVE = 'wave';
     case STRIPE = 'stripe';
+    case PAIEMENTPRO = 'paiementpro';
 }

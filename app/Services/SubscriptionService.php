@@ -9,6 +9,7 @@ use App\Enums\TransactionStatus;
 use App\Http\Resources\SubscriptionPlanResource;
 use App\Http\Resources\UserSubscriptionResource;
 use App\Models\Transaction;
+use App\Models\User;
 use App\Models\UserSubscription;
 use App\Repositories\Contracts\SubscriptionPlanRepositoryInterface;
 use App\Repositories\Contracts\UserSubscriptionRepositoryInterface;
@@ -120,6 +121,8 @@ class SubscriptionService
                 'successUrl' => $data['successUrl'] ?? config('app.url'),
                 'errorUrl' => $data['errorUrl'] ?? config('app.url'),
                 'clientReference' => $clientReference,
+                // Infos client — requises par Paiement Pro, ignorées par Wave/Stripe.
+                ...$this->customerDetails($data['userId'], $data['planId'], $data['customerPhone'] ?? null),
             ]);
 
             $this->recordTransaction($data['userId'], $data['planId'], $gatewayName, $session['sessionId'], $amount, $currency);
@@ -269,6 +272,28 @@ class SubscriptionService
             'end_date' => $endDate,
             'auto_renew' => false,
         ]);
+    }
+
+    /**
+     * Le modèle User n'a que `name` + `email` : on découpe `name` en prénom/nom
+     * (sur le 1er espace) et on retombe sur le téléphone fourni au checkout ou
+     * la valeur par défaut de config.
+     *
+     * @return array{customerEmail: ?string, customerFirstName: string, customerLastName: string, customerPhone: ?string, userId: string, planId: string}
+     */
+    private function customerDetails(string $userId, string $planId, ?string $phone): array
+    {
+        $user = User::find($userId);
+        $parts = preg_split('/\s+/', trim((string) $user?->name), 2) ?: [];
+
+        return [
+            'customerEmail' => $user?->email,
+            'customerFirstName' => $parts[0] ?? 'Client',
+            'customerLastName' => $parts[1] ?? 'GORIYA',
+            'customerPhone' => $phone,
+            'userId' => $userId,
+            'planId' => $planId,
+        ];
     }
 
     private function recordTransaction(string $userId, string $planId, string $gateway, string $gatewayTransactionId, int|float $amount, string $currency): void
