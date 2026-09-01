@@ -14,8 +14,9 @@ interface PitchAiServiceInterface
     /**
      * @param  array{name: string, email: string, about?: string}  $profile
      * @param  array{title?: string, company?: string, description?: string}|null  $job
+     * @param  string|null  $idea  Description libre de l'idée du pitch saisie par l'utilisateur
      */
-    public function generate(array $profile, ?array $job, string $type): string;
+    public function generate(array $profile, ?array $job, string $type, ?string $idea = null): string;
 
     /**
      * @return array{clarte: int, impact: int, persuasion: int, feedback: string}

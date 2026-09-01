@@ -40,7 +40,7 @@ class PitchService
     }
 
     /**
-     * @param  array{type: string, jobOfferId?: string, content?: string}  $data
+     * @param  array{type: string, jobOfferId?: string, description?: string, content?: string}  $data
      */
     public function create(User $user, array $data): Pitch
     {
@@ -55,13 +55,16 @@ class PitchService
             'description' => $jobOffer->description,
         ] : null;
 
-        $content = $data['content'] ?? $this->pitchAi->generate($profile, $job, $data['type']);
+        $idea = ! empty(trim((string) ($data['description'] ?? ''))) ? trim($data['description']) : null;
+
+        $content = $data['content'] ?? $this->pitchAi->generate($profile, $job, $data['type'], $idea);
         $score = $this->pitchAi->score($content);
 
         return Pitch::create([
             'user_id' => $user->id,
             'job_offer_id' => $jobOffer?->id,
             'type' => $data['type'],
+            'description' => $idea,
             'format' => PitchFormat::TEXT,
             'content' => $content,
             'score' => $score,

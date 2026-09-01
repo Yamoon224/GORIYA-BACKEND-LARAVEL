@@ -30,6 +30,7 @@ class Pitch extends Model
         'user_id',
         'job_offer_id',
         'type',
+        'description',
         'format',
         'content',
         'video_path',

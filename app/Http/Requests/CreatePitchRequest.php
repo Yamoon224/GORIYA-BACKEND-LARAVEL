@@ -11,6 +11,7 @@ use OpenApi\Attributes as OA;
     properties: [
         new OA\Property(property: 'type', type: 'string', enum: ['EMPLOI', 'CONCOURS', 'APPEL_PROJET', 'STARTUP']),
         new OA\Property(property: 'jobOfferId', type: 'string', format: 'uuid', nullable: true),
+        new OA\Property(property: 'description', type: 'string', nullable: true, description: "Idée / sujet du pitch — sert de contexte à la génération IA"),
         new OA\Property(property: 'content', type: 'string', nullable: true, description: 'Script fourni manuellement — sinon généré par IA'),
     ]
 )]
@@ -29,6 +30,7 @@ class CreatePitchRequest extends FormRequest
         return [
             'type' => ['required', 'string', 'in:EMPLOI,CONCOURS,APPEL_PROJET,STARTUP'],
             'jobOfferId' => ['nullable', 'uuid', 'exists:job_offers,id'],
+            'description' => ['nullable', 'string', 'max:2000'],
             'content' => ['nullable', 'string', 'max:5000'],
         ];
     }

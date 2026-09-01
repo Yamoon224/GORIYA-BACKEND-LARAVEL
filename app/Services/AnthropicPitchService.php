@@ -39,7 +39,7 @@ TEXT;
         $this->initClaudeClient();
     }
 
-    public function generate(array $profile, ?array $job, string $type): string
+    public function generate(array $profile, ?array $job, string $type, ?string $idea = null): string
     {
         if (! $this->hasClaudeClient()) {
             return self::GENERATE_FALLBACK;
@@ -50,12 +50,16 @@ TEXT;
             $jobBlock = $job
                 ? "Poste visé : {$job['title']} chez {$job['company']}".(! empty($job['description']) ? "\nDescription : ".$this->truncateForClaude($job['description'], 800) : '')
                 : '';
+            $ideaBlock = ! empty(trim((string) $idea))
+                ? "Idée / sujet du pitch (à respecter fidèlement) : ".$this->truncateForClaude($idea, 1200)
+                : '';
 
             $prompt = <<<PROMPT
 Vous êtes un coach en communication professionnelle. Rédigez un pitch oral percutant de 45 à 60 secondes (environ 130-160 mots) pour {$context}, à la première personne, prêt à être lu à voix haute (donc sans markdown, sans puces, juste un texte fluide).
 
 Candidat : {$profile['name']}
 {$jobBlock}
+{$ideaBlock}
 
 Le pitch doit être clair, structuré (accroche, valeur ajoutée, appel à l'action) et percutant. Répondez uniquement avec le texte du pitch, sans guillemets ni commentaire. {$this->localizedInstruction()}
 PROMPT;

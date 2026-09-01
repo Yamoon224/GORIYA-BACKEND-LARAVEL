@@ -19528,6 +19528,11 @@
                         "format": "uuid",
                         "nullable": true
                     },
+                    "description": {
+                        "description": "Idée / sujet du pitch — sert de contexte à la génération IA",
+                        "type": "string",
+                        "nullable": true
+                    },
                     "content": {
                         "description": "Script fourni manuellement — sinon généré par IA",
                         "type": "string",
@@ -21558,6 +21563,11 @@
                             "APPEL_PROJET",
                             "STARTUP"
                         ]
+                    },
+                    "description": {
+                        "description": "Idée / sujet du pitch saisi par l'utilisateur",
+                        "type": "string",
+                        "nullable": true
                     },
                     "format": {
                         "type": "string",
