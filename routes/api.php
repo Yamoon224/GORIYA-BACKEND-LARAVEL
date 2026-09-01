@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\CompanyResearchController;
 use App\Http\Controllers\Api\ConnectionsController;
 use App\Http\Controllers\Api\CoursesController;
 use App\Http\Controllers\Api\CvAnalysisController;
+use App\Http\Controllers\Api\CvController;
 use App\Http\Controllers\Api\DeviceTokensController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\EmployeeSurveysController;
@@ -137,6 +138,13 @@ Route::middleware('auth:api')->group(function () {
 Route::get('/profile/me', [PublicProfileController::class, 'me'])->middleware('auth:api');
 Route::patch('/profile/me', [PublicProfileController::class, 'update'])->middleware('auth:api');
 Route::get('/profiles/{slug}', [PublicProfileController::class, 'show']);
+
+// --- CV (brouillon du créateur de CV, un par utilisateur) ---
+Route::middleware('auth:api')->group(function () {
+    Route::get('/me/cv', [CvController::class, 'show']);
+    Route::put('/me/cv', [CvController::class, 'update']);
+    Route::delete('/me/cv', [CvController::class, 'destroy']);
+});
 
 // --- Portfolios ---
 Route::get('/portfolios', [PortfoliosController::class, 'index']);
