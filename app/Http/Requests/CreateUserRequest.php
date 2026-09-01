@@ -35,7 +35,7 @@ class CreateUserRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string'],
-            'email' => ['required', 'email'],
+            'email' => ['required', 'email', Rule::unique('users', 'email')],
             'password' => ['required', 'string', 'min:6'],
             'role' => ['nullable', Rule::enum(UserRole::class)],
             'status' => ['nullable', Rule::enum(UserStatus::class)],
@@ -43,6 +43,20 @@ class CreateUserRequest extends FormRequest
             // pas ici — parité avec le service NestJS.
             'companyId' => ['nullable', 'uuid'],
             'avatar' => ['nullable', 'file', 'mimetypes:image/png,image/jpeg,image/jpg,image/webp'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'email.unique' => 'Un compte existe déjà avec cette adresse e-mail.',
+            'email.email' => "L'adresse e-mail n'est pas valide.",
+            'name.required' => 'Le nom complet est requis.',
+            'password.required' => 'Le mot de passe est requis.',
+            'password.min' => 'Le mot de passe doit contenir au moins 6 caractères.',
         ];
     }
 }

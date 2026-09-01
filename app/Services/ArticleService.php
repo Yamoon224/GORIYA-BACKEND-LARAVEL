@@ -16,12 +16,22 @@ use Illuminate\Support\Str;
  */
 class ArticleService
 {
-    public function paginate(int $page, int $limit, bool $publishedOnly = true): LengthAwarePaginator
+    public function paginate(int $page, int $limit, bool $publishedOnly = true, ?string $search = null): LengthAwarePaginator
     {
         $query = Article::query()->orderByDesc('published_at')->orderByDesc('created_at');
 
         if ($publishedOnly) {
             $query->where('status', ArticleStatus::PUBLISHED);
+        }
+
+        if ($search !== null && trim($search) !== '') {
+            $term = '%'.str_replace(['%', '_'], ['\%', '\_'], trim($search)).'%';
+            $query->where(function ($q) use ($term) {
+                $q->where('title', 'like', $term)
+                    ->orWhere('excerpt', 'like', $term)
+                    ->orWhere('content', 'like', $term)
+                    ->orWhere('author_name', 'like', $term);
+            });
         }
 
         return $query->paginate(max(1, $limit), ['*'], 'page', max(1, $page));

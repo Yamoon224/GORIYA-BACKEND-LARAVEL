@@ -24,6 +24,7 @@ class ArticlesController extends Controller
         parameters: [
             new OA\Parameter(name: 'page', in: 'query', schema: new OA\Schema(type: 'integer', default: 1)),
             new OA\Parameter(name: 'limit', in: 'query', schema: new OA\Schema(type: 'integer', default: 9)),
+            new OA\Parameter(name: 'search', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
         ],
         responses: [
             new OA\Response(
@@ -40,8 +41,9 @@ class ArticlesController extends Controller
     {
         $page = (int) $request->query('page', 1);
         $limit = (int) $request->query('limit', 9);
+        $search = $request->query('search');
 
-        $paginator = $this->articleService->paginate($page, $limit, publishedOnly: true);
+        $paginator = $this->articleService->paginate($page, $limit, publishedOnly: true, search: $search);
         $paginator->setCollection(
             $paginator->getCollection()->map(fn (Article $article) => (new ArticleResource($article))->resolve())
         );
