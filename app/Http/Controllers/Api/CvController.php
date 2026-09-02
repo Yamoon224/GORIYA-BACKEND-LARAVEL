@@ -17,7 +17,7 @@ class CvController extends Controller
     #[OA\Get(
         path: '/me/cv',
         tags: ['CV'],
-        summary: "Récupère le brouillon de CV de l'utilisateur authentifié (créé vide s'il n'existe pas)",
+        summary: "Récupère le brouillon de CV de l'utilisateur authentifié (renvoie un brouillon vide s'il n'en a pas)",
         security: [['bearerAuth' => []]],
         responses: [
             new OA\Response(response: 200, description: 'Brouillon', content: new OA\JsonContent(ref: '#/components/schemas/Cv')),
@@ -26,7 +26,7 @@ class CvController extends Controller
     )]
     public function show(Request $request)
     {
-        return new CvResource($this->cvService->getOrCreateForUser($request->user()));
+        return new CvResource($this->cvService->findForUser($request->user()));
     }
 
     #[OA\Put(

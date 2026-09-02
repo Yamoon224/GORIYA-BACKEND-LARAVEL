@@ -46,9 +46,15 @@ class CvService
      */
     private const BOOLEAN_SUBKEYS = ['enCours'];
 
-    public function getOrCreateForUser(User $user): Cv
+    /**
+     * Lecture seule : renvoie un brouillon non persisté quand l'utilisateur
+     * n'en a pas encore. Créer la ligne à la lecture remplirait la table dès
+     * qu'un écran consulte l'état du brouillon (bibliothèque, tableau de bord).
+     */
+    public function findForUser(User $user): Cv
     {
-        return Cv::firstOrCreate(['user_id' => $user->id], ['data' => null, 'step' => 0]);
+        return Cv::firstWhere('user_id', $user->id)
+            ?? new Cv(['user_id' => $user->id, 'data' => null, 'step' => 0]);
     }
 
     /**
