@@ -21,6 +21,8 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'status', type: 'string', enum: ['ACTIVE', 'INACTIVE']),
         new OA\Property(property: 'avatar', type: 'string', nullable: true),
         new OA\Property(property: 'location', type: 'string', nullable: true),
+        new OA\Property(property: 'title', type: 'string', nullable: true, description: 'Titre professionnel'),
+        new OA\Property(property: 'bio', type: 'string', nullable: true),
         new OA\Property(property: 'registrationDate', type: 'string', format: 'date-time'),
         new OA\Property(
             property: 'company',
@@ -50,6 +52,8 @@ class UserResource extends JsonResource
             'status' => $this->status->value,
             'avatar' => $this->avatar,
             'location' => $this->location,
+            'title' => $this->title,
+            'bio' => $this->bio,
             'registrationDate' => $this->registration_date,
             'company' => $this->company ? [
                 'id' => $this->company->id,

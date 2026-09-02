@@ -41,6 +41,7 @@ use App\Http\Controllers\Api\JobOffersController;
 use App\Http\Controllers\Api\LunionMeetWebhookController;
 use App\Http\Controllers\Api\MatchingResultsController;
 use App\Http\Controllers\Api\MessagesController;
+use App\Http\Controllers\Api\MyProfileController;
 use App\Http\Controllers\Api\NewsletterController;
 use App\Http\Controllers\Api\NotificationsController;
 use App\Http\Controllers\Api\PaiementProWebhookController;
@@ -141,6 +142,12 @@ Route::middleware('auth:api')->group(function () {
 Route::get('/profile/me', [PublicProfileController::class, 'me'])->middleware('auth:api');
 Route::patch('/profile/me', [PublicProfileController::class, 'update'])->middleware('auth:api');
 Route::get('/profiles/{slug}', [PublicProfileController::class, 'show']);
+
+// --- Profil de l'utilisateur authentifié (titre, localisation, bio) ---
+Route::middleware('auth:api')->group(function () {
+    Route::get('/me/profile', [MyProfileController::class, 'show']);
+    Route::patch('/me/profile', [MyProfileController::class, 'update']);
+});
 
 // --- CV (brouillon du créateur de CV, un par utilisateur) ---
 Route::middleware('auth:api')->group(function () {
