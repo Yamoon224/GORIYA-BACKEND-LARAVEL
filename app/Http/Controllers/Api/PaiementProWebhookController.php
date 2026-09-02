@@ -16,10 +16,16 @@ use OpenApi\Attributes as OA;
  * Pro n'expose pas d'API de consultation de statut.
  *
  * Pas de guard `auth:api` (l'appelant est Paiement Pro). L'authentification
- * repose sur : un jeton statique dans l'URL (PAIEMENTPRO_NOTIFICATION_TOKEN),
- * le recoupement de `referenceNumber` avec une Transaction PENDING existante,
- * et le contrôle du montant. Le hashcode Paiement Pro n'est pas vérifié (algo
- * non fourni) — le payload brut est loggé pour ajustement.
+ * repose aujourd'hui sur : un jeton statique ajouté par nos soins à l'URL
+ * (PAIEMENTPRO_NOTIFICATION_TOKEN — jeton GORIYA, pas un paramètre de l'API
+ * Paiement Pro), le recoupement de `referenceNumber` avec une Transaction
+ * PENDING existante, et le contrôle du montant.
+ *
+ * TODO intégrité : la documentation Paiement Pro renvoie un `hashcode` dans
+ * les données de notification, prévu pour vérifier l'intégrité du message.
+ * Il n'est PAS encore vérifié ici (formule de calcul à récupérer auprès de
+ * Paiement Pro) — c'est ce contrôle qui devrait remplacer le jeton en query
+ * string. Le payload brut est loggé pour permettre ce calage.
  *
  * NOTE : la casse/le nom exact des champs (`referenceNumber` vs `reference`,
  * `responsecode` vs `status`) n'a pas été confirmé sur une livraison réelle —

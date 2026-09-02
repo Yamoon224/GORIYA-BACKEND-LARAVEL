@@ -67,14 +67,20 @@ return [
     // PayPal). Flux "session hébergée" comme Wave/Stripe — voir
     // PaiementProService. Le résultat définitif arrive via la notification
     // serveur-à-serveur sur /api/webhooks/paiementpro (pas d'API de statut).
-    // currency_code 952 = XOF. channel vide => page de choix du moyen de
-    // paiement hébergée par Paiement Pro.
+    // currency_code 952 = XOF. merchant_id = l'identifiant marchand (format
+    // PP-Fxxxx) — ce n'est PAS un channel. channel = le canal/provider, dont
+    // les valeurs exactes sont à relever dans l'espace marchand Paiement Pro ;
+    // laissé vide => page de choix du moyen de paiement hébergée.
+    // default_phone : valeur de repli applicative pour customerPhoneNumber
+    // (aucun identifiant Paiement Pro), utilisée si le front n'envoie pas de
+    // numéro. notification_token : jeton interne GORIYA ajouté en query string
+    // à notificationURL — ce n'est pas un paramètre de l'API Paiement Pro.
     'paiementpro' => [
         'merchant_id' => env('PAIEMENTPRO_MERCHANT_ID'),
         'base_url' => env('PAIEMENTPRO_BASE_URL', 'https://www.paiementpro.net'),
         'currency_code' => env('PAIEMENTPRO_CURRENCY_CODE', '952'),
         'channel' => env('PAIEMENTPRO_CHANNEL'),
-        'default_phone' => env('PAIEMENTPRO_DEFAULT_PHONE', '0000000000'),
+        'default_phone' => env('PAIEMENTPRO_DEFAULT_PHONE'),
         'notification_token' => env('PAIEMENTPRO_NOTIFICATION_TOKEN'),
     ],
 

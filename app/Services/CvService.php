@@ -13,8 +13,8 @@ use App\Models\User;
 class CvService
 {
     /**
-     * Clés du formulaire réellement persistées — tout le reste est ignoré
-     * pour éviter de stocker un blob arbitraire côté client.
+     * Champs scalaires du formulaire réellement persistés — tout le reste est
+     * ignoré pour éviter de stocker un blob arbitraire côté client.
      *
      * @var list<string>
      */
@@ -24,10 +24,18 @@ class CvService
         'telephone',
         'adresse',
         'profil',
-        'competences',
-        'experience',
-        'formation',
-        'langues',
+    ];
+
+    /**
+     * Listes répétables du formulaire (étapes Expérience / Formation /
+     * Compétences) : clé => sous-clés autorisées de chaque entrée.
+     *
+     * @var array<string, list<string>>
+     */
+    public const LISTS = [
+        'experiences' => ['entreprise', 'poste', 'dateDebut', 'dateFin', 'description'],
+        'formations' => ['etablissement', 'diplome', 'dateDebut', 'dateFin'],
+        'competences' => ['nom', 'niveau'],
     ];
 
     public function getOrCreateForUser(User $user): Cv
@@ -43,9 +51,7 @@ class CvService
         $cv = Cv::firstOrNew(['user_id' => $user->id]);
 
         if (array_key_exists('data', $payload)) {
-            $cv->data = $payload['data'] === null
-                ? null
-                : collect($payload['data'])->only(self::FIELDS)->map(fn ($v) => is_string($v) ? $v : (string) $v)->toArray();
+            $cv->data = $payload['data'] === null ? null : $this->sanitize($payload['data']);
         }
 
         if (array_key_exists('step', $payload)) {
@@ -60,5 +66,31 @@ class CvService
     public function deleteForUser(User $user): void
     {
         Cv::where('user_id', $user->id)->delete();
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function sanitize(array $data): array
+    {
+        $clean = collect($data)->only(self::FIELDS)->map(fn ($v) => is_string($v) ? $v : (string) $v)->all();
+
+        foreach (self::LISTS as $key => $subKeys) {
+            if (! array_key_exists($key, $data)) {
+                continue;
+            }
+
+            $clean[$key] = collect(is_array($data[$key]) ? $data[$key] : [])
+                ->filter(fn ($row) => is_array($row))
+                ->map(fn (array $row) => collect($row)
+                    ->only($subKeys)
+                    ->map(fn ($v) => is_string($v) ? $v : (string) $v)
+                    ->all())
+                ->values()
+                ->all();
+        }
+
+        return $clean;
     }
 }
