@@ -341,6 +341,10 @@ class AdminAuthController extends Controller
                 new OA\Property(property: 'name', type: 'string', nullable: true),
                 new OA\Property(property: 'email', type: 'string', format: 'email', nullable: true),
                 new OA\Property(property: 'password', type: 'string', format: 'password', nullable: true),
+                new OA\Property(property: 'location', type: 'string', nullable: true),
+                new OA\Property(property: 'title', type: 'string', nullable: true, description: 'Titre professionnel'),
+                new OA\Property(property: 'bio', type: 'string', nullable: true),
+                new OA\Property(property: 'phone', type: 'string', nullable: true),
             ])
         ),
         responses: [
@@ -364,7 +368,7 @@ class AdminAuthController extends Controller
         // s'auto-modifier ces champs par ce biais (utiliser la gestion admin dédiée).
         // Avant ce correctif, $request->all() transmettait tout tel quel, permettant
         // à n'importe quel utilisateur authentifié de s'auto-promouvoir ADMIN.
-        $data = $request->only(['name', 'email', 'password', 'location']);
+        $data = $request->only(['name', 'email', 'password', 'location', 'title', 'bio', 'phone']);
 
         return ApiResponse::success($this->adminAuthService->updateMyProfile($request->user()->id, $data));
     }

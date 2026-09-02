@@ -123,6 +123,9 @@ class UserService
             'email' => 'email',
             'password' => 'password',
             'location' => 'location',
+            'title' => 'title',
+            'bio' => 'bio',
+            'phone' => 'phone',
         ]);
 
         if ($allowPrivilegedFields) {

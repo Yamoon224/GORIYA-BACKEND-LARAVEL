@@ -31,6 +31,7 @@ class MyProfileController extends Controller
             'title' => $user->title,
             'location' => $user->location,
             'bio' => $user->bio,
+            'phone' => $user->phone,
         ];
     }
 
