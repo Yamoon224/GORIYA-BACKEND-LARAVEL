@@ -30,6 +30,22 @@ return [
         ))),
     ],
 
+    // Connexion / inscription via LinkedIn (« Sign In with LinkedIn using
+    // OpenID Connect »). Contrairement à Google, LinkedIn impose le flux
+    // authorization code : le front récupère un `code`, le backend l'échange
+    // ici avec le client_secret (voir LinkedInOAuthClient).
+    // LINKEDIN_REDIRECT_URIS : liste blanche, séparée par des virgules, des
+    // URL de callback des fronts (elles doivent aussi être déclarées dans
+    // l'app LinkedIn Developers).
+    'linkedin' => [
+        'client_id' => env('LINKEDIN_CLIENT_ID'),
+        'client_secret' => env('LINKEDIN_CLIENT_SECRET'),
+        'redirect_uris' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('LINKEDIN_REDIRECT_URIS', ''))
+        ))),
+    ],
+
     'resend' => [
         'key' => env('RESEND_API_KEY'),
     ],

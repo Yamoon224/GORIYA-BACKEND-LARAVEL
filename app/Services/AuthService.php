@@ -23,6 +23,7 @@ class AuthService
         private readonly AuditLogService $auditLogService,
         private readonly OtpService $otpService,
         private readonly GoogleTokenVerifier $googleTokenVerifier,
+        private readonly LinkedInOAuthClient $linkedInOAuthClient,
     ) {}
 
     /**
@@ -158,6 +159,31 @@ class AuthService
             config('services.google.client_ids', []),
         );
 
+        return $this->authenticateWithProvider($profile, 'google', ($data['allowSignup'] ?? true) !== false);
+    }
+
+    /**
+     * @param  array{code: string, redirectUri: string, allowSignup?: bool}  $data
+     * @return array{access_token: string, user: UserResource, isNewUser: bool}
+     */
+    public function linkedinAuth(array $data): array
+    {
+        $profile = $this->linkedInOAuthClient->fetchProfile($data['code'], $data['redirectUri']);
+
+        return $this->authenticateWithProvider($profile, 'linkedin', ($data['allowSignup'] ?? true) !== false);
+    }
+
+    /**
+     * Ouvre une session à partir d'un profil déjà vérifié auprès du
+     * fournisseur d'identité (Google, LinkedIn…). L'appelant est responsable
+     * de la vérification : rien de ce qui arrive ici ne doit provenir
+     * directement du navigateur.
+     *
+     * @param  array{sub: string, email: string, name: ?string, picture: ?string, given_name: ?string, family_name: ?string}  $profile
+     * @return array{access_token: string, user: UserResource, isNewUser: bool}
+     */
+    private function authenticateWithProvider(array $profile, string $provider, bool $allowSignup): array
+    {
         $existingUser = $this->userRepository->findByEmail($profile['email']);
 
         if ($existingUser) {
@@ -169,16 +195,17 @@ class AuthService
             $fullUser = $this->userRepository->findOrFail($existingUser->id);
             $fullUser->load('company');
 
-            $this->auditLogService->log('login', $fullUser, [], ['provider' => 'google'], actor: $fullUser);
+            $this->auditLogService->log('login', $fullUser, [], ['provider' => $provider], actor: $fullUser);
 
             return ['access_token' => $token, 'user' => new UserResource($fullUser), 'isNewUser' => false];
         }
 
-        // Certains fronts (espace entreprise) n'autorisent la connexion Google
-        // que pour un compte déjà existant — la création d'un compte entreprise
-        // passe par un autre parcours (choix d'offre, création de la société).
-        if (($data['allowSignup'] ?? true) === false) {
-            abort(404, "Aucun compte n'est associé à cette adresse Google.");
+        // Certains fronts (espace entreprise) n'autorisent la connexion via un
+        // fournisseur externe que pour un compte déjà existant — la création
+        // d'un compte entreprise passe par un autre parcours (choix d'offre,
+        // création de la société).
+        if (! $allowSignup) {
+            abort(404, "Aucun compte n'est associé à cette adresse.");
         }
 
         $user = $this->userRepository->create([
@@ -190,15 +217,16 @@ class AuthService
             'avatar' => $profile['picture'] ?? null,
         ]);
 
-        // L'email est déjà vérifié par Google (claim email_verified contrôlé
-        // dans GoogleTokenVerifier) — pas d'OTP à repasser.
+        // L'email est déjà vérifié par le fournisseur (claim email_verified
+        // contrôlé par GoogleTokenVerifier / LinkedInOAuthClient) — pas d'OTP
+        // à repasser.
         $user->forceFill(['email_verified_at' => now()])->save();
 
         $token = auth('api')->login($user);
         $fullUser = $this->userRepository->findOrFail($user->id);
         $fullUser->load('company');
 
-        $this->auditLogService->log('register', $fullUser, [], ['provider' => 'google'], actor: $fullUser);
+        $this->auditLogService->log('register', $fullUser, [], ['provider' => $provider], actor: $fullUser);
 
         return ['access_token' => $token, 'user' => new UserResource($fullUser), 'isNewUser' => true];
     }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\GoogleAuthRequest;
+use App\Http\Requests\LinkedInAuthRequest;
 use App\Http\Requests\LoginRequest;
 use App\Services\AuthService;
 use Illuminate\Http\Request;
@@ -194,5 +195,30 @@ class AuthController extends Controller
     public function google(GoogleAuthRequest $request)
     {
         return response()->json($this->authService->googleAuth($request->validated()));
+    }
+
+    #[OA\Post(
+        path: '/auth/linkedin',
+        tags: ['Auth'],
+        summary: "Connexion/inscription via LinkedIn : le `code` d'autorisation est échangé côté serveur contre le profil LinkedIn, puis l'utilisateur est créé s'il n'existe pas (sauf allowSignup=false)",
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(ref: '#/components/schemas/LinkedInAuthRequest')
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Connexion/inscription réussie',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'access_token', type: 'string'),
+                    new OA\Property(property: 'user', ref: '#/components/schemas/User'),
+                    new OA\Property(property: 'isNewUser', type: 'boolean'),
+                ])
+            ),
+        ]
+    )]
+    public function linkedin(LinkedInAuthRequest $request)
+    {
+        return response()->json($this->authService->linkedinAuth($request->validated()));
     }
 }

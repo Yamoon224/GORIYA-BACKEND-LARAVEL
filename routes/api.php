@@ -81,6 +81,7 @@ Route::post('/auth/logout', [AuthController::class, 'logout']);
 Route::post('/auth/otp/request', [AuthController::class, 'requestOtp']);
 Route::post('/auth/otp/verify', [AuthController::class, 'verifyOtp']);
 Route::post('/auth/google', [AuthController::class, 'google']);
+Route::post('/auth/linkedin', [AuthController::class, 'linkedin']);
 Route::get('/auth/profile', [AuthController::class, 'profile'])->middleware('auth:api');
 // Pas de middleware auth:api : le contrôleur accepte un token expiré tant
 // qu'il reste dans la fenêtre refresh_ttl (voir AuthService::refresh).
