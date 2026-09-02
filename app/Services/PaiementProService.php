@@ -25,6 +25,9 @@ class PaiementProService implements HostedCheckoutGatewayInterface, PaymentGatew
 {
     private const INIT_PATH = '/webservice/onlinepayment/init/curl-init.php';
 
+    /** Doit rester aligné sur la route de PaiementProWebhookController. */
+    public const NOTIFICATION_PATH = '/webhooks/paiementpro';
+
     /**
      * @param  array{amount: int|string, currency: string, successUrl: string, errorUrl: string, clientReference?: string, customerEmail?: string, customerFirstName?: string, customerLastName?: string, customerPhone?: string, userId?: string, planId?: string}  $params
      * @return array{sessionId: string, checkoutUrl: string}
@@ -39,7 +42,9 @@ class PaiementProService implements HostedCheckoutGatewayInterface, PaymentGatew
         $reference = $params['clientReference'] ?? (string) (int) round(microtime(true) * 1000);
         $token = config('services.paiementpro.notification_token');
 
-        $notificationUrl = rtrim((string) config('app.url'), '/').'/api/webhooks/paiementpro';
+        // Pas de préfixe /api : bootstrap/app.php déclare apiPrefix: '' —
+        // la route est servie à la racine (voir routes/api.php).
+        $notificationUrl = rtrim((string) config('app.url'), '/').self::NOTIFICATION_PATH;
         if ($token) {
             $notificationUrl .= '?token='.urlencode((string) $token);
         }

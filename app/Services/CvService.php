@@ -21,6 +21,7 @@ class CvService
     public const FIELDS = [
         'nom',
         'email',
+        'indicatif',
         'telephone',
         'adresse',
         'profil',
@@ -33,10 +34,17 @@ class CvService
      * @var array<string, list<string>>
      */
     public const LISTS = [
-        'experiences' => ['entreprise', 'poste', 'dateDebut', 'dateFin', 'description'],
+        'experiences' => ['entreprise', 'poste', 'dateDebut', 'dateFin', 'enCours', 'description'],
         'formations' => ['etablissement', 'diplome', 'dateDebut', 'dateFin'],
         'competences' => ['nom', 'niveau'],
     ];
+
+    /**
+     * Sous-clés des listes à conserver en booléen plutôt qu'en chaîne.
+     *
+     * @var list<string>
+     */
+    private const BOOLEAN_SUBKEYS = ['enCours'];
 
     public function getOrCreateForUser(User $user): Cv
     {
@@ -85,7 +93,9 @@ class CvService
                 ->filter(fn ($row) => is_array($row))
                 ->map(fn (array $row) => collect($row)
                     ->only($subKeys)
-                    ->map(fn ($v) => is_string($v) ? $v : (string) $v)
+                    ->map(fn ($v, $k) => in_array($k, self::BOOLEAN_SUBKEYS, true)
+                        ? (bool) $v
+                        : (is_string($v) ? $v : (string) $v))
                     ->all())
                 ->values()
                 ->all();

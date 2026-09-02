@@ -66,7 +66,8 @@ return [
     // Paiement Pro (agrégateur Côte d'Ivoire : Mobile Money OM/MTN/Moov, carte,
     // PayPal). Flux "session hébergée" comme Wave/Stripe — voir
     // PaiementProService. Le résultat définitif arrive via la notification
-    // serveur-à-serveur sur /api/webhooks/paiementpro (pas d'API de statut).
+    // serveur-à-serveur sur /webhooks/paiementpro (pas d'API de statut ;
+    // pas de préfixe /api, voir apiPrefix dans bootstrap/app.php).
     // currency_code 952 = XOF. merchant_id = l'identifiant marchand (format
     // PP-Fxxxx) — ce n'est PAS un channel. channel = le canal/provider, dont
     // les valeurs exactes sont à relever dans l'espace marchand Paiement Pro ;
