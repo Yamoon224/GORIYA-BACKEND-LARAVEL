@@ -10258,6 +10258,99 @@
                 }
             }
         },
+        "/auth/password/forgot": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Demande un code de réinitialisation de mot de passe par email",
+                "description": "Répond toujours 200 avec le même message, que le compte existe ou non, pour ne pas permettre d'énumérer les adresses inscrites.",
+                "operationId": "ce5a0b34425df184968ccaf044485305",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ForgotPasswordRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Demande prise en compte (code envoyé si le compte existe et est actif)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/password/reset": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Définit un nouveau mot de passe à partir du code reçu par email",
+                "operationId": "374d04b5bb5810135aba107a897fd126",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ResetPasswordRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Mot de passe réinitialisé",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Code invalide ou expiré, ou compte bloqué",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Utilisateur introuvable",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/auth/google": {
             "post": {
                 "tags": [
@@ -10271,6 +10364,48 @@
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/GoogleAuthRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Connexion/inscription réussie",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "access_token": {
+                                            "type": "string"
+                                        },
+                                        "user": {
+                                            "$ref": "#/components/schemas/User"
+                                        },
+                                        "isNewUser": {
+                                            "type": "boolean"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/linkedin": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Connexion/inscription via LinkedIn : le `code` d'autorisation est échangé côté serveur contre le profil LinkedIn, puis l'utilisateur est créé s'il n'existe pas (sauf allowSignup=false)",
+                "operationId": "40f1d2806ed2850f4b9b3e5b36c8f46c",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LinkedInAuthRequest"
                             }
                         }
                     }
@@ -13217,7 +13352,7 @@
                 "tags": [
                     "CV"
                 ],
-                "summary": "Récupère le brouillon de CV de l'utilisateur authentifié (créé vide s'il n'existe pas)",
+                "summary": "Récupère le brouillon de CV de l'utilisateur authentifié (renvoie un brouillon vide s'il n'en a pas)",
                 "operationId": "f4dcdf81a629a12131eb28b1c39559c4",
                 "responses": {
                     "200": {
@@ -19766,6 +19901,19 @@
                 },
                 "type": "object"
             },
+            "ForgotPasswordRequest": {
+                "required": [
+                    "email"
+                ],
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "example": "user@example.com"
+                    }
+                },
+                "type": "object"
+            },
             "GoogleAuthRequest": {
                 "required": [
                     "credential"
@@ -19773,6 +19921,28 @@
                 "properties": {
                     "credential": {
                         "description": "ID token JWT renvoyé par Google Identity Services (champ `credential` du callback)",
+                        "type": "string"
+                    },
+                    "allowSignup": {
+                        "description": "Si false, refuse la connexion quand aucun compte n'existe déjà pour cet email (utilisé par l'espace entreprise)",
+                        "type": "boolean",
+                        "default": true
+                    }
+                },
+                "type": "object"
+            },
+            "LinkedInAuthRequest": {
+                "required": [
+                    "code",
+                    "redirectUri"
+                ],
+                "properties": {
+                    "code": {
+                        "description": "Authorization code renvoyé par LinkedIn sur l'URL de callback (paramètre `code`)",
+                        "type": "string"
+                    },
+                    "redirectUri": {
+                        "description": "URL de callback utilisée lors de l'autorisation — doit figurer dans LINKEDIN_REDIRECT_URIS",
                         "type": "string"
                     },
                     "allowSignup": {
@@ -19822,6 +19992,31 @@
                 },
                 "type": "object"
             },
+            "ResetPasswordRequest": {
+                "required": [
+                    "email",
+                    "code",
+                    "password"
+                ],
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "example": "user@example.com"
+                    },
+                    "code": {
+                        "description": "Code à 6 chiffres reçu par email",
+                        "type": "string",
+                        "example": "123456"
+                    },
+                    "password": {
+                        "type": "string",
+                        "format": "password",
+                        "minLength": 6
+                    }
+                },
+                "type": "object"
+            },
             "SaveCvRequest": {
                 "properties": {
                     "data": {
@@ -19833,7 +20028,12 @@
                             "email": {
                                 "type": "string"
                             },
+                            "indicatif": {
+                                "type": "string",
+                                "example": "+225"
+                            },
                             "telephone": {
+                                "description": "Numéro local, sans indicatif",
                                 "type": "string"
                             },
                             "adresse": {
@@ -19842,17 +20042,78 @@
                             "profil": {
                                 "type": "string"
                             },
+                            "experiences": {
+                                "type": "array",
+                                "items": {
+                                    "properties": {
+                                        "entreprise": {
+                                            "type": "string"
+                                        },
+                                        "poste": {
+                                            "type": "string"
+                                        },
+                                        "dateDebut": {
+                                            "type": "string",
+                                            "format": "date"
+                                        },
+                                        "dateFin": {
+                                            "type": "string",
+                                            "format": "date"
+                                        },
+                                        "enCours": {
+                                            "type": "boolean"
+                                        },
+                                        "description": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "formations": {
+                                "type": "array",
+                                "items": {
+                                    "properties": {
+                                        "etablissement": {
+                                            "type": "string"
+                                        },
+                                        "diplome": {
+                                            "type": "string",
+                                            "enum": [
+                                                "",
+                                                "Bac",
+                                                "BTS",
+                                                "Licence",
+                                                "Master",
+                                                "Doctorat",
+                                                "Professorat"
+                                            ]
+                                        },
+                                        "dateDebut": {
+                                            "type": "string",
+                                            "format": "date"
+                                        },
+                                        "dateFin": {
+                                            "type": "string",
+                                            "format": "date"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
                             "competences": {
-                                "type": "string"
-                            },
-                            "experience": {
-                                "type": "string"
-                            },
-                            "formation": {
-                                "type": "string"
-                            },
-                            "langues": {
-                                "type": "string"
+                                "type": "array",
+                                "items": {
+                                    "properties": {
+                                        "nom": {
+                                            "type": "string"
+                                        },
+                                        "niveau": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
                             }
                         },
                         "type": "object",

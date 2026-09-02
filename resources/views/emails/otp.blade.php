@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="utf-8">
-    <title>Votre code de vérification Goriya</title>
+    <title>{{ $title }}</title>
 </head>
 <body style="margin:0;padding:0;background-color:#f4f5f7;font-family:Arial,Helvetica,sans-serif;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:32px 0;">
@@ -18,7 +18,7 @@
                         <td style="padding:32px;">
                             <p style="font-size:16px;color:#1b2331;margin:0 0 16px;">Bonjour {{ $name }},</p>
                             <p style="font-size:14px;color:#4b5563;margin:0 0 24px;">
-                                Voici ton code de vérification. Il expire dans {{ $validMinutes }} minutes.
+                                {{ $intro }}
                             </p>
                             <div style="text-align:center;margin:0 0 24px;">
                                 <span style="display:inline-block;font-size:32px;font-weight:bold;letter-spacing:8px;color:#2f6de6;background-color:#f0f4ff;padding:16px 24px;border-radius:8px;">
@@ -26,7 +26,7 @@
                                 </span>
                             </div>
                             <p style="font-size:13px;color:#7a8495;margin:0;">
-                                Si tu n'es pas à l'origine de cette demande, tu peux ignorer cet email.
+                                {{ $footer }}
                             </p>
                         </td>
                     </tr>

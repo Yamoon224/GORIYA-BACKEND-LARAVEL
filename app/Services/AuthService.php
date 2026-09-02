@@ -149,6 +149,79 @@ class AuthService
     }
 
     /**
+     * Démarre une réinitialisation de mot de passe : envoi d'un code OTP
+     * dédié (purpose PASSWORD_RESET, distinct de la vérification d'email —
+     * un code de vérification ne doit pas permettre de changer un mot de
+     * passe, et réciproquement).
+     *
+     * La réponse est volontairement identique que le compte existe ou non :
+     * cet endpoint est public, et un message différencié en ferait un
+     * oracle d'énumération d'adresses. Même raison pour le cooldown 429 de
+     * OtpService, avalé ici.
+     *
+     * @return array{message: string}
+     */
+    public function forgotPassword(string $email): array
+    {
+        $genericResponse = ['message' => "Si un compte existe pour cette adresse, un code de réinitialisation vient d'être envoyé."];
+
+        $user = $this->userRepository->findByEmail($email);
+
+        // Compte bloqué : la réinitialisation ne doit pas servir à contourner
+        // la désactivation décidée par un administrateur.
+        if (! $user || $user->status === UserStatus::INACTIVE) {
+            return $genericResponse;
+        }
+
+        try {
+            $this->otpService->send($user, OtpService::PURPOSE_PASSWORD_RESET);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Envoi du code de réinitialisation échoué', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $this->auditLogService->log('password_reset_requested', $user, [], ['email' => $user->email], actor: $user);
+
+        return $genericResponse;
+    }
+
+    /**
+     * Finalise la réinitialisation : le code OTP tient lieu de preuve de
+     * possession de la boîte mail, donc l'ancien mot de passe n'est pas
+     * demandé.
+     *
+     * @return array{message: string}
+     */
+    public function resetPassword(string $email, string $code, string $password): array
+    {
+        $user = $this->otpService->verify($email, $code, OtpService::PURPOSE_PASSWORD_RESET);
+
+        if ($user->status === UserStatus::INACTIVE) {
+            abort(401, "Compte bloqué. Vous n'êtes pas autorisé à vous connecter. Veuillez contacter l'administrateur.");
+        }
+
+        // Le cast 'hashed' du modèle chiffre la valeur ; forceFill car
+        // 'password' est masqué des écritures de masse habituelles.
+        $user->forceFill(['password' => $password])->save();
+
+        // Franchir l'OTP prouve l'accès à la boîte mail : un compte resté non
+        // vérifié le devient ici, sinon il resterait bloqué au login (403
+        // EMAIL_NOT_VERIFIED) juste après avoir choisi son mot de passe.
+        if (! $user->email_verified_at) {
+            $user->forceFill(['email_verified_at' => now()])->save();
+        }
+
+        // Tout autre code de réinitialisation encore valide devient caduc.
+        $this->otpService->invalidatePending($user, OtpService::PURPOSE_PASSWORD_RESET);
+
+        $this->auditLogService->log('password_reset', $user, [], ['email' => $user->email], actor: $user);
+
+        return ['message' => 'Mot de passe réinitialisé. Tu peux maintenant te connecter.'];
+    }
+
+    /**
      * @param  array{credential: string, allowSignup?: bool}  $data
      * @return array{access_token: string, user: UserResource, isNewUser: bool}
      */

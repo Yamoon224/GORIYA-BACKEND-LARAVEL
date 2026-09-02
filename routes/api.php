@@ -80,6 +80,8 @@ Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/logout', [AuthController::class, 'logout']);
 Route::post('/auth/otp/request', [AuthController::class, 'requestOtp']);
 Route::post('/auth/otp/verify', [AuthController::class, 'verifyOtp']);
+Route::post('/auth/password/forgot', [AuthController::class, 'forgotPassword']);
+Route::post('/auth/password/reset', [AuthController::class, 'resetPassword']);
 Route::post('/auth/google', [AuthController::class, 'google']);
 Route::post('/auth/linkedin', [AuthController::class, 'linkedin']);
 Route::get('/auth/profile', [AuthController::class, 'profile'])->middleware('auth:api');

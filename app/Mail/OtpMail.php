@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Models\User;
+use App\Services\OtpService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
@@ -17,12 +18,20 @@ class OtpMail extends Mailable
         public readonly User $user,
         public readonly string $code,
         public readonly int $validMinutes = 10,
+        public readonly string $purpose = OtpService::PURPOSE_EMAIL_VERIFICATION,
     ) {}
+
+    private function isPasswordReset(): bool
+    {
+        return $this->purpose === OtpService::PURPOSE_PASSWORD_RESET;
+    }
 
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Votre code de vérification Goriya',
+            subject: $this->isPasswordReset()
+                ? 'Réinitialisation de ton mot de passe Goriya'
+                : 'Votre code de vérification Goriya',
         );
     }
 
@@ -34,6 +43,15 @@ class OtpMail extends Mailable
                 'name' => $this->user->name,
                 'code' => $this->code,
                 'validMinutes' => $this->validMinutes,
+                'title' => $this->isPasswordReset()
+                    ? 'Réinitialisation de ton mot de passe Goriya'
+                    : 'Votre code de vérification Goriya',
+                'intro' => $this->isPasswordReset()
+                    ? "Voici le code à saisir pour choisir un nouveau mot de passe. Il expire dans {$this->validMinutes} minutes."
+                    : "Voici ton code de vérification. Il expire dans {$this->validMinutes} minutes.",
+                'footer' => $this->isPasswordReset()
+                    ? "Si tu n'es pas à l'origine de cette demande, ignore cet email : ton mot de passe reste inchangé."
+                    : "Si tu n'es pas à l'origine de cette demande, tu peux ignorer cet email.",
             ],
         );
     }

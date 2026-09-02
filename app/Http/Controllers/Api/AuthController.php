@@ -3,11 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ForgotPasswordRequest;
 use App\Http\Requests\GoogleAuthRequest;
 use App\Http\Requests\LinkedInAuthRequest;
 use App\Http\Requests\LoginRequest;
+use App\Http\Requests\ResetPasswordRequest;
 use App\Services\AuthService;
+use App\Services\OtpService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
 
 #[OA\Tag(name: 'Auth', description: "Authentification de l'espace utilisateur (candidats, entreprises)")]
@@ -125,12 +129,15 @@ class AuthController extends Controller
     )]
     public function requestOtp(Request $request)
     {
+        // `purpose` est borné à la vérification d'email : les codes de
+        // réinitialisation (PASSWORD_RESET) ont leurs propres endpoints, sinon
+        // un code de reset pourrait être échangé ici contre un JWT.
         $data = $request->validate([
             'email' => ['required', 'email'],
-            'purpose' => ['nullable', 'string'],
+            'purpose' => ['nullable', Rule::in([OtpService::PURPOSE_EMAIL_VERIFICATION])],
         ]);
 
-        return response()->json($this->authService->requestOtp($data['email'], $data['purpose'] ?? 'EMAIL_VERIFICATION'));
+        return response()->json($this->authService->requestOtp($data['email'], OtpService::PURPOSE_EMAIL_VERIFICATION));
     }
 
     #[OA\Post(
@@ -166,10 +173,57 @@ class AuthController extends Controller
         $data = $request->validate([
             'email' => ['required', 'email'],
             'code' => ['required', 'string'],
-            'purpose' => ['nullable', 'string'],
+            'purpose' => ['nullable', Rule::in([OtpService::PURPOSE_EMAIL_VERIFICATION])],
         ]);
 
-        return response()->json($this->authService->verifyOtp($data['email'], $data['code'], $data['purpose'] ?? 'EMAIL_VERIFICATION'));
+        return response()->json($this->authService->verifyOtp($data['email'], $data['code'], OtpService::PURPOSE_EMAIL_VERIFICATION));
+    }
+
+    #[OA\Post(
+        path: '/auth/password/forgot',
+        tags: ['Auth'],
+        summary: "Demande un code de réinitialisation de mot de passe par email",
+        description: "Répond toujours 200 avec le même message, que le compte existe ou non, pour ne pas permettre d'énumérer les adresses inscrites.",
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(ref: '#/components/schemas/ForgotPasswordRequest')
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Demande prise en compte (code envoyé si le compte existe et est actif)',
+                content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string')])
+            ),
+        ]
+    )]
+    public function forgotPassword(ForgotPasswordRequest $request)
+    {
+        return response()->json($this->authService->forgotPassword($request->validated()['email']));
+    }
+
+    #[OA\Post(
+        path: '/auth/password/reset',
+        tags: ['Auth'],
+        summary: "Définit un nouveau mot de passe à partir du code reçu par email",
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(ref: '#/components/schemas/ResetPasswordRequest')
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Mot de passe réinitialisé',
+                content: new OA\JsonContent(properties: [new OA\Property(property: 'message', type: 'string')])
+            ),
+            new OA\Response(response: 401, description: 'Code invalide ou expiré, ou compte bloqué', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Utilisateur introuvable', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function resetPassword(ResetPasswordRequest $request)
+    {
+        $data = $request->validated();
+
+        return response()->json($this->authService->resetPassword($data['email'], $data['code'], $data['password']));
     }
 
     #[OA\Post(
