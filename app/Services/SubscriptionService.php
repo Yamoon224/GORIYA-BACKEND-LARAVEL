@@ -6,6 +6,7 @@ use App\Contracts\HostedCheckoutGatewayInterface;
 use App\Enums\BillingPeriod;
 use App\Enums\SubscriptionStatus;
 use App\Enums\TransactionStatus;
+use App\Enums\UserRole;
 use App\Http\Resources\SubscriptionPlanResource;
 use App\Http\Resources\UserSubscriptionResource;
 use App\Models\Transaction;
@@ -49,8 +50,33 @@ class SubscriptionService
         ];
     }
 
+    /**
+     * Activation directe, SANS paiement. Réservée aux plans gratuits (prix 0),
+     * dont l'« Offre gratuite » entreprise : un forfait payant ne peut être
+     * activé que par /subscriptions/checkout puis vérification de la
+     * transaction, sinon n'importe quel compte authentifié pourrait s'offrir
+     * Business+ en appelant cet endpoint avec son propre userId.
+     *
+     * Le userId reste dans le corps (parité NestJS) mais n'est plus libre :
+     * seul son propriétaire — ou un ADMIN — peut l'utiliser.
+     */
     public function subscribe(string $userId, string $planId): UserSubscriptionResource
     {
+        $actor = auth('api')->user();
+
+        if ($actor && $actor->role !== UserRole::ADMIN && $actor->id !== $userId) {
+            abort(403, 'Vous ne pouvez activer un abonnement que pour votre propre compte');
+        }
+
+        $plan = $this->subscriptionPlanRepository->find($planId);
+        if (! $plan) {
+            abort(404, 'Plan non trouvé');
+        }
+
+        if (! $plan->isFree()) {
+            abort(403, 'Ce plan est payant : son activation passe par le paiement.');
+        }
+
         $sub = $this->performSubscribe($userId, $planId);
 
         return new UserSubscriptionResource($sub->load('plan'));
@@ -75,16 +101,24 @@ class SubscriptionService
     }
 
     /**
-     * @return array{hasSubscription: bool, planName: ?string, status: ?string}
+     * `tier` distingue l'offre gratuite (FREE) d'un forfait payant (PAID) —
+     * sans lui, un abonnement gratuit actif rendait `hasSubscription` vrai et
+     * ouvrait donc toutes les pages premium côté frontend.
+     *
+     * @return array{hasSubscription: bool, planName: ?string, status: ?string, planId: ?string, planPrice: ?float, tier: string}
      */
     public function check(string $userId): array
     {
         $sub = $this->userSubscriptionRepository->findActiveForUser($userId);
+        $plan = $sub?->plan;
 
         return [
             'hasSubscription' => (bool) $sub,
-            'planName' => $sub?->plan?->name,
+            'planName' => $plan?->name,
             'status' => $sub?->status?->value,
+            'planId' => $plan?->id,
+            'planPrice' => $plan ? (float) $plan->price : null,
+            'tier' => $plan?->tier() ?? 'NONE',
         ];
     }
 

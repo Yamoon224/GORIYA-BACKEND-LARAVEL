@@ -58,12 +58,41 @@ class CreateCompanyRequest extends FormRequest
             'phone' => ['nullable', 'string'],
             // Optionnels côté DTO Nest mais exigés par le service : on encode
             // directement en required ici pour produire le même 400.
-            'email' => ['required', 'string'],
-            'password' => ['required', 'string'],
+            //
+            // `email` + `unique:users` : sans ça, un email déjà pris n'était
+            // détecté qu'au moment de l'INSERT (violation d'unicité traduite
+            // par HandlesUniqueViolations), après création de la company dans
+            // la transaction — et un email mal formé passait jusqu'à l'envoi
+            // du code OTP, qui échouait silencieusement.
+            'email' => ['required', 'string', 'email:filter', 'max:255', Rule::unique('users', 'email')],
+            'password' => ['required', 'string', 'min:8', 'max:255'],
             'status' => ['nullable', Rule::enum(CompanyStatus::class)],
             'partnershipDate' => ['required', 'date'],
             'logo' => ['nullable', 'file', 'mimetypes:image/png,image/jpeg,image/jpg,image/webp'],
             'coverImage' => ['nullable', 'file', 'mimetypes:image/png,image/jpeg,image/jpg,image/webp'],
+        ];
+    }
+
+    /**
+     * Messages métier explicites : le rendu d'exception global ne renvoie que
+     * le PREMIER message de validation (voir bootstrap/app.php), c'est donc
+     * lui que l'utilisateur voit dans le toast du formulaire d'inscription.
+     *
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'companyName.required' => "Le nom de l'entreprise est obligatoire.",
+            'sector.required' => "Le secteur d'activité est obligatoire.",
+            'email.required' => "L'email professionnel est obligatoire.",
+            'email.email' => "L'email professionnel n'est pas une adresse valide.",
+            'email.unique' => 'Cette adresse email est déjà utilisée par un compte existant.',
+            'password.required' => 'Le mot de passe est obligatoire.',
+            'password.min' => 'Le mot de passe doit contenir au moins 8 caractères.',
+            'creationDate.date' => "La date de création n'est pas une date valide.",
+            'logo.mimetypes' => 'Le logo doit être une image PNG, JPEG, JPG ou WEBP.',
+            'coverImage.mimetypes' => "L'image de couverture doit être une image PNG, JPEG, JPG ou WEBP.",
         ];
     }
 }

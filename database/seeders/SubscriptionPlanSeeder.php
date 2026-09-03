@@ -61,6 +61,27 @@ class SubscriptionPlanSeeder extends Seeder
                 'is_active' => true,
             ],
             [
+                // Offre de découverte entreprise : activable sans paiement
+                // (SubscriptionService::subscribe n'accepte que les plans à 0)
+                // pour permettre de tester l'espace recrutement avant de
+                // souscrire. Les fonctionnalités premium (Services RH, appels
+                // vidéo, intégrations API) restent fermées — voir
+                // entreprise/lib/plan-access.ts.
+                'name' => 'Offre gratuite',
+                'price' => 0,
+                'billing_period' => BillingPeriod::MONTHLY,
+                'user_type' => SubscriptionUserType::ENTERPRISE,
+                'features' => [
+                    'Accès au tableau de bord',
+                    "Publication d'offres d'emploi",
+                    'Gestion de vos annonces',
+                    'Suivi des candidatures',
+                    'Messagerie avec les candidats',
+                    'Profil entreprise complet',
+                ],
+                'is_active' => true,
+            ],
+            [
                 'name' => 'Business',
                 'price' => 35500,
                 'billing_period' => BillingPeriod::MONTHLY,

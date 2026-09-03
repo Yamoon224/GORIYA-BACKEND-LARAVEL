@@ -48,4 +48,25 @@ class SubscriptionPlan extends Model
     {
         return $this->hasMany(UserSubscription::class, 'plan_id');
     }
+
+    /**
+     * Un plan à 0 est activable sans paiement (voir
+     * SubscriptionService::subscribe) — c'est le socle de l'offre gratuite
+     * entreprise, qui doit rester distinguable des forfaits payants pour le
+     * gating des fonctionnalités premium.
+     */
+    public function isFree(): bool
+    {
+        return (float) $this->price === 0.0;
+    }
+
+    /**
+     * Palier d'accès dérivé du prix : FREE (offre de découverte) ou PAID
+     * (forfait complet). Consommé par SubscriptionService::check(), que le
+     * frontend utilise pour n'ouvrir les pages premium qu'aux forfaits payants.
+     */
+    public function tier(): string
+    {
+        return $this->isFree() ? 'FREE' : 'PAID';
+    }
 }

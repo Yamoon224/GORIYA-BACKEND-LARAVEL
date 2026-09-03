@@ -67,7 +67,7 @@ class SubscriptionsController extends Controller
     #[OA\Post(
         path: '/subscriptions/subscribe',
         tags: ['Subscriptions'],
-        summary: 'Souscrit un utilisateur à un plan (annule tout abonnement actif existant)',
+        summary: "Active un plan GRATUIT pour l'utilisateur authentifié, sans paiement (annule tout abonnement actif existant)",
         security: [['bearerAuth' => []]],
         requestBody: new OA\RequestBody(
             required: true,
@@ -76,6 +76,7 @@ class SubscriptionsController extends Controller
         responses: [
             new OA\Response(response: 200, description: 'Abonnement créé', content: new OA\JsonContent(ref: '#/components/schemas/UserSubscription')),
             new OA\Response(response: 401, description: 'Non authentifié'),
+            new OA\Response(response: 403, description: "Plan payant (passer par /subscriptions/checkout) ou userId d'un autre compte"),
             new OA\Response(response: 404, description: 'Plan non trouvé'),
         ]
     )]
@@ -157,6 +158,9 @@ class SubscriptionsController extends Controller
                     new OA\Property(property: 'hasSubscription', type: 'boolean'),
                     new OA\Property(property: 'planName', type: 'string', nullable: true),
                     new OA\Property(property: 'status', type: 'string', enum: ['ACTIVE', 'EXPIRED', 'CANCELLED'], nullable: true),
+                    new OA\Property(property: 'planId', type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'planPrice', type: 'number', format: 'float', nullable: true),
+                    new OA\Property(property: 'tier', type: 'string', enum: ['NONE', 'FREE', 'PAID'], description: "FREE = offre gratuite (fonctionnalités premium fermées), PAID = forfait payant"),
                 ])
             ),
         ]
