@@ -51,6 +51,8 @@ class WelcomeMail extends Mailable
             with: [
                 'name' => $this->user->name,
                 'logoUrl' => ((string) config('app.frontend_url')).'/images/logo-blanc.png',
+                // Visuel d'en-tete de la carte, servi par le front public.
+                'headerImageUrl' => ((string) config('app.frontend_url')).'/images/email-welcome-header.jpg',
                 'title' => 'Bienvenue sur Goriya !',
                 'badge' => 'Inscription confirmée',
                 'paragraphs' => $this->isEnterprise()

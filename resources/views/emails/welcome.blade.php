@@ -6,13 +6,13 @@
     <title>{{ $title }}</title>
 </head>
 {{--
-    Gabarit "pleine couleur" : le fond reprend le bleu du logo Goriya (#0029a9)
-    et la carte blanche porte le message. Tout est en tables + styles inline,
-    seule mise en forme fiable dans Outlook/Gmail (pas de flex, pas de <style>
-    externe, pas de classes).
+    Gabarit "pleine couleur" : le fond reprend le bleu ciel du Hero du site
+    (#1e7df2) et la carte blanche porte le message. Tout est en tables +
+    styles inline, seule mise en forme fiable dans Outlook/Gmail (pas de flex,
+    pas de <style> externe, pas de classes).
 --}}
-<body style="margin:0;padding:0;background-color:#0029a9;font-family:Arial,Helvetica,sans-serif;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0029a9;">
+<body style="margin:0;padding:0;background-color:#1e7df2;font-family:Arial,Helvetica,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1e7df2;">
         <tr>
             <td align="center" style="padding:32px 16px 40px;">
 
@@ -27,6 +27,11 @@
 
                 {{-- Carte --}}
                 <table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:520px;background-color:#ffffff;border-radius:6px;">
+                    <tr>
+                        <td style="padding:0;font-size:0;line-height:0;">
+                            <img src="{{ $headerImageUrl }}" alt="" width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;border-radius:6px 6px 0 0;">
+                        </td>
+                    </tr>
                     <tr>
                         <td style="padding:32px 32px 36px;">
 
