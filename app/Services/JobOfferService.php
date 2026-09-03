@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Contracts\AiAnalysisServiceInterface;
+use App\Enums\JobStatus;
 use App\Http\Concerns\HandlesUniqueViolations;
 use App\Models\JobOffer;
 use App\Models\User;
@@ -35,17 +36,20 @@ class JobOfferService
             abort(404, "Company with id {$data['companyId']} not found");
         }
 
+        // Tout est facultatif sauf le titre : un brouillon (status = DRAFT)
+        // s'enregistre incomplet, CreateJobOfferRequest ne l'exige qu'à la
+        // publication.
         $payload = [
             'title' => $data['title'],
-            'location' => $data['location'],
-            'type' => $data['type'],
-            'experience' => $data['experience'],
-            'salary' => $data['salary'],
-            'description' => $data['description'],
-            'benefits' => $data['benefits'],
-            'requirements' => $data['requirements'],
-            'publish_date' => $data['publishDate'],
-            'end_date' => $data['endDate'],
+            'location' => $data['location'] ?? null,
+            'type' => $data['type'] ?? null,
+            'experience' => $data['experience'] ?? null,
+            'salary' => $data['salary'] ?? null,
+            'description' => $data['description'] ?? null,
+            'benefits' => $data['benefits'] ?? null,
+            'requirements' => $data['requirements'] ?? null,
+            'publish_date' => $data['publishDate'] ?? null,
+            'end_date' => $data['endDate'] ?? null,
             'company_id' => $company->id,
         ];
 
@@ -57,6 +61,12 @@ class JobOfferService
         }
         if (array_key_exists('applicants', $data)) {
             $payload['applicants'] = $data['applicants'];
+        }
+
+        // Sans `status`, la colonne prend son défaut ACTIVE : l'offre est donc
+        // publiée d'emblée et doit être complète.
+        if (($payload['status'] ?? JobStatus::ACTIVE->value) !== JobStatus::DRAFT->value) {
+            $this->assertPublishable($payload);
         }
 
         try {
@@ -91,6 +101,25 @@ class JobOfferService
             'applicants' => 'applicants',
         ]);
 
+        // Publier un brouillon se fait par un simple PATCH {status: ACTIVE} :
+        // la complétude se vérifie donc sur l'offre telle qu'elle sera APRÈS
+        // la mise à jour, pas sur le seul corps de la requête.
+        $avant = $jobOffer->getAttributes();
+        $apres = array_merge($avant, $mapped);
+        // Un `status` absent ou null laisse l'offre dans son statut actuel : ce
+        // n'est pas une publication, on ne réclame donc rien de plus.
+        $statutApres = $mapped['status'] ?? $avant['status'] ?? JobStatus::ACTIVE->value;
+        $publie = $statutApres !== JobStatus::DRAFT->value;
+        $sortDeBrouillon = $publie && ($avant['status'] ?? null) === JobStatus::DRAFT->value;
+        // Une offre déjà publiée avant les brouillons peut avoir des colonnes
+        // vides : on ne bloque son édition que si la requête touche justement
+        // l'un des champs exigés à la publication — sinon corriger un titre
+        // deviendrait impossible sur ces anciennes offres.
+        $toucheChampPublie = array_intersect_key($mapped, $this->champsDePublication()) !== [];
+        if ($sortDeBrouillon || ($publie && $toucheChampPublie)) {
+            $this->assertPublishable($apres);
+        }
+
         try {
             $this->jobOfferRepository->update($jobOffer, $mapped);
         } catch (QueryException $e) {
@@ -98,6 +127,51 @@ class JobOfferService
         }
 
         return $jobOffer->fresh(self::RELATIONS);
+    }
+
+    /**
+     * Refuse la publication d'une offre incomplète.
+     *
+     * Les colonnes sont nullables depuis l'ajout des brouillons : c'est ici, et
+     * plus dans le schéma, que se joue l'exigence « une offre publiée est
+     * complète ». Renvoie un 422 nommant les champs manquants, que le
+     * formulaire affiche tel quel.
+     *
+     * @param  array<string, mixed>  $attributs  Attributs en colonnes DB.
+     */
+    private function assertPublishable(array $attributs): void
+    {
+        $manquants = [];
+        foreach ($this->champsDePublication() as $colonne => $libelle) {
+            $valeur = $attributs[$colonne] ?? null;
+            if ($valeur === null || (is_string($valeur) && trim($valeur) === '')) {
+                $manquants[] = $libelle;
+            }
+        }
+
+        if ($manquants !== []) {
+            abort(422, 'Impossible de publier : renseignez '.implode(', ', $manquants).'.');
+        }
+    }
+
+    /**
+     * Colonnes exigées d'une offre publiée, et leur libellé côté formulaire.
+     *
+     * @return array<string, string>
+     */
+    private function champsDePublication(): array
+    {
+        return [
+            'title' => 'Titre du poste',
+            'location' => 'Localisation',
+            'type' => 'Type de contrat',
+            'experience' => 'Expérience requise',
+            'salary' => 'Salaire',
+            'description' => 'Description du poste',
+            'benefits' => 'Avantages offerts',
+            'publish_date' => 'Date de publication',
+            'end_date' => 'Date limite de candidature',
+        ];
     }
 
     public function paginate(int $page, int $limit, array $filters = []): LengthAwarePaginator

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\JobStatus;
 use App\Enums\UserRole;
 use App\Http\Concerns\AuthorizesOwnership;
 use App\Http\Controllers\Controller;
@@ -9,8 +10,10 @@ use App\Http\Requests\CreateJobOfferRequest;
 use App\Http\Requests\UpdateJobOfferRequest;
 use App\Http\Resources\JobOfferResource;
 use App\Models\JobOffer;
+use App\Models\User;
 use App\Services\JobOfferService;
 use App\Support\ApiResponse;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
@@ -67,9 +70,11 @@ class JobOffersController extends Controller
             ),
         ]
     )]
-    public function index()
+    public function index(Request $request)
     {
-        $jobOffers = JobOffer::with(self::RELATIONS)->get();
+        $jobOffers = JobOffer::with(self::RELATIONS)
+            ->where(fn ($q) => $this->exceptForeignDrafts($q, $request))
+            ->get();
 
         return JobOfferResource::collection($jobOffers);
     }
@@ -132,6 +137,10 @@ class JobOffersController extends Controller
             'companySize' => $request->query('companySize'),
             'sector' => $request->query('sector'),
             'applicants' => $request->has('applicants') ? $request->query('applicants') : null,
+            // Les brouillons ne sortent que pour leur propriétaire : voir
+            // JobOfferRepository::hideForeignDrafts.
+            'viewerCompanyId' => $this->viewerCompanyId($request),
+            'viewerIsAdmin' => $this->viewerIsAdmin($request),
         ]);
 
         $paginator->setCollection(
@@ -181,7 +190,7 @@ class JobOffersController extends Controller
             new OA\Response(response: 404, description: 'Offre introuvable'),
         ]
     )]
-    public function show(string $id)
+    public function show(string $id, Request $request)
     {
         $jobOffer = JobOffer::with(self::RELATIONS)->find($id);
 
@@ -189,7 +198,63 @@ class JobOffersController extends Controller
             abort(404, 'JobOffer not found');
         }
 
+        // Un brouillon n'existe que pour l'entreprise qui le rédige (et
+        // l'administration) : ailleurs, il se comporte comme une offre absente.
+        $estBrouillon = $jobOffer->status === JobStatus::DRAFT;
+        $peutVoir = $this->viewerIsAdmin($request) || $this->viewerCompanyId($request) === $jobOffer->company_id;
+        if ($estBrouillon && ! $peutVoir) {
+            abort(404, 'JobOffer not found');
+        }
+
         return new JobOfferResource($jobOffer);
+    }
+
+    /**
+     * Entreprise de l'appelant, ou null s'il n'est pas authentifié.
+     *
+     * Les routes de lecture sont publiques (pas de middleware auth:api) : le
+     * jeton, quand il est présent, sert uniquement à élargir ce qui est visible.
+     * Un jeton absent ou invalide ne doit donc pas faire échouer la requête.
+     */
+    private function viewer(Request $request): ?User
+    {
+        try {
+            return $request->user();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function viewerCompanyId(Request $request): ?string
+    {
+        $user = $this->viewer($request);
+
+        return $user?->role === UserRole::ENTERPRISE ? $user->company_id : null;
+    }
+
+    private function viewerIsAdmin(Request $request): bool
+    {
+        return $this->viewer($request)?->role === UserRole::ADMIN;
+    }
+
+    /**
+     * Version « requête Eloquent » de JobOfferRepository::hideForeignDrafts,
+     * pour les listes construites directement dans ce contrôleur.
+     */
+    private function exceptForeignDrafts(Builder $query, Request $request): Builder
+    {
+        if ($this->viewerIsAdmin($request)) {
+            return $query;
+        }
+
+        $viewerCompanyId = $this->viewerCompanyId($request);
+
+        return $query->where(function (Builder $q) use ($viewerCompanyId) {
+            $q->where('status', '!=', JobStatus::DRAFT->value);
+            if ($viewerCompanyId) {
+                $q->orWhere('company_id', $viewerCompanyId);
+            }
+        });
     }
 
     /*

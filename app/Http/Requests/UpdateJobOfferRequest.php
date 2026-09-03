@@ -39,19 +39,22 @@ class UpdateJobOfferRequest extends FormRequest
      */
     public function rules(): array
     {
+        // `nullable` partout sauf le titre : un brouillon en cours de rédaction
+        // doit pouvoir voir un champ revidé. La complétude exigée d'une offre
+        // publiée est vérifiée à la publication (JobOfferService::update).
         return [
             'title' => ['sometimes', 'string'],
-            'location' => ['sometimes', 'string'],
+            'location' => ['sometimes', 'nullable', 'string'],
             'type' => ['nullable', Rule::enum(JobType::class)],
             'experience' => ['nullable', Rule::enum(JobExperienceType::class)],
-            'salary' => ['sometimes', 'string'],
-            'description' => ['sometimes', 'string'],
-            'benefits' => ['sometimes', 'string'],
-            'requirements' => ['sometimes', 'array'],
+            'salary' => ['sometimes', 'nullable', 'string'],
+            'description' => ['sometimes', 'nullable', 'string'],
+            'benefits' => ['sometimes', 'nullable', 'string'],
+            'requirements' => ['sometimes', 'nullable', 'array'],
             'requirements.*' => ['string'],
             'status' => ['nullable', Rule::enum(JobStatus::class)],
-            'publishDate' => ['sometimes', 'date'],
-            'endDate' => ['sometimes', 'date'],
+            'publishDate' => ['sometimes', 'nullable', 'date'],
+            'endDate' => ['sometimes', 'nullable', 'date'],
             'applicants' => ['nullable'],
             'companyId' => ['nullable', 'uuid'],
         ];

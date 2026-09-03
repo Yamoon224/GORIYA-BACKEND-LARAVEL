@@ -84,6 +84,9 @@ class AdminJobsController extends Controller
             'type' => $this->asArray($request->query('jobType'))[0] ?? null,
             'salary' => $this->asArray($request->query('salary'))[0] ?? null,
             'status' => $request->query('status'),
+            // Back-office : la route est déjà réservée à role:ADMIN, les
+            // brouillons des entreprises doivent y rester visibles.
+            'viewerIsAdmin' => true,
         ]);
 
         $paginator->setCollection(

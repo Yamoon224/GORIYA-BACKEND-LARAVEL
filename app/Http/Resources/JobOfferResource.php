@@ -16,8 +16,8 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'id', type: 'string', format: 'uuid'),
         new OA\Property(property: 'title', type: 'string'),
         new OA\Property(property: 'location', type: 'string'),
-        new OA\Property(property: 'type', type: 'string', enum: ['CDI', 'CDD', 'STAGE', 'ALTERNANCE', 'FREELANCE', 'TEMPS_PARTIEL']),
-        new OA\Property(property: 'experience', type: 'string', enum: ['JUNIOR', 'INTERMEDIAIRE', 'SENIOR', 'EXPERT']),
+        new OA\Property(property: 'type', type: 'string', enum: ['CDI', 'CDD', 'STAGE', 'ALTERNANCE', 'FREELANCE', 'TEMPS_PARTIEL'], nullable: true),
+        new OA\Property(property: 'experience', type: 'string', enum: ['JUNIOR', 'INTERMEDIAIRE', 'SENIOR', 'EXPERT'], nullable: true),
         new OA\Property(property: 'salary', type: 'string'),
         new OA\Property(property: 'description', type: 'string'),
         new OA\Property(property: 'benefits', type: 'string'),
@@ -55,8 +55,10 @@ class JobOfferResource extends JsonResource
             'id' => $this->id,
             'title' => $this->title,
             'location' => $this->location,
-            'type' => $this->type->value,
-            'experience' => $this->experience->value,
+            // Nullables depuis les brouillons : une offre non publiée peut
+            // n'avoir encore ni type de contrat ni niveau d'expérience.
+            'type' => $this->type?->value,
+            'experience' => $this->experience?->value,
             'salary' => $this->salary,
             'description' => $this->description,
             'benefits' => $this->benefits,

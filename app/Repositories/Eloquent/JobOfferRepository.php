@@ -2,6 +2,7 @@
 
 namespace App\Repositories\Eloquent;
 
+use App\Enums\JobStatus;
 use App\Models\JobOffer;
 use App\Repositories\Contracts\JobOfferRepositoryInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -77,9 +78,38 @@ class JobOfferRepository extends BaseRepository implements JobOfferRepositoryInt
             $query->where('applicants', $filters['applicants']);
         }
 
+        $this->hideForeignDrafts($query, $filters);
+
         $query->orderByDesc('id');
 
         return $query->paginate($limit, ['*'], 'page', $page);
+    }
+
+    /**
+     * Masque les brouillons qui ne sont pas ceux de l'appelant.
+     *
+     * `/job-offers` et `/job-offers/paginate` sont des routes publiques : sans
+     * ce filtre, une offre enregistrée en brouillon — donc non publiée — sortirait
+     * dans la recherche d'emploi des candidats. L'entreprise propriétaire
+     * (`viewerCompanyId`) et l'administration (`viewerIsAdmin`) continuent de
+     * voir les leurs, c'est ce qui alimente la page « Mes annonces ».
+     *
+     * @param  array<string, mixed>  $filters
+     */
+    private function hideForeignDrafts(Builder $query, array $filters): void
+    {
+        if (filter_var($filters['viewerIsAdmin'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            return;
+        }
+
+        $viewerCompanyId = $filters['viewerCompanyId'] ?? null;
+
+        $query->where(function (Builder $q) use ($viewerCompanyId) {
+            $q->where('status', '!=', JobStatus::DRAFT->value);
+            if ($viewerCompanyId) {
+                $q->orWhere('company_id', $viewerCompanyId);
+            }
+        });
     }
 
     /**
