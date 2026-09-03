@@ -27,6 +27,7 @@ class OtpService
 
     public function __construct(
         private readonly UserRepositoryInterface $userRepository,
+        private readonly WelcomeEmailService $welcomeEmailService,
     ) {}
 
     public function send(User $user, string $purpose = self::PURPOSE_EMAIL_VERIFICATION): void
@@ -74,8 +75,12 @@ class OtpService
 
         $otp->update(['consumed_at' => now()]);
 
+        // Première vérification de l'email = inscription aboutie : c'est ici,
+        // et une seule fois par compte, que part l'email de bienvenue.
         if ($purpose === self::PURPOSE_EMAIL_VERIFICATION && ! $user->email_verified_at) {
             $user->forceFill(['email_verified_at' => now()])->save();
+
+            $this->welcomeEmailService->send($user);
         }
 
         return $user;

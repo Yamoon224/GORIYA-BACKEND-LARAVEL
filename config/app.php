@@ -56,6 +56,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | URLs des applications front
+    |--------------------------------------------------------------------------
+    |
+    | APP_URL pointe sur l'API (backend.goriya.net) : les liens envoyés par
+    | email doivent, eux, ramener l'utilisateur sur son interface. D'où ces
+    | deux entrées, une par front public.
+    |
+    */
+
+    'frontend_url' => rtrim((string) env('FRONTEND_URL', 'https://goriya.net'), '/'),
+
+    'enterprise_frontend_url' => rtrim((string) env('ENTERPRISE_FRONTEND_URL', 'https://entreprise.goriya.net'), '/'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

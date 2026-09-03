@@ -24,6 +24,7 @@ class AuthService
         private readonly OtpService $otpService,
         private readonly GoogleTokenVerifier $googleTokenVerifier,
         private readonly LinkedInOAuthClient $linkedInOAuthClient,
+        private readonly WelcomeEmailService $welcomeEmailService,
     ) {}
 
     /**
@@ -294,6 +295,10 @@ class AuthService
         // contrôlé par GoogleTokenVerifier / LinkedInOAuthClient) — pas d'OTP
         // à repasser.
         $user->forceFill(['email_verified_at' => now()])->save();
+
+        // Inscription aboutie dès la création ici : pas d'étape OTP où
+        // accrocher l'email de bienvenue, on l'envoie donc directement.
+        $this->welcomeEmailService->send($user);
 
         $token = auth('api')->login($user);
         $fullUser = $this->userRepository->findOrFail($user->id);
