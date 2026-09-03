@@ -144,7 +144,13 @@ class JobOfferService
         $manquants = [];
         foreach ($this->champsDePublication() as $colonne => $libelle) {
             $valeur = $attributs[$colonne] ?? null;
-            if ($valeur === null || (is_string($valeur) && trim($valeur) === '')) {
+            // `requirements` arrive tantôt en tableau (payload), tantôt en JSON
+            // encodé (attributs bruts du modèle) : les deux formes doivent être
+            // reconnues comme vides.
+            $vide = $valeur === null
+                || (is_string($valeur) && in_array(trim($valeur), ['', '[]'], true))
+                || (is_array($valeur) && $valeur === []);
+            if ($vide) {
                 $manquants[] = $libelle;
             }
         }
@@ -169,6 +175,7 @@ class JobOfferService
             'salary' => 'Salaire',
             'description' => 'Description du poste',
             'benefits' => 'Avantages offerts',
+            'requirements' => 'Compétences et exigences',
             'publish_date' => 'Date de publication',
             'end_date' => 'Date limite de candidature',
         ];
