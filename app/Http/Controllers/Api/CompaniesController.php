@@ -198,7 +198,7 @@ class CompaniesController extends Controller
         path: '/companies/{id}',
         tags: ['Companies'],
         summary: "Détail d'une entreprise",
-        parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, description: 'uuid ou slug', schema: new OA\Schema(type: 'string'))],
         responses: [
             new OA\Response(response: 200, description: 'Entreprise trouvée', content: new OA\JsonContent(ref: '#/components/schemas/Company')),
             new OA\Response(response: 404, description: 'Entreprise introuvable'),
@@ -206,7 +206,9 @@ class CompaniesController extends Controller
     )]
     public function show(string $id)
     {
-        $company = Company::with('users')->find($id);
+        // Les fiches publiques adressent l'entreprise par son slug ; l'uuid
+        // reste accepté pour les liens émis avant la mise en place des slugs.
+        $company = Company::with('users')->whereKeyOrSlug($id)->first();
 
         if (! $company) {
             abort(404, 'Company not found');
@@ -241,7 +243,7 @@ class CompaniesController extends Controller
     )]
     public function update(string $id, UpdateCompanyRequest $request)
     {
-        $company = Company::find($id);
+        $company = Company::whereKeyOrSlug($id)->first();
 
         if (! $company) {
             abort(404, 'Company not found');
@@ -281,7 +283,7 @@ class CompaniesController extends Controller
     )]
     public function destroy(string $id, Request $request)
     {
-        $company = Company::find($id);
+        $company = Company::whereKeyOrSlug($id)->first();
 
         if (! $company) {
             abort(404, 'Company not found');

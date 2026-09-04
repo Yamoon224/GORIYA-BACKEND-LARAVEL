@@ -10,11 +10,11 @@ use App\Http\Controllers\Api\AdminJobsController;
 use App\Http\Controllers\Api\AdminPlanningController;
 use App\Http\Controllers\Api\AdminPortfoliosController;
 use App\Http\Controllers\Api\AdminStudentsController;
-use App\Http\Controllers\Api\ArticlesController;
 use App\Http\Controllers\Api\AdminSystemController;
 use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\AnonymousUsageController;
 use App\Http\Controllers\Api\ApiClientsController;
+use App\Http\Controllers\Api\ArticlesController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CalendarEventsController;
 use App\Http\Controllers\Api\CallSessionsController;
@@ -29,8 +29,8 @@ use App\Http\Controllers\Api\ConnectionsController;
 use App\Http\Controllers\Api\CoursesController;
 use App\Http\Controllers\Api\CvAnalysisController;
 use App\Http\Controllers\Api\CvController;
-use App\Http\Controllers\Api\DeviceTokensController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\DeviceTokensController;
 use App\Http\Controllers\Api\EmployeeSurveysController;
 use App\Http\Controllers\Api\EnrollmentsController;
 use App\Http\Controllers\Api\External\ExternalCandidateAssessmentsController;
@@ -42,6 +42,7 @@ use App\Http\Controllers\Api\LunionMeetWebhookController;
 use App\Http\Controllers\Api\MatchingResultsController;
 use App\Http\Controllers\Api\MessagesController;
 use App\Http\Controllers\Api\MyProfileController;
+use App\Http\Controllers\Api\MyResumesController;
 use App\Http\Controllers\Api\NewsletterController;
 use App\Http\Controllers\Api\NotificationsController;
 use App\Http\Controllers\Api\PaiementProWebhookController;
@@ -131,6 +132,13 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/me/followed-companies', [AdminCompaniesController::class, 'followedCompanies']);
     Route::get('/me/saved-jobs', [AdminJobsController::class, 'savedJobsList']);
     Route::get('/me/applied-jobs', [AdminJobsController::class, 'appliedJobsList']);
+
+    // Bibliothèque de CV du candidat (étape « CV » du wizard de candidature).
+    // POST pour l'upload : PHP ne parse pas les corps multipart en PATCH/PUT.
+    Route::get('/me/resumes', [MyResumesController::class, 'index']);
+    Route::post('/me/resumes', [MyResumesController::class, 'store']);
+    Route::patch('/me/resumes/{id}', [MyResumesController::class, 'update']);
+    Route::delete('/me/resumes/{id}', [MyResumesController::class, 'destroy']);
     Route::post('/job-offers/{jobId}/apply', [AdminJobsController::class, 'applyToJob']);
     Route::post('/job-offers/{jobId}/save', [AdminJobsController::class, 'saveJob']);
     Route::delete('/job-offers/{jobId}/save', [AdminJobsController::class, 'unsaveJob']);

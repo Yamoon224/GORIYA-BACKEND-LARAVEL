@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Contracts\AiAnalysisServiceInterface;
+use App\Enums\JobQuestionType;
 use App\Enums\JobStatus;
 use App\Http\Concerns\HandlesUniqueViolations;
 use App\Models\JobOffer;
@@ -21,7 +22,7 @@ class JobOfferService
 {
     use HandlesUniqueViolations, MapsFieldsToColumns;
 
-    private const RELATIONS = ['company', 'candidatures'];
+    private const RELATIONS = ['company', 'candidatures', 'questions'];
 
     public function __construct(
         private readonly JobOfferRepositoryInterface $jobOfferRepository,
@@ -75,6 +76,10 @@ class JobOfferService
             $this->abortOnUniqueViolation($e, []);
         }
 
+        if (array_key_exists('questions', $data)) {
+            $this->syncQuestions($jobOffer, $data['questions'] ?? []);
+        }
+
         return $jobOffer->fresh(self::RELATIONS);
     }
 
@@ -126,7 +131,89 @@ class JobOfferService
             $this->abortOnUniqueViolation($e, []);
         }
 
+        // Absent du corps = questions inchangées ; un tableau vide les efface.
+        if (array_key_exists('questions', $data)) {
+            $this->syncQuestions($jobOffer, $data['questions'] ?? []);
+        }
+
         return $jobOffer->fresh(self::RELATIONS);
+    }
+
+    /**
+     * Aligne les questions de présélection de l'offre sur la liste envoyée par
+     * le formulaire entreprise.
+     *
+     * Les questions déjà présentes sont mises à jour en place (identifiées par
+     * leur `id`) plutôt que recréées : leur clé étrangère est référencée par
+     * les réponses des candidatures déjà reçues, qu'un delete/insert
+     * détacherait.
+     *
+     * @param  array<int, array<string, mixed>>|null  $questions
+     */
+    private function syncQuestions(JobOffer $jobOffer, ?array $questions): void
+    {
+        $questions ??= [];
+        $conserves = [];
+
+        foreach (array_values($questions) as $position => $question) {
+            $libelle = trim((string) ($question['label'] ?? ''));
+            if ($libelle === '') {
+                continue;
+            }
+
+            $type = JobQuestionType::tryFrom((string) ($question['type'] ?? '')) ?? JobQuestionType::TEXT;
+            $options = $this->normalizeOptions($type, $question['options'] ?? null);
+
+            if ($type->expectsOptions() && $options === []) {
+                abort(422, 'La question "'.$libelle.'" doit proposer au moins une réponse au choix.');
+            }
+
+            $attributs = [
+                'label' => $libelle,
+                'type' => $type->value,
+                'options' => $options === [] ? null : $options,
+                'required' => (bool) ($question['required'] ?? false),
+                'position' => $position,
+            ];
+
+            $existante = ! empty($question['id'])
+                ? $jobOffer->questions()->whereKey($question['id'])->first()
+                : null;
+
+            if ($existante) {
+                $existante->update($attributs);
+                $conserves[] = $existante->id;
+
+                continue;
+            }
+
+            $conserves[] = $jobOffer->questions()->create($attributs)->id;
+        }
+
+        $obsoletes = $jobOffer->questions()->whereNotIn('id', $conserves ?: ['-'])->get();
+        foreach ($obsoletes as $question) {
+            $question->delete();
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeOptions(JobQuestionType $type, mixed $options): array
+    {
+        if (! $type->expectsOptions() || ! is_array($options)) {
+            return [];
+        }
+
+        $nettoyees = [];
+        foreach ($options as $option) {
+            $valeur = trim((string) $option);
+            if ($valeur !== '' && ! in_array($valeur, $nettoyees, true)) {
+                $nettoyees[] = $valeur;
+            }
+        }
+
+        return $nettoyees;
     }
 
     /**

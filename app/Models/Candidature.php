@@ -8,6 +8,7 @@ use App\Enums\CandidatureStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Candidature extends Model
@@ -28,6 +29,10 @@ class Candidature extends Model
         'user_id',
         'job_offer_id',
         'pitch_id',
+        'candidate_phone',
+        'candidate_location',
+        'cover_letter',
+        'resume_id',
     ];
 
     /**
@@ -61,5 +66,15 @@ class Candidature extends Model
     public function assessment(): HasOne
     {
         return $this->hasOne(CandidateAssessment::class);
+    }
+
+    public function answers(): HasMany
+    {
+        return $this->hasMany(CandidatureAnswer::class)->orderBy('position');
+    }
+
+    public function resume(): BelongsTo
+    {
+        return $this->belongsTo(UserResume::class, 'resume_id');
     }
 }

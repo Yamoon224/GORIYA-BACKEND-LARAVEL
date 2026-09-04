@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Concerns\Auditable;
+use App\Concerns\HasSlug;
 use App\Concerns\HasUuid;
 use App\Enums\CompanyStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Company extends Model
 {
-    use Auditable, HasFactory, HasUuid;
+    use Auditable, HasFactory, HasSlug, HasUuid;
 
     /**
      * The attributes that are mass assignable.

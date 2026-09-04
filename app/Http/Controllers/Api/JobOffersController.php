@@ -22,7 +22,7 @@ class JobOffersController extends Controller
 {
     use AuthorizesOwnership;
 
-    private const RELATIONS = ['company', 'candidatures'];
+    private const RELATIONS = ['company', 'candidatures', 'questions'];
 
     public function __construct(private readonly JobOfferService $jobOfferService) {}
 
@@ -74,6 +74,7 @@ class JobOffersController extends Controller
     {
         $jobOffers = JobOffer::with(self::RELATIONS)
             ->where(fn ($q) => $this->exceptForeignDrafts($q, $request))
+            ->orderByPlanThenRecency()
             ->get();
 
         return JobOfferResource::collection($jobOffers);
@@ -192,7 +193,9 @@ class JobOffersController extends Controller
     )]
     public function show(string $id, Request $request)
     {
-        $jobOffer = JobOffer::with(self::RELATIONS)->find($id);
+        // Les fiches publiques adressent l'offre par son slug ; l'uuid reste
+        // accepté pour les liens émis avant la mise en place des slugs.
+        $jobOffer = JobOffer::with(self::RELATIONS)->whereKeyOrSlug($id)->first();
 
         if (! $jobOffer) {
             abort(404, 'JobOffer not found');
@@ -280,7 +283,7 @@ class JobOffersController extends Controller
     )]
     public function update(string $id, UpdateJobOfferRequest $request)
     {
-        $jobOffer = JobOffer::with(self::RELATIONS)->find($id);
+        $jobOffer = JobOffer::with(self::RELATIONS)->whereKeyOrSlug($id)->first();
 
         if (! $jobOffer) {
             abort(404, "JobOffer with id {$id} not found");
@@ -316,7 +319,7 @@ class JobOffersController extends Controller
     )]
     public function destroy(string $id, Request $request)
     {
-        $jobOffer = JobOffer::find($id);
+        $jobOffer = JobOffer::whereKeyOrSlug($id)->first();
 
         if (! $jobOffer) {
             abort(404, 'JobOffer not found');
@@ -360,7 +363,7 @@ class JobOffersController extends Controller
     )]
     public function match(string $id, Request $request)
     {
-        $jobOffer = JobOffer::find($id);
+        $jobOffer = JobOffer::whereKeyOrSlug($id)->first();
 
         if (! $jobOffer) {
             abort(404, 'JobOffer not found');

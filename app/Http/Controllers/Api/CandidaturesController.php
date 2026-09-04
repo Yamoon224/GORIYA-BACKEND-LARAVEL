@@ -42,6 +42,39 @@ class CandidaturesController extends Controller
             && $actingUser->company_id === $candidature->jobOffer?->company_id;
     }
 
+    /**
+     * Identifiant d'entreprise de l'appelant, quand il en représente une.
+     */
+    private function viewerCompanyId(Request $request): ?string
+    {
+        $user = $request->user();
+
+        return $user?->role === UserRole::ENTERPRISE ? $user->company_id : null;
+    }
+
+    /**
+     * Même règle que isCandidatureOwner(), exprimée en clause SQL pour les
+     * listes : ses candidatures, ou celles reçues sur les offres de son
+     * entreprise. Un admin n'est pas restreint.
+     */
+    private function scopeToViewer($query, Request $request)
+    {
+        $user = $request->user();
+
+        if ($user?->role === UserRole::ADMIN) {
+            return $query;
+        }
+
+        $companyId = $this->viewerCompanyId($request);
+
+        return $query
+            ->where('user_id', $user?->id)
+            ->when(
+                $companyId,
+                fn ($q) => $q->orWhereHas('jobOffer', fn ($offre) => $offre->where('company_id', $companyId)),
+            );
+    }
+
     /*
     |----------------------------------------------------------------------
     | CREATE
@@ -88,9 +121,11 @@ class CandidaturesController extends Controller
             new OA\Response(response: 401, description: 'Non authentifié'),
         ]
     )]
-    public function index()
+    public function index(Request $request)
     {
-        $candidatures = Candidature::with(self::RELATIONS)->get();
+        $candidatures = Candidature::with(self::RELATIONS)
+            ->where(fn ($q) => $this->scopeToViewer($q, $request))
+            ->get();
 
         return CandidatureResource::collection($candidatures);
     }
@@ -141,6 +176,11 @@ class CandidaturesController extends Controller
             'appliedDate' => $request->query('appliedDate'),
             'userId' => $request->query('userId'),
             'jobOfferId' => $request->query('jobOfferId'),
+            // Portée : un candidat ne voit que ses candidatures, une entreprise
+            // que celles déposées sur ses offres (cf. scopeToViewer).
+            'viewerUserId' => $request->user()?->id,
+            'viewerCompanyId' => $this->viewerCompanyId($request),
+            'viewerIsAdmin' => $request->user()?->role === UserRole::ADMIN,
         ]);
 
         $paginator->setCollection(

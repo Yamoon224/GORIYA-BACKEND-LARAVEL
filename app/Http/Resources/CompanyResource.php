@@ -15,6 +15,7 @@ use OpenApi\Attributes as OA;
     properties: [
         new OA\Property(property: 'id', type: 'string', format: 'uuid'),
         new OA\Property(property: 'name', type: 'string'),
+        new OA\Property(property: 'slug', type: 'string', description: 'Identifiant lisible utilisé dans les URLs publiques'),
         new OA\Property(property: 'sector', type: 'string'),
         new OA\Property(property: 'logo', type: 'string', nullable: true),
         new OA\Property(property: 'coverImage', type: 'string', nullable: true),
@@ -45,6 +46,7 @@ class CompanyResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'slug' => $this->slug,
             'sector' => $this->sector,
             'logo' => MediaUrl::resolve($this->logo),
             'coverImage' => MediaUrl::resolve($this->cover_image),

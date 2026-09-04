@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\JobExperienceType;
+use App\Enums\JobQuestionType;
 use App\Enums\JobStatus;
 use App\Enums\JobType;
 use Illuminate\Foundation\Http\FormRequest;
@@ -27,6 +28,19 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'endDate', type: 'string', format: 'date'),
         new OA\Property(property: 'applicants', type: 'integer', nullable: true),
         new OA\Property(property: 'companyId', type: 'string', format: 'uuid'),
+        new OA\Property(
+            property: 'questions',
+            description: 'Questions de présélection posées au candidat. Omis = inchangé, [] = supprimées.',
+            type: 'array',
+            nullable: true,
+            items: new OA\Items(properties: [
+                new OA\Property(property: 'id', type: 'string', format: 'uuid', nullable: true),
+                new OA\Property(property: 'label', type: 'string'),
+                new OA\Property(property: 'type', type: 'string', enum: ['TEXT', 'TEXTAREA', 'NUMBER', 'BOOLEAN', 'SINGLE_CHOICE', 'MULTI_CHOICE']),
+                new OA\Property(property: 'required', type: 'boolean'),
+                new OA\Property(property: 'options', type: 'array', nullable: true, items: new OA\Items(type: 'string')),
+            ], type: 'object')
+        ),
     ]
 )]
 class CreateJobOfferRequest extends FormRequest
@@ -72,6 +86,15 @@ class CreateJobOfferRequest extends FormRequest
             // Pas de contrainte de type côté DTO Nest (@IsOptional() seul).
             'applicants' => ['nullable'],
             'companyId' => ['required', 'uuid'],
+            // Questions de présélection façon LinkedIn : absentes du corps =
+            // inchangées, tableau vide = toutes supprimées.
+            'questions' => ['sometimes', 'nullable', 'array', 'max:20'],
+            'questions.*.id' => ['nullable', 'uuid'],
+            'questions.*.label' => ['required', 'string', 'max:500'],
+            'questions.*.type' => ['nullable', Rule::enum(JobQuestionType::class)],
+            'questions.*.required' => ['nullable', 'boolean'],
+            'questions.*.options' => ['nullable', 'array', 'max:20'],
+            'questions.*.options.*' => ['string', 'max:200'],
         ];
     }
 }

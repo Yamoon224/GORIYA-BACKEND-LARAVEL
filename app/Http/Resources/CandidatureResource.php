@@ -37,6 +37,22 @@ use OpenApi\Attributes as OA;
                 new OA\Property(property: 'title', type: 'string'),
             ]
         ),
+        new OA\Property(property: 'candidatePhone', type: 'string', nullable: true),
+        new OA\Property(property: 'candidateLocation', type: 'string', nullable: true),
+        new OA\Property(property: 'coverLetter', type: 'string', nullable: true),
+        new OA\Property(property: 'resume', ref: '#/components/schemas/UserResume', nullable: true),
+        new OA\Property(
+            property: 'answers',
+            description: "Réponses aux questions de présélection de l'offre",
+            type: 'array',
+            items: new OA\Items(properties: [
+                new OA\Property(property: 'id', type: 'string', format: 'uuid'),
+                new OA\Property(property: 'questionId', type: 'string', format: 'uuid', nullable: true),
+                new OA\Property(property: 'question', type: 'string'),
+                new OA\Property(property: 'type', type: 'string'),
+                new OA\Property(property: 'value', type: 'array', items: new OA\Items(type: 'string')),
+            ], type: 'object')
+        ),
         new OA\Property(property: 'createdAt', type: 'string', format: 'date-time'),
         new OA\Property(property: 'updatedAt', type: 'string', format: 'date-time'),
     ]
@@ -64,6 +80,18 @@ class CandidatureResource extends JsonResource
                 'id' => $this->jobOffer->id,
                 'title' => $this->jobOffer->title,
             ] : null,
+            'candidatePhone' => $this->candidate_phone,
+            'candidateLocation' => $this->candidate_location,
+            'coverLetter' => $this->cover_letter,
+            'resume' => $this->resume ? (new UserResumeResource($this->resume))->resolve() : null,
+            'answers' => $this->answers->map(fn ($answer) => [
+                'id' => $answer->id,
+                'questionId' => $answer->question_id,
+                'question' => $answer->question_label,
+                'type' => $answer->question_type->value,
+                // Toujours une liste, même pour une réponse unique (cf. modèle).
+                'value' => $answer->value ?? [],
+            ])->values()->all(),
             'createdAt' => $this->created_at,
             'updatedAt' => $this->updated_at,
         ];

@@ -16,7 +16,7 @@ class CandidatureService
 {
     use HandlesUniqueViolations, MapsFieldsToColumns;
 
-    private const RELATIONS = ['user', 'jobOffer', 'jobOffer.company'];
+    private const RELATIONS = ['user', 'jobOffer', 'jobOffer.company', 'answers', 'resume'];
 
     public function __construct(
         private readonly CandidatureRepositoryInterface $candidatureRepository,

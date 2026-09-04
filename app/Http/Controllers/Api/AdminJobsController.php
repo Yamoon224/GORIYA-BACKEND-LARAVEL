@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ApplyToJobRequest;
 use App\Http\Resources\CandidatureResource;
 use App\Http\Resources\JobOfferResource;
 use App\Models\Candidature;
@@ -233,9 +234,11 @@ class AdminJobsController extends Controller
             new OA\Response(response: 404, description: 'Candidat ou offre introuvable'),
         ]
     )]
-    public function applyToJob(string $jobId, Request $request)
+    public function applyToJob(string $jobId, ApplyToJobRequest $request)
     {
-        return ApiResponse::success($this->adminActionService->createJobApplication($request->user()->id, $jobId));
+        return ApiResponse::success(
+            $this->adminActionService->createJobApplication($request->user()->id, $jobId, $request->validated())
+        );
     }
 
     #[OA\Post(
@@ -298,7 +301,7 @@ class AdminJobsController extends Controller
         responses: [
             new OA\Response(
                 response: 200,
-                description: "Identifiants des offres sauvegardées",
+                description: 'Identifiants des offres sauvegardées',
                 content: new OA\JsonContent(properties: [
                     new OA\Property(property: 'success', type: 'boolean', example: true),
                     new OA\Property(

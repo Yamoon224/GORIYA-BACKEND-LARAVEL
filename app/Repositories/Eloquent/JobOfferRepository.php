@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Collection;
 
 class JobOfferRepository extends BaseRepository implements JobOfferRepositoryInterface
 {
-    private const RELATIONS = ['company', 'candidatures'];
+    private const RELATIONS = ['company', 'candidatures', 'questions'];
 
     protected function model(): string
     {
@@ -80,7 +80,9 @@ class JobOfferRepository extends BaseRepository implements JobOfferRepositoryInt
 
         $this->hideForeignDrafts($query, $filters);
 
-        $query->orderByDesc('id');
+        // Forfait de l'entreprise décroissant, puis date d'ajout décroissante
+        // — voir JobOffer::scopeOrderByPlanThenRecency.
+        $query->orderByPlanThenRecency();
 
         return $query->paginate($limit, ['*'], 'page', $page);
     }
