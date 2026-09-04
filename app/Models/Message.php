@@ -19,6 +19,10 @@ class Message extends Model
         'conversation_id',
         'sender_id',
         'content',
+        'attachment_path',
+        'attachment_name',
+        'attachment_mime',
+        'attachment_size',
         'read_at',
     ];
 
@@ -29,6 +33,7 @@ class Message extends Model
     {
         return [
             'read_at' => 'datetime',
+            'attachment_size' => 'integer',
         ];
     }
 

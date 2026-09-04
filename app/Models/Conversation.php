@@ -21,6 +21,8 @@ class Conversation extends Model
         'participant_one_id',
         'participant_two_id',
         'last_message_at',
+        'starred_by',
+        'deleted_by',
     ];
 
     /**
@@ -30,6 +32,8 @@ class Conversation extends Model
     {
         return [
             'last_message_at' => 'datetime',
+            'starred_by' => 'array',
+            'deleted_by' => 'array',
         ];
     }
 
@@ -56,6 +60,16 @@ class Conversation extends Model
     public function isParticipant(string $userId): bool
     {
         return $this->participant_one_id === $userId || $this->participant_two_id === $userId;
+    }
+
+    public function isStarredBy(string $userId): bool
+    {
+        return in_array($userId, $this->starred_by ?? [], true);
+    }
+
+    public function isDeletedBy(string $userId): bool
+    {
+        return in_array($userId, $this->deleted_by ?? [], true);
     }
 
     public function otherParticipantId(string $userId): ?string

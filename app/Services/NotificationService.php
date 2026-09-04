@@ -83,6 +83,10 @@ class NotificationService
             'type' => NotificationType::MESSAGE,
             'title' => $title,
             'body' => $body,
+            // Chemin relatif : /messages existe dans standard/ comme dans
+            // entreprise/, et le paramètre `conversation` y ouvre directement
+            // le fil concerné plutôt que le premier de la liste.
+            'link' => '/messages?conversation='.$conversation->id,
         ]);
 
         $this->pushToUser($recipient, $title, $body);
@@ -109,6 +113,8 @@ class NotificationService
             'type' => NotificationType::APPLICATION_STATUS,
             'title' => $title,
             'body' => $body,
+            // Côté candidat, le suivi des candidatures vit dans /mes-offres.
+            'link' => '/mes-offres',
         ]);
 
         if ($candidature->user) {
@@ -136,6 +142,9 @@ class NotificationService
                 'type' => NotificationType::APPLICATION_STATUS,
                 'title' => $title,
                 'body' => $body,
+                // Côté entreprise, les candidatures reçues vivent dans
+                // /candidatures.
+                'link' => '/candidatures',
             ]);
 
             $this->pushToUser($recipient, $title, $body);

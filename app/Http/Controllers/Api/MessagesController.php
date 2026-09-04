@@ -122,7 +122,90 @@ class MessagesController extends Controller
         $conversation = Conversation::findOrFail($conversationId);
         $this->authorizeOwnerOrAdmin($request->user(), $this->messagingService->isParticipant($conversation, $request->user()));
 
-        return response()->json($this->messagingService->sendMessage($conversation, $request->user(), $request->validated()['content']));
+        return response()->json($this->messagingService->sendMessage(
+            $conversation,
+            $request->user(),
+            $request->validated()['content'] ?? '',
+            $request->file('attachment'),
+        ));
+    }
+
+    #[OA\Put(
+        path: '/messages/conversations/{conversationId}/star',
+        tags: ['Messages'],
+        summary: 'Epingle ou desepingle une conversation pour l\'utilisateur courant',
+        security: [['bearerAuth' => []]],
+        parameters: [new OA\Parameter(name: 'conversationId', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        requestBody: new OA\RequestBody(
+            required: false,
+            content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'starred', type: 'boolean', description: 'Absent = bascule'),
+            ])
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Conversation mise a jour'),
+            new OA\Response(response: 401, description: 'Non authentifie'),
+            new OA\Response(response: 403, description: 'Pas participant de cette conversation'),
+        ]
+    )]
+    public function star(string $conversationId, Request $request)
+    {
+        $conversation = Conversation::findOrFail($conversationId);
+        $this->authorizeOwnerOrAdmin($request->user(), $this->messagingService->isParticipant($conversation, $request->user()));
+
+        $data = $request->validate(['starred' => ['sometimes', 'boolean']]);
+        // Sans `starred` explicite, l'appel bascule l'etat courant : c'est ce
+        // que fait l'etoile de la barre de conversation.
+        $starred = array_key_exists('starred', $data)
+            ? (bool) $data['starred']
+            : ! $conversation->isStarredBy($request->user()->id);
+
+        return response()->json($this->messagingService->setStarred($conversation, $request->user(), $starred));
+    }
+
+    #[OA\Put(
+        path: '/messages/conversations/{conversationId}/unread',
+        tags: ['Messages'],
+        summary: 'Remet une conversation en non lu pour l\'utilisateur courant',
+        security: [['bearerAuth' => []]],
+        parameters: [new OA\Parameter(name: 'conversationId', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [
+            new OA\Response(response: 200, description: 'Marquee comme non lue'),
+            new OA\Response(response: 401, description: 'Non authentifie'),
+            new OA\Response(response: 403, description: 'Pas participant de cette conversation'),
+        ]
+    )]
+    public function markUnread(string $conversationId, Request $request)
+    {
+        $conversation = Conversation::findOrFail($conversationId);
+        $this->authorizeOwnerOrAdmin($request->user(), $this->messagingService->isParticipant($conversation, $request->user()));
+
+        $this->messagingService->markAsUnread($conversation, $request->user());
+
+        return response()->json(['message' => 'Conversation marquee comme non lue']);
+    }
+
+    #[OA\Delete(
+        path: '/messages/conversations/{conversationId}',
+        tags: ['Messages'],
+        summary: 'Retire la conversation de la liste de l\'utilisateur courant',
+        description: "L'autre participant conserve la conversation et son historique ; un nouveau message la fait reapparaitre.",
+        security: [['bearerAuth' => []]],
+        parameters: [new OA\Parameter(name: 'conversationId', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [
+            new OA\Response(response: 200, description: 'Conversation supprimee'),
+            new OA\Response(response: 401, description: 'Non authentifie'),
+            new OA\Response(response: 403, description: 'Pas participant de cette conversation'),
+        ]
+    )]
+    public function destroy(string $conversationId, Request $request)
+    {
+        $conversation = Conversation::findOrFail($conversationId);
+        $this->authorizeOwnerOrAdmin($request->user(), $this->messagingService->isParticipant($conversation, $request->user()));
+
+        $this->messagingService->deleteForUser($conversation, $request->user());
+
+        return response()->json(['message' => 'Conversation supprimee']);
     }
 
     #[OA\Put(

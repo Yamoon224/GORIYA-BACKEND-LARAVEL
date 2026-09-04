@@ -408,6 +408,9 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/messages/conversations/{conversationId}/messages', [MessagesController::class, 'messages']);
     Route::post('/messages/conversations/{conversationId}/messages', [MessagesController::class, 'store']);
     Route::put('/messages/conversations/{conversationId}/read', [MessagesController::class, 'markRead']);
+    Route::put('/messages/conversations/{conversationId}/unread', [MessagesController::class, 'markUnread']);
+    Route::put('/messages/conversations/{conversationId}/star', [MessagesController::class, 'star']);
+    Route::delete('/messages/conversations/{conversationId}', [MessagesController::class, 'destroy']);
 
     Route::get('/notifications', [NotificationsController::class, 'index']);
     Route::put('/notifications/read-all', [NotificationsController::class, 'markAllRead']);

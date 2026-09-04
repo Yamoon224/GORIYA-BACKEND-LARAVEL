@@ -30,6 +30,7 @@ class NotificationsController extends Controller
                     new OA\Property(property: 'type', type: 'string', enum: ['MESSAGE', 'APPLICATION_STATUS', 'SYSTEM']),
                     new OA\Property(property: 'title', type: 'string'),
                     new OA\Property(property: 'body', type: 'string', nullable: true),
+                    new OA\Property(property: 'link', type: 'string', nullable: true, description: "Chemin relatif de la page concernée, ex. /messages?conversation=..."),
                     new OA\Property(property: 'isRead', type: 'boolean'),
                     new OA\Property(property: 'createdAt', type: 'string', format: 'date-time'),
                 ], type: 'object'))
@@ -44,6 +45,7 @@ class NotificationsController extends Controller
             'type' => $n->type->value,
             'title' => $n->title,
             'body' => $n->body,
+            'link' => $n->link,
             'isRead' => $n->is_read,
             'createdAt' => $n->created_at,
         ]);
