@@ -54,6 +54,13 @@ class AdminActionService
             abort(404, 'Candidat ou offre introuvable');
         }
 
+        // Une seule candidature par couple (candidat, offre) : le bouton
+        // "Postuler" est masqué côté front dès que l'offre est déjà postulée,
+        // ce garde-fou couvre les appels directs / double-soumission.
+        if ($this->candidatureRepository->existsForUserAndJob($candidate->id, $jobOffer->id)) {
+            abort(409, 'Vous avez déjà postulé pour cette offre.');
+        }
+
         $candidature = $this->candidatureRepository->create([
             'candidate_name' => $candidate->name,
             'candidate_email' => $candidate->email,

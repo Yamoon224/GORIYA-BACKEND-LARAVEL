@@ -53,4 +53,20 @@ class CandidatureRepository extends BaseRepository implements CandidatureReposit
     {
         return Candidature::where('status', $status)->count();
     }
+
+    public function existsForUserAndJob(string $userId, string $jobOfferId): bool
+    {
+        return Candidature::where('user_id', $userId)
+            ->where('job_offer_id', $jobOfferId)
+            ->exists();
+    }
+
+    public function appliedJobIds(string $userId): array
+    {
+        return Candidature::where('user_id', $userId)
+            ->whereNotNull('job_offer_id')
+            ->distinct()
+            ->pluck('job_offer_id')
+            ->all();
+    }
 }

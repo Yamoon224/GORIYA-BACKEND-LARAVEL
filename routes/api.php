@@ -130,6 +130,7 @@ Route::delete('/job-offers/{id}', [JobOffersController::class, 'destroy'])->midd
 Route::middleware('auth:api')->group(function () {
     Route::get('/me/followed-companies', [AdminCompaniesController::class, 'followedCompanies']);
     Route::get('/me/saved-jobs', [AdminJobsController::class, 'savedJobsList']);
+    Route::get('/me/applied-jobs', [AdminJobsController::class, 'appliedJobsList']);
     Route::post('/job-offers/{jobId}/apply', [AdminJobsController::class, 'applyToJob']);
     Route::post('/job-offers/{jobId}/save', [AdminJobsController::class, 'saveJob']);
     Route::delete('/job-offers/{jobId}/save', [AdminJobsController::class, 'unsaveJob']);

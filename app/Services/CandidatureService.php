@@ -106,4 +106,15 @@ class CandidatureService
     {
         $this->candidatureRepository->delete($candidature);
     }
+
+    /**
+     * Identifiants des offres auxquelles l'utilisateur a déjà postulé — sert au
+     * front à masquer le bouton "Postuler" sur une offre déjà candidatée.
+     *
+     * @return list<string>
+     */
+    public function appliedJobIds(string $userId): array
+    {
+        return $this->candidatureRepository->appliedJobIds($userId);
+    }
 }

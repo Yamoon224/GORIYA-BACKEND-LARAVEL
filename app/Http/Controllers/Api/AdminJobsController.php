@@ -317,6 +317,32 @@ class AdminJobsController extends Controller
     }
 
     #[OA\Get(
+        path: '/me/applied-jobs',
+        tags: ['Admin Jobs & Candidatures'],
+        summary: "Liste des identifiants d'offres auxquelles l'utilisateur courant a déjà postulé",
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Identifiants des offres déjà postulées',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'success', type: 'boolean', example: true),
+                    new OA\Property(
+                        property: 'data',
+                        properties: [new OA\Property(property: 'jobIds', type: 'array', items: new OA\Items(type: 'string', format: 'uuid'))],
+                        type: 'object'
+                    ),
+                ])
+            ),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+        ]
+    )]
+    public function appliedJobsList(Request $request)
+    {
+        return ApiResponse::success(['jobIds' => $this->candidatureService->appliedJobIds($request->user()->id)]);
+    }
+
+    #[OA\Get(
         path: '/admin/job-offers/{id}',
         tags: ['Admin Jobs & Candidatures'],
         summary: "Détail d'une offre d'emploi (rôle ADMIN requis)",
