@@ -9,7 +9,10 @@ use Illuminate\Database\Eloquent\Builder;
 
 class CandidatureRepository extends BaseRepository implements CandidatureRepositoryInterface
 {
-    private const RELATIONS = ['user', 'jobOffer', 'answers', 'resume'];
+    // `user.portfolios` / `user.cv` alimentent candidateSkills dans
+    // CandidatureResource : sans eux la ressource ferait deux requetes par
+    // candidature listee.
+    private const RELATIONS = ['user', 'user.portfolios', 'user.cv', 'jobOffer', 'answers', 'resume'];
 
     protected function model(): string
     {

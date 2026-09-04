@@ -20,7 +20,7 @@ class CandidaturesController extends Controller
 {
     use AuthorizesOwnership;
 
-    private const RELATIONS = ['user', 'jobOffer'];
+    private const RELATIONS = ['user', 'user.portfolios', 'user.cv', 'jobOffer'];
 
     public function __construct(private readonly CandidatureService $candidatureService) {}
 

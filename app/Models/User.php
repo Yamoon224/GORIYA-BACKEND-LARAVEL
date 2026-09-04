@@ -11,6 +11,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Tymon\JWTAuth\Contracts\JWTSubject;
@@ -79,6 +80,16 @@ class User extends Authenticatable implements JWTSubject
     public function candidatures(): HasMany
     {
         return $this->hasMany(Candidature::class);
+    }
+
+    /**
+     * Brouillon du créateur de CV — un seul par utilisateur (unicité sur
+     * user_id, cf. CvService). Source des compétences déclarées quand
+     * l'utilisateur n'a pas de portfolio.
+     */
+    public function cv(): HasOne
+    {
+        return $this->hasOne(Cv::class);
     }
 
     public function subscriptions(): HasMany
