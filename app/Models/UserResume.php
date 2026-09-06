@@ -22,6 +22,7 @@ class UserResume extends Model
     protected $fillable = [
         'user_id',
         'name',
+        'source',
         'path',
         'mime_type',
         'size',

@@ -30,6 +30,14 @@ class UserResumeService
 
     public const MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
+    /**
+     * Origines possibles d'un CV : fichier déposé par le candidat, ou PDF
+     * produit par le créateur de CV.
+     *
+     * @var list<string>
+     */
+    public const SOURCES = ['upload', 'builder'];
+
     /** Garde-fou contre une bibliothèque qui enfle sans limite. */
     public const MAX_PER_USER = 10;
 
@@ -49,8 +57,10 @@ class UserResumeService
         return UserResume::where('user_id', $user->id)->find($id);
     }
 
-    public function store(User $user, UploadedFile $file, ?string $name = null): UserResume
+    public function store(User $user, UploadedFile $file, ?string $name = null, string $source = 'upload'): UserResume
     {
+        $source = in_array($source, self::SOURCES, true) ? $source : 'upload';
+
         if (! in_array($file->getMimeType(), self::ALLOWED_MIME_TYPES, true)) {
             abort(400, 'Format non supporté : joignez un CV au format PDF ou Word.');
         }
@@ -59,7 +69,15 @@ class UserResumeService
             abort(400, 'Le CV ne doit pas dépasser 5 Mo.');
         }
 
-        if (UserResume::where('user_id', $user->id)->count() >= self::MAX_PER_USER) {
+        // Le créateur de CV n'a qu'un brouillon : chaque enregistrement remplace
+        // le PDF qu'il avait déjà produit, sinon la bibliothèque se remplirait
+        // de versions successives du même CV.
+        $remplace = $source === 'builder'
+            ? UserResume::where('user_id', $user->id)->where('source', 'builder')->latest()->first()
+            : null;
+
+        $existants = UserResume::where('user_id', $user->id)->count() - ($remplace ? 1 : 0);
+        if ($existants >= self::MAX_PER_USER) {
             abort(400, 'Vous avez atteint la limite de '.self::MAX_PER_USER.' CV. Supprimez-en un avant d\'en ajouter un autre.');
         }
 
@@ -68,17 +86,34 @@ class UserResumeService
         Storage::disk('public')->putFileAs('resumes', $file, $filename);
 
         // Le premier CV déposé devient le CV par défaut : sans ça, le wizard
-        // de candidature n'aurait rien de présélectionné.
-        $estPremier = ! UserResume::where('user_id', $user->id)->exists();
+        // de candidature n'aurait rien de présélectionné. Un CV régénéré garde
+        // le statut de celui qu'il remplace.
+        $estPremier = $remplace
+            ? $remplace->is_default
+            : ! UserResume::where('user_id', $user->id)->exists();
 
-        return UserResume::create([
+        if ($remplace) {
+            $this->delete($remplace);
+        }
+
+        $resume = UserResume::create([
             'user_id' => $user->id,
             'name' => trim((string) $name) !== '' ? trim((string) $name) : $file->getClientOriginalName(),
+            'source' => $source,
             'path' => "/resumes/{$filename}",
             'mime_type' => $file->getMimeType(),
             'size' => $file->getSize(),
-            'is_default' => $estPremier,
+            'is_default' => false,
         ]);
+
+        // Passer par markDefault plutôt que par le champ : la suppression du CV
+        // remplacé a pu promouvoir un autre CV par défaut, qu'il faut démarquer.
+        if ($estPremier) {
+            $this->markDefault($resume);
+            $resume->save();
+        }
+
+        return $resume;
     }
 
     /**

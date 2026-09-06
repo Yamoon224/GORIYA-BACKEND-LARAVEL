@@ -12,6 +12,7 @@ use OpenApi\Attributes as OA;
     properties: [
         new OA\Property(property: 'id', type: 'string', format: 'uuid'),
         new OA\Property(property: 'name', type: 'string'),
+        new OA\Property(property: 'source', type: 'string', enum: ['upload', 'builder']),
         new OA\Property(property: 'url', type: 'string', nullable: true),
         new OA\Property(property: 'mimeType', type: 'string', nullable: true),
         new OA\Property(property: 'size', type: 'integer'),
@@ -29,6 +30,8 @@ class UserResumeResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            // « builder » = PDF issu du créateur de CV, « upload » = fichier déposé.
+            'source' => $this->source ?? 'upload',
             'url' => MediaUrl::resolve($this->path),
             'mimeType' => $this->mime_type,
             'size' => $this->size,

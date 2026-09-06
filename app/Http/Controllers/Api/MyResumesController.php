@@ -54,6 +54,7 @@ class MyResumesController extends Controller
                 schema: new OA\Schema(properties: [
                     new OA\Property(property: 'file', type: 'string', format: 'binary'),
                     new OA\Property(property: 'name', type: 'string', nullable: true),
+                    new OA\Property(property: 'source', type: 'string', enum: ['upload', 'builder'], nullable: true),
                 ])
             )
         ),
@@ -68,12 +69,14 @@ class MyResumesController extends Controller
         $request->validate([
             'file' => ['required', 'file'],
             'name' => ['nullable', 'string', 'max:255'],
+            'source' => ['nullable', 'in:'.implode(',', UserResumeService::SOURCES)],
         ]);
 
         $resume = $this->resumeService->store(
             $request->user(),
             $request->file('file'),
             $request->input('name'),
+            (string) $request->input('source', 'upload'),
         );
 
         return ApiResponse::success((new UserResumeResource($resume))->resolve());
