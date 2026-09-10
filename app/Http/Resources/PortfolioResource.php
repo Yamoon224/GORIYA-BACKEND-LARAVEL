@@ -2,12 +2,14 @@
 
 namespace App\Http\Resources;
 
+use App\Support\MediaUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use OpenApi\Attributes as OA;
 
 /**
- * Mirroir de backend/src/portfolios/dto/portfolio.vm.ts.
+ * Mirroir de backend/src/portfolios/dto/portfolio.vm.ts, étendu pour
+ * l'éditeur complet (photo, thème, statut, détails).
  */
 #[OA\Schema(
     schema: 'Portfolio',
@@ -19,6 +21,11 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'views', type: 'integer'),
         new OA\Property(property: 'downloads', type: 'integer'),
         new OA\Property(property: 'likes', type: 'integer'),
+        new OA\Property(property: 'theme', type: 'string'),
+        new OA\Property(property: 'status', type: 'string', enum: ['DRAFT', 'PUBLISHED']),
+        new OA\Property(property: 'photo', type: 'string', nullable: true, description: 'URL absolue de la photo'),
+        new OA\Property(property: 'photoPath', type: 'string', nullable: true, description: 'Chemin à renvoyer dans `photo` pour conserver la photo'),
+        new OA\Property(property: 'details', type: 'object', nullable: true),
         new OA\Property(property: 'createdDate', type: 'string', format: 'date-time'),
         new OA\Property(
             property: 'user',
@@ -45,10 +52,15 @@ class PortfolioResource extends JsonResource
             'id' => $this->id,
             'title' => $this->title,
             'description' => $this->description,
-            'skills' => $this->skills,
+            'skills' => $this->skills ?? [],
             'views' => $this->views,
             'downloads' => $this->downloads,
             'likes' => $this->likes,
+            'theme' => $this->theme ?? 'default',
+            'status' => $this->status ?? 'PUBLISHED',
+            'photo' => MediaUrl::resolve($this->photo_path),
+            'photoPath' => $this->photo_path,
+            'details' => $this->details,
             'createdDate' => $this->created_date,
             'user' => $this->user ? [
                 'id' => $this->user->id,

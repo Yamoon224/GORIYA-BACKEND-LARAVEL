@@ -12,6 +12,13 @@ class Portfolio extends Model
 {
     use Auditable, HasFactory, HasUuid;
 
+    public const STATUS_DRAFT = 'DRAFT';
+
+    public const STATUS_PUBLISHED = 'PUBLISHED';
+
+    /** Thèmes proposés par l'éditeur (standard /portfolio/creer). */
+    public const THEMES = ['default', 'blue', 'purple', 'green'];
+
     /**
      * The attributes that are mass assignable.
      *
@@ -26,6 +33,10 @@ class Portfolio extends Model
         'likes',
         'created_date',
         'user_id',
+        'theme',
+        'status',
+        'photo_path',
+        'details',
     ];
 
     /**
@@ -38,6 +49,9 @@ class Portfolio extends Model
         return [
             'created_date' => 'datetime',
             'skills' => 'array',
+            // Coordonnées, niveaux de compétences, projets et liens — voir
+            // CreatePortfolioRequest::editorRules() pour la forme attendue.
+            'details' => 'array',
         ];
     }
 

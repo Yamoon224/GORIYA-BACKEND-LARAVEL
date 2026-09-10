@@ -7,6 +7,7 @@ use OpenApi\Attributes as OA;
 
 #[OA\Schema(
     schema: 'UpdatePortfolioRequest',
+    description: 'Mêmes champs que CreatePortfolioRequest, tous facultatifs',
     properties: [
         new OA\Property(property: 'title', type: 'string'),
         new OA\Property(property: 'description', type: 'string'),
@@ -16,6 +17,10 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'likes', type: 'number', nullable: true),
         new OA\Property(property: 'createdDate', type: 'string', format: 'date'),
         new OA\Property(property: 'userId', type: 'string', format: 'uuid', nullable: true),
+        new OA\Property(property: 'theme', type: 'string'),
+        new OA\Property(property: 'status', type: 'string', enum: ['DRAFT', 'PUBLISHED']),
+        new OA\Property(property: 'photo', type: 'string', nullable: true),
+        new OA\Property(property: 'details', type: 'object', nullable: true),
     ]
 )]
 class UpdatePortfolioRequest extends FormRequest
@@ -31,15 +36,16 @@ class UpdatePortfolioRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'title' => ['sometimes', 'string'],
-            'description' => ['sometimes', 'string'],
+            'title' => ['sometimes', 'string', 'max:255'],
+            'description' => ['sometimes', 'nullable', 'string'],
             'skills' => ['sometimes', 'array'],
-            'skills.*' => ['string'],
+            'skills.*' => ['string', 'max:100'],
             'views' => ['nullable', 'numeric'],
             'downloads' => ['nullable', 'numeric'],
             'likes' => ['nullable', 'numeric'],
             'createdDate' => ['sometimes', 'date'],
             'userId' => ['nullable', 'uuid'],
+            ...CreatePortfolioRequest::editorRules(),
         ];
     }
 }

@@ -17,6 +17,7 @@ use OpenApi\Attributes as OA;
     properties: [
         new OA\Property(property: 'id', type: 'string', format: 'uuid'),
         new OA\Property(property: 'name', type: 'string'),
+        new OA\Property(property: 'title', type: 'string', nullable: true),
         new OA\Property(property: 'avatar', type: 'string', nullable: true),
         new OA\Property(property: 'companyName', type: 'string', nullable: true),
     ]
@@ -31,6 +32,9 @@ class ConnectUserResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            // Titre professionnel (« Développeuse React »), affiché sous le nom
+            // dans le fil et les listes, comme le headline LinkedIn.
+            'title' => $this->title,
             'avatar' => $this->avatar,
             'companyName' => $this->whenLoaded('company', fn () => $this->company?->name),
         ];

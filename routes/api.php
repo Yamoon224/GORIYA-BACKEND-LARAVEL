@@ -150,7 +150,9 @@ Route::middleware('auth:api')->group(function () {
 // --- Public Profiles (Profil Public GORIYA) ---
 Route::get('/profile/me', [PublicProfileController::class, 'me'])->middleware('auth:api');
 Route::patch('/profile/me', [PublicProfileController::class, 'update'])->middleware('auth:api');
-Route::get('/profiles/{slug}', [PublicProfileController::class, 'show']);
+// Sans middleware auth : le jeton est facultatif et ne sert qu'à déterminer le
+// mode de lecture (propriétaire / membre / visiteur).
+Route::get('/profiles/{ref}', [PublicProfileController::class, 'show']);
 
 // --- Profil de l'utilisateur authentifié (titre, localisation, bio) ---
 Route::middleware('auth:api')->group(function () {
@@ -170,6 +172,8 @@ Route::get('/portfolios', [PortfoliosController::class, 'index']);
 Route::get('/portfolios/paginate', [PortfoliosController::class, 'paginate']);
 Route::get('/portfolios/{id}', [PortfoliosController::class, 'show']);
 Route::post('/portfolios', [PortfoliosController::class, 'store'])->middleware('auth:api');
+// POST pour l'upload : PHP ne parse pas les corps multipart en PATCH/PUT.
+Route::post('/portfolios/photo', [PortfoliosController::class, 'uploadPhoto'])->middleware('auth:api');
 Route::patch('/portfolios/{id}', [PortfoliosController::class, 'update'])->middleware('auth:api');
 Route::delete('/portfolios/{id}', [PortfoliosController::class, 'destroy'])->middleware('auth:api');
 
@@ -190,8 +194,14 @@ Route::middleware('auth:api')->group(function () {
     Route::delete('/communities/{id}/join', [CommunitiesController::class, 'leave']);
 
     Route::get('/posts/feed', [PostsController::class, 'feed']);
+    // POST multipart : un post peut embarquer des images ou un PDF.
     Route::post('/posts', [PostsController::class, 'store']);
+    Route::get('/posts/{id}', [PostsController::class, 'show']);
     Route::post('/posts/{id}/like', [PostsController::class, 'toggleLike']);
+    Route::post('/posts/{id}/repost', [PostsController::class, 'repost']);
+    Route::get('/posts/{id}/comments', [PostsController::class, 'comments']);
+    Route::post('/posts/{id}/comments', [PostsController::class, 'storeComment']);
+    Route::delete('/posts/{id}/comments/{commentId}', [PostsController::class, 'destroyComment']);
     Route::delete('/posts/{id}', [PostsController::class, 'destroy']);
 });
 

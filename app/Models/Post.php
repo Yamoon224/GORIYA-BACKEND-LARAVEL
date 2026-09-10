@@ -19,6 +19,7 @@ class Post extends Model
     protected $fillable = [
         'user_id',
         'community_id',
+        'repost_of_id',
         'content',
     ];
 
@@ -35,5 +36,26 @@ class Post extends Model
     public function likes(): HasMany
     {
         return $this->hasMany(PostLike::class);
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(PostAttachment::class)->orderBy('position');
+    }
+
+    public function comments(): HasMany
+    {
+        return $this->hasMany(PostComment::class);
+    }
+
+    /** Post d'origine quand celui-ci est une republication. */
+    public function repostOf(): BelongsTo
+    {
+        return $this->belongsTo(Post::class, 'repost_of_id');
+    }
+
+    public function reposts(): HasMany
+    {
+        return $this->hasMany(Post::class, 'repost_of_id');
     }
 }

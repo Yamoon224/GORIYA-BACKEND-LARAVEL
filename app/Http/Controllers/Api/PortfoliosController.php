@@ -42,9 +42,49 @@ class PortfoliosController extends Controller
     )]
     public function store(CreatePortfolioRequest $request)
     {
-        $portfolio = $this->portfolioService->create($request->validated());
+        $data = $request->validated();
+
+        // Un membre crée pour lui-même : l'userId du corps n'est honoré que
+        // pour un admin, sinon n'importe qui publierait au nom d'un autre.
+        if ($request->user()->role !== \App\Enums\UserRole::ADMIN || empty($data['userId'])) {
+            $data['userId'] = $request->user()->id;
+        }
+
+        $portfolio = $this->portfolioService->create($data);
 
         return new PortfolioResource($portfolio);
+    }
+
+    #[OA\Post(
+        path: '/portfolios/photo',
+        tags: ['Portfolios'],
+        summary: "Téléverse la photo d'un portfolio (JPG, PNG ou WebP, 5 Mo)",
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\MediaType(mediaType: 'multipart/form-data', schema: new OA\Schema(properties: [
+                new OA\Property(property: 'photo', type: 'string', format: 'binary'),
+            ]))
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Photo enregistrée', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'data', type: 'object', properties: [
+                    new OA\Property(property: 'path', type: 'string', description: 'À transmettre dans `photo`'),
+                    new OA\Property(property: 'url', type: 'string'),
+                ]),
+            ])),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+            new OA\Response(response: 422, description: 'Format ou taille refusés'),
+        ]
+    )]
+    public function uploadPhoto(Request $request)
+    {
+        $request->validate(['photo' => ['required', 'file', 'max:5120']]);
+
+        $path = $this->portfolioService->storePhoto($request->file('photo'));
+
+        return ApiResponse::success(['path' => $path, 'url' => \App\Support\MediaUrl::resolve($path)]);
     }
 
     /*

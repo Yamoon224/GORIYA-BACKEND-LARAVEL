@@ -9,29 +9,31 @@ use App\Services\PublicProfileService;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
-#[OA\Tag(name: 'Public Profiles', description: 'Profil Public GORIYA — page vitrine (goriya.net/{slug})')]
+#[OA\Tag(name: 'Public Profiles', description: 'Profil Public GORIYA — page vitrine (goriya.net/p/{slug ou uuid})')]
 class PublicProfileController extends Controller
 {
     public function __construct(private readonly PublicProfileService $profileService) {}
 
     /*
     |----------------------------------------------------------------------
-    | PROFIL PUBLIC PAR SLUG (aucune auth — 404 si non publié)
+    | PROFIL PAR SLUG OU UUID — authentification facultative : le jeton, s'il
+    | est présent, décide du mode (propriétaire / membre / public).
     |----------------------------------------------------------------------
     */
     #[OA\Get(
-        path: '/profiles/{slug}',
+        path: '/profiles/{ref}',
         tags: ['Public Profiles'],
-        summary: 'Affiche un profil public par son slug',
-        parameters: [new OA\Parameter(name: 'slug', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
+        summary: 'Affiche un profil par son URL personnalisée ou par l\'uuid du membre',
+        description: 'Sans jeton : 404 si le profil n\'est pas public. Avec jeton : visible des membres ; `viewerMode` vaut owner, member ou public.',
+        parameters: [new OA\Parameter(name: 'ref', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
         responses: [
-            new OA\Response(response: 200, description: 'Profil public (agrège portfolios et pitchs vidéo)'),
-            new OA\Response(response: 404, description: 'Profil introuvable ou non publié'),
+            new OA\Response(response: 200, description: 'Profil (identité, portfolios, pitchs vidéo publics, activité récente)'),
+            new OA\Response(response: 404, description: 'Profil introuvable ou non visible'),
         ]
     )]
-    public function show(string $slug)
+    public function show(string $ref)
     {
-        $profile = $this->profileService->showPublic($slug);
+        $profile = $this->profileService->showFor($ref, auth('api')->user());
 
         if (! $profile) {
             abort(404, 'Public profile not found');
@@ -62,13 +64,13 @@ class PublicProfileController extends Controller
 
     /*
     |----------------------------------------------------------------------
-    | MISE À JOUR (slug/thème/visibilité/SEO)
+    | MISE À JOUR (URL personnalisée / thème / visibilité / SEO)
     |----------------------------------------------------------------------
     */
     #[OA\Patch(
         path: '/profile/me',
         tags: ['Public Profiles'],
-        summary: 'Met à jour le profil public (slug, thème, visibilité, SEO)',
+        summary: 'Met à jour le profil public (URL personnalisée, thème, visibilité, SEO)',
         security: [['bearerAuth' => []]],
         requestBody: new OA\RequestBody(
             content: new OA\JsonContent(ref: '#/components/schemas/UpdatePublicProfileRequest')
@@ -76,7 +78,7 @@ class PublicProfileController extends Controller
         responses: [
             new OA\Response(response: 200, description: 'Profil mis à jour', content: new OA\JsonContent(ref: '#/components/schemas/PublicProfile')),
             new OA\Response(response: 401, description: 'Non authentifié'),
-            new OA\Response(response: 422, description: 'Validation échouée'),
+            new OA\Response(response: 422, description: 'Validation échouée, ou URL déjà prise'),
         ]
     )]
     public function update(UpdatePublicProfileRequest $request)
