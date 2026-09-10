@@ -125,7 +125,6 @@ class ConnectFeedTest extends TestCase
         $this->assertSame('Nous recrutons !', $repost['repostOf']['content']);
         // Compteurs de l'original, pour agir dessus depuis la republication.
         $this->assertSame(1, $repost['repostOf']['likesCount']);
-        $this->assertFalse($repost['repostOf']['likedByMe'] === false && $repost['repostOf']['likesCount'] === 0);
 
         // Une seconde republication « nue » du même post est refusée…
         $this->actingAs($bob, 'api')->postJson("/posts/{$post['id']}/repost")->assertStatus(400);

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\MediaUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use OpenApi\Attributes as OA;
@@ -88,7 +89,7 @@ class CandidatureResource extends JsonResource
                     'id' => $this->jobOffer->company->id,
                     'slug' => $this->jobOffer->company->slug,
                     'name' => $this->jobOffer->company->name,
-                    'logo' => \App\Support\MediaUrl::resolve($this->jobOffer->company->logo),
+                    'logo' => MediaUrl::resolve($this->jobOffer->company->logo),
                 ] : null,
             ] : null,
             'candidatePhone' => $this->candidate_phone,

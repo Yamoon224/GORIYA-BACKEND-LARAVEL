@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\UserRole;
 use App\Http\Concerns\AuthorizesOwnership;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreatePortfolioRequest;
@@ -10,6 +11,7 @@ use App\Http\Resources\PortfolioResource;
 use App\Models\Portfolio;
 use App\Services\PortfolioService;
 use App\Support\ApiResponse;
+use App\Support\MediaUrl;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
@@ -46,7 +48,7 @@ class PortfoliosController extends Controller
 
         // Un membre crée pour lui-même : l'userId du corps n'est honoré que
         // pour un admin, sinon n'importe qui publierait au nom d'un autre.
-        if ($request->user()->role !== \App\Enums\UserRole::ADMIN || empty($data['userId'])) {
+        if ($request->user()->role !== UserRole::ADMIN || empty($data['userId'])) {
             $data['userId'] = $request->user()->id;
         }
 
@@ -84,7 +86,7 @@ class PortfoliosController extends Controller
 
         $path = $this->portfolioService->storePhoto($request->file('photo'));
 
-        return ApiResponse::success(['path' => $path, 'url' => \App\Support\MediaUrl::resolve($path)]);
+        return ApiResponse::success(['path' => $path, 'url' => MediaUrl::resolve($path)]);
     }
 
     /*
@@ -152,7 +154,7 @@ class PortfoliosController extends Controller
         // portfolios) ou pour un admin ; tout autre lecteur ne voit que les publiés.
         $viewer = auth('api')->user();
         $voitBrouillons = $viewer !== null
-            && ($viewer->role === \App\Enums\UserRole::ADMIN || $request->query('userId') === $viewer->id);
+            && ($viewer->role === UserRole::ADMIN || $request->query('userId') === $viewer->id);
 
         $paginator = $this->portfolioService->paginate($page, $limit, [
             'status' => $voitBrouillons ? $request->query('status') : Portfolio::STATUS_PUBLISHED,

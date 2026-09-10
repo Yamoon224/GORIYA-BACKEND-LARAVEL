@@ -11,6 +11,7 @@ use App\Models\PostLike;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -134,7 +135,7 @@ class PostService
      * Derniers posts publics d'un membre, pour la section « Activité » de son
      * profil public.
      *
-     * @return \Illuminate\Database\Eloquent\Collection<int, Post>
+     * @return Collection<int, Post>
      */
     public function recentByAuthor(User $author, ?User $viewer, int $limit = 3)
     {
