@@ -78,7 +78,7 @@ class PublicProfileController extends Controller
         responses: [
             new OA\Response(response: 200, description: 'Profil mis à jour', content: new OA\JsonContent(ref: '#/components/schemas/PublicProfile')),
             new OA\Response(response: 401, description: 'Non authentifié'),
-            new OA\Response(response: 422, description: 'Validation échouée, ou URL déjà prise'),
+            new OA\Response(response: 400, description: 'Validation échouée, ou URL déjà prise'),
         ]
     )]
     public function update(UpdatePublicProfileRequest $request)

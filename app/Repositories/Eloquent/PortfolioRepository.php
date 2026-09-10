@@ -52,6 +52,9 @@ class PortfolioRepository extends BaseRepository implements PortfolioRepositoryI
         if ($userId = $filters['userId'] ?? null) {
             $query->where('user_id', $userId);
         }
+        if ($status = $filters['status'] ?? null) {
+            $query->where('status', $status);
+        }
 
         $query->orderByDesc('created_date');
 

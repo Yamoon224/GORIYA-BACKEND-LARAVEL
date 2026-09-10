@@ -82,7 +82,14 @@ class CandidatureResource extends JsonResource
             ] : null,
             'jobOffer' => $this->jobOffer ? [
                 'id' => $this->jobOffer->id,
+                'slug' => $this->jobOffer->slug,
                 'title' => $this->jobOffer->title,
+                'company' => $this->jobOffer->company ? [
+                    'id' => $this->jobOffer->company->id,
+                    'slug' => $this->jobOffer->company->slug,
+                    'name' => $this->jobOffer->company->name,
+                    'logo' => \App\Support\MediaUrl::resolve($this->jobOffer->company->logo),
+                ] : null,
             ] : null,
             'candidatePhone' => $this->candidate_phone,
             'candidateLocation' => $this->candidate_location,

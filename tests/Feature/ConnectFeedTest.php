@@ -40,7 +40,7 @@ class ConnectFeedTest extends TestCase
         return $this->actingAs($author, 'api')
             ->post('/posts', $payload, ['Accept' => 'application/json'])
             ->assertOk()
-            ->json('data');
+            ->json();
     }
 
     public function test_un_post_avec_images_est_visible_des_autres_membres(): void
@@ -83,11 +83,11 @@ class ConnectFeedTest extends TestCase
                     UploadedFile::fake()->create('photo.jpg', 100, 'image/jpeg'),
                 ],
             ], ['Accept' => 'application/json'])
-            ->assertStatus(422);
+            ->assertStatus(400);
 
         $this->actingAs($alice, 'api')
             ->post('/posts', ['content' => '   '], ['Accept' => 'application/json'])
-            ->assertStatus(422);
+            ->assertStatus(400);
 
         $post = $this->publish($alice, [
             'attachments' => [UploadedFile::fake()->create('rapport.pdf', 300, 'application/pdf')],
@@ -110,8 +110,8 @@ class ConnectFeedTest extends TestCase
 
         $comment = $this->actingAs($bob, 'api')
             ->postJson("/posts/{$post['id']}/comments", ['content' => 'Bravo, je postule.'])
-            ->assertOk()
-            ->json('data');
+            ->assertCreated()
+            ->json();
         $this->assertSame('Bob Traore', $comment['author']['name']);
 
         $this->actingAs($alice, 'api')->getJson("/posts/{$post['id']}/comments")
@@ -120,18 +120,21 @@ class ConnectFeedTest extends TestCase
 
         $repost = $this->actingAs($bob, 'api')->postJson("/posts/{$post['id']}/repost")
             ->assertOk()
-            ->json('data');
+            ->json();
         $this->assertSame($post['id'], $repost['repostOf']['id']);
         $this->assertSame('Nous recrutons !', $repost['repostOf']['content']);
+        // Compteurs de l'original, pour agir dessus depuis la republication.
+        $this->assertSame(1, $repost['repostOf']['likesCount']);
+        $this->assertFalse($repost['repostOf']['likedByMe'] === false && $repost['repostOf']['likesCount'] === 0);
 
         // Une seconde republication « nue » du même post est refusée…
-        $this->actingAs($bob, 'api')->postJson("/posts/{$post['id']}/repost")->assertStatus(422);
+        $this->actingAs($bob, 'api')->postJson("/posts/{$post['id']}/repost")->assertStatus(400);
         // …mais republier la republication vise le post d'origine.
         $this->actingAs($alice, 'api')->postJson("/posts/{$repost['id']}/repost", ['content' => 'Partagez autour de vous'])
             ->assertOk()
-            ->assertJsonPath('data.repostOf.id', $post['id']);
+            ->assertJsonPath('repostOf.id', $post['id']);
 
-        $vuParAlice = $this->actingAs($alice, 'api')->getJson("/posts/{$post['id']}")->assertOk()->json('data');
+        $vuParAlice = $this->actingAs($alice, 'api')->getJson("/posts/{$post['id']}")->assertOk()->json();
         $this->assertSame(1, $vuParAlice['likesCount']);
         $this->assertSame(1, $vuParAlice['commentsCount']);
         $this->assertSame(2, $vuParAlice['repostsCount']);

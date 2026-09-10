@@ -56,7 +56,7 @@ class PortfolioEditorTest extends TestCase
                 'projects' => [['title' => 'Boutique en ligne', 'status' => 'EN_COURS', 'previewUrl' => 'https://boutique.example.ci']],
                 'links' => ['github' => 'https://github.com/awa'],
             ],
-        ])->assertOk()->json('data');
+        ])->assertOk()->json();
 
         $this->assertSame($awa->id, $portfolio['user']['id']);
         $this->assertSame('DRAFT', $portfolio['status']);
@@ -68,12 +68,12 @@ class PortfolioEditorTest extends TestCase
         // `details` n'accepte que les clés connues de l'éditeur.
         $this->actingAs($awa, 'api')
             ->patchJson("/portfolios/{$portfolio['id']}", ['details' => ['script' => '<b>x</b>']])
-            ->assertStatus(422);
+            ->assertStatus(400);
 
         $this->actingAs($awa, 'api')
             ->patchJson("/portfolios/{$portfolio['id']}", ['status' => 'PUBLISHED'])
             ->assertOk()
-            ->assertJsonPath('data.status', 'PUBLISHED');
+            ->assertJsonPath('status', 'PUBLISHED');
 
         // Un autre membre ne peut pas le modifier.
         $this->actingAs($autre, 'api')
@@ -88,6 +88,6 @@ class PortfolioEditorTest extends TestCase
 
         $this->actingAs($awa, 'api')
             ->post('/portfolios/photo', ['photo' => UploadedFile::fake()->create('cv.pdf', 100, 'application/pdf')], ['Accept' => 'application/json'])
-            ->assertStatus(422);
+            ->assertStatus(400);
     }
 }

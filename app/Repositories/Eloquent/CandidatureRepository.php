@@ -12,7 +12,9 @@ class CandidatureRepository extends BaseRepository implements CandidatureReposit
     // `user.portfolios` / `user.cv` alimentent candidateSkills dans
     // CandidatureResource : sans eux la ressource ferait deux requetes par
     // candidature listee.
-    private const RELATIONS = ['user', 'user.portfolios', 'user.cv', 'jobOffer', 'answers', 'resume'];
+    // `jobOffer.company` : la bibliothèque du candidat (standard) affiche
+    // l'entreprise de chaque candidature.
+    private const RELATIONS = ['user', 'user.portfolios', 'user.cv', 'jobOffer.company', 'answers', 'resume'];
 
     protected function model(): string
     {

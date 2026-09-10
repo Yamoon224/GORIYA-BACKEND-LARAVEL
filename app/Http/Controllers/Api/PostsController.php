@@ -72,7 +72,7 @@ class PostsController extends Controller
             new OA\Response(response: 200, description: 'Post créé', content: new OA\JsonContent(ref: '#/components/schemas/Post')),
             new OA\Response(response: 401, description: 'Non authentifié'),
             new OA\Response(response: 403, description: 'Réservé aux membres de la communauté'),
-            new OA\Response(response: 422, description: 'Post vide, format ou nombre de pièces jointes refusé'),
+            new OA\Response(response: 400, description: 'Post vide, format ou nombre de pièces jointes refusé'),
         ]
     )]
     public function store(CreatePostRequest $request)
@@ -150,7 +150,7 @@ class PostsController extends Controller
             new OA\Response(response: 200, description: 'Republication créée', content: new OA\JsonContent(ref: '#/components/schemas/Post')),
             new OA\Response(response: 401, description: 'Non authentifié'),
             new OA\Response(response: 404, description: 'Post introuvable'),
-            new OA\Response(response: 422, description: 'Déjà republié, ou publication de communauté'),
+            new OA\Response(response: 400, description: 'Déjà republié, ou publication de communauté'),
         ]
     )]
     public function repost(string $id, Request $request)

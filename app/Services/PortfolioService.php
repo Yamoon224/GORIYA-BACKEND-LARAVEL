@@ -113,7 +113,7 @@ class PortfolioService
     {
         $extension = self::PHOTO_MIME_TYPES[(string) $file->getMimeType()] ?? null;
         if ($extension === null) {
-            abort(422, 'Format non supporté : choisissez une image JPG, PNG ou WebP.');
+            abort(400, 'Format non supporté : choisissez une image JPG, PNG ou WebP.');
         }
 
         $filename = Str::uuid().'.'.$extension;

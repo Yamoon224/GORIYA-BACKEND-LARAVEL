@@ -198,12 +198,12 @@ class PublicProfileService
         }
 
         if (in_array($slug, self::RESERVED_SLUGS, true) || Str::isUuid($slug)) {
-            abort(422, "Cette URL n'est pas disponible.");
+            abort(400, "Cette URL n'est pas disponible.");
         }
 
         $prise = PublicProfile::where('slug', $slug)->where('id', '!=', $profile->id)->exists();
         if ($prise) {
-            abort(422, 'Cette URL est déjà utilisée par un autre membre.');
+            abort(400, 'Cette URL est déjà utilisée par un autre membre.');
         }
 
         return $slug;

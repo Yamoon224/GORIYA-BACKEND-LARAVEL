@@ -75,7 +75,7 @@ class PortfoliosController extends Controller
                 ]),
             ])),
             new OA\Response(response: 401, description: 'Non authentifié'),
-            new OA\Response(response: 422, description: 'Format ou taille refusés'),
+            new OA\Response(response: 400, description: 'Format ou taille refusés'),
         ]
     )]
     public function uploadPhoto(Request $request)
@@ -148,7 +148,14 @@ class PortfoliosController extends Controller
         $page = (int) $request->query('page', 1);
         $limit = (int) $request->query('limit', 10);
 
+        // Les brouillons ne sortent que pour leur auteur (liste de ses propres
+        // portfolios) ou pour un admin ; tout autre lecteur ne voit que les publiés.
+        $viewer = auth('api')->user();
+        $voitBrouillons = $viewer !== null
+            && ($viewer->role === \App\Enums\UserRole::ADMIN || $request->query('userId') === $viewer->id);
+
         $paginator = $this->portfolioService->paginate($page, $limit, [
+            'status' => $voitBrouillons ? $request->query('status') : Portfolio::STATUS_PUBLISHED,
             'title' => $request->query('title'),
             'description' => $request->query('description'),
             'skills' => $request->query('skills'),

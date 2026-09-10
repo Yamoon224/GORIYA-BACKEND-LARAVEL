@@ -57,7 +57,7 @@ class PostService
 
         $content = $this->normalizeContent($content);
         if ($content === null && $files === []) {
-            abort(422, 'Écrivez quelque chose ou joignez une image ou un PDF.');
+            abort(400, 'Écrivez quelque chose ou joignez une image ou un PDF.');
         }
 
         $attachments = $this->validateAttachments($files);
@@ -90,7 +90,7 @@ class PostService
         }
 
         if ($original->community_id !== null) {
-            abort(422, 'Une publication de communauté ne peut pas être republiée.');
+            abort(400, 'Une publication de communauté ne peut pas être republiée.');
         }
 
         $comment = $this->normalizeContent($comment);
@@ -100,7 +100,7 @@ class PostService
             ->whereNull('content')
             ->exists();
         if ($comment === null && $dejaRepublie) {
-            abort(422, 'Vous avez déjà republié cette publication.');
+            abort(400, 'Vous avez déjà republié cette publication.');
         }
 
         return Post::create([
@@ -201,7 +201,7 @@ class PostService
 
         $content = $this->normalizeContent($content);
         if ($content === null) {
-            abort(422, 'Le commentaire est vide.');
+            abort(400, 'Le commentaire est vide.');
         }
 
         return $post->comments()->create(['user_id' => $user->id, 'content' => $content])->load('user.company');
@@ -238,19 +238,27 @@ class PostService
      */
     private function withViewerData(Builder $query, ?User $viewer): Builder
     {
+        $counters = function ($query) use ($viewer) {
+            $query->withCount(['likes', 'comments', 'reposts']);
+
+            if ($viewer) {
+                $query->withExists([
+                    'likes as liked_by_me' => fn ($q) => $q->where('user_id', $viewer->id),
+                    'reposts as reposted_by_me' => fn ($q) => $q->where('user_id', $viewer->id),
+                ]);
+            }
+        };
+
+        // Le post d'origine porte aussi ses compteurs : sur une republication
+        // sans commentaire, j'aime / commentaires / republication visent l'original.
         $query->with([
             'user.company',
             'attachments',
+            'repostOf' => $counters,
             'repostOf.user.company',
             'repostOf.attachments',
-        ])->withCount(['likes', 'comments', 'reposts']);
-
-        if ($viewer) {
-            $query->withExists([
-                'likes as liked_by_me' => fn ($q) => $q->where('user_id', $viewer->id),
-                'reposts as reposted_by_me' => fn ($q) => $q->where('user_id', $viewer->id),
-            ]);
-        }
+        ]);
+        $counters($query);
 
         return $query;
     }
@@ -277,7 +285,7 @@ class PostService
 
             if (isset(self::IMAGE_MIME_TYPES[$mime])) {
                 if ($file->getSize() > self::MAX_IMAGE_BYTES) {
-                    abort(422, 'Chaque image doit peser 8 Mo au plus.');
+                    abort(400, 'Chaque image doit peser 8 Mo au plus.');
                 }
                 $typed[] = [$file, PostAttachment::TYPE_IMAGE, self::IMAGE_MIME_TYPES[$mime]];
 
@@ -286,23 +294,23 @@ class PostService
 
             if (isset(self::DOCUMENT_MIME_TYPES[$mime])) {
                 if ($file->getSize() > self::MAX_DOCUMENT_BYTES) {
-                    abort(422, 'Le PDF doit peser 10 Mo au plus.');
+                    abort(400, 'Le PDF doit peser 10 Mo au plus.');
                 }
                 $typed[] = [$file, PostAttachment::TYPE_DOCUMENT, self::DOCUMENT_MIME_TYPES[$mime]];
 
                 continue;
             }
 
-            abort(422, 'Format non supporté : joignez des images (JPG, PNG, WebP, GIF) ou un PDF.');
+            abort(400, 'Format non supporté : joignez des images (JPG, PNG, WebP, GIF) ou un PDF.');
         }
 
         $documents = count(array_filter($typed, fn (array $item) => $item[1] === PostAttachment::TYPE_DOCUMENT));
         if ($documents > 0 && count($typed) > 1) {
-            abort(422, 'Un PDF se publie seul : retirez les autres pièces jointes.');
+            abort(400, 'Un PDF se publie seul : retirez les autres pièces jointes.');
         }
 
         if (count($typed) > self::MAX_IMAGES) {
-            abort(422, 'Neuf images au maximum par publication.');
+            abort(400, 'Neuf images au maximum par publication.');
         }
 
         return $typed;

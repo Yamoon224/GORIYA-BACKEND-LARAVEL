@@ -39,7 +39,7 @@ class PublicProfileTest extends TestCase
         $awa = $this->member('Awa Kone', 'Data analyst');
         $bob = $this->member('Bob Traore');
 
-        $me = $this->actingAs($awa, 'api')->getJson('/profile/me')->assertOk()->json('data');
+        $me = $this->actingAs($awa, 'api')->getJson('/profile/me')->assertSuccessful()->json();
         $this->assertNull($me['slug']);
         $this->assertSame($awa->id, $me['ref']);
         $this->assertSame('/p/'.$awa->id, $me['publicPath']);
@@ -62,7 +62,7 @@ class PublicProfileTest extends TestCase
         $this->actingAs($awa, 'api')
             ->patchJson('/profile/me', ['isPublic' => true, 'slug' => 'awa-kone'])
             ->assertOk()
-            ->assertJsonPath('data.ref', 'awa-kone');
+            ->assertJsonPath('ref', 'awa-kone');
 
         $this->anonymous();
         $this->getJson('/profiles/awa-kone')
@@ -79,15 +79,15 @@ class PublicProfileTest extends TestCase
         $bob = $this->member('Bob Traore');
 
         $this->actingAs($awa, 'api')->patchJson('/profile/me', ['slug' => 'talent'])->assertOk();
-        $this->actingAs($bob, 'api')->patchJson('/profile/me', ['slug' => 'talent'])->assertStatus(422);
-        $this->actingAs($bob, 'api')->patchJson('/profile/me', ['slug' => 'Mauvais Slug'])->assertStatus(422);
-        $this->actingAs($bob, 'api')->patchJson('/profile/me', ['slug' => 'admin'])->assertStatus(422);
+        $this->actingAs($bob, 'api')->patchJson('/profile/me', ['slug' => 'talent'])->assertStatus(400);
+        $this->actingAs($bob, 'api')->patchJson('/profile/me', ['slug' => 'Mauvais Slug'])->assertStatus(400);
+        $this->actingAs($bob, 'api')->patchJson('/profile/me', ['slug' => 'admin'])->assertStatus(400);
 
         $this->actingAs($awa, 'api')
             ->patchJson('/profile/me', ['slug' => null])
             ->assertOk()
-            ->assertJsonPath('data.slug', null)
-            ->assertJsonPath('data.ref', $awa->id);
+            ->assertJsonPath('slug', null)
+            ->assertJsonPath('ref', $awa->id);
     }
 
     public function test_les_brouillons_ne_sont_vus_que_du_proprietaire(): void
