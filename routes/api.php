@@ -31,11 +31,14 @@ use App\Http\Controllers\Api\CvAnalysisController;
 use App\Http\Controllers\Api\CvController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DeviceTokensController;
+use App\Http\Controllers\Api\EmployeeLeavesController;
 use App\Http\Controllers\Api\EmployeeSurveysController;
+use App\Http\Controllers\Api\EmployeesController;
 use App\Http\Controllers\Api\EnrollmentsController;
 use App\Http\Controllers\Api\External\ExternalCandidateAssessmentsController;
 use App\Http\Controllers\Api\External\ExternalCandidaturesController;
 use App\Http\Controllers\Api\External\ExternalJobOffersController;
+use App\Http\Controllers\Api\HrRequestsController;
 use App\Http\Controllers\Api\InterviewSessionsController;
 use App\Http\Controllers\Api\JobOffersController;
 use App\Http\Controllers\Api\LunionMeetWebhookController;
@@ -270,6 +273,28 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/employee-surveys/{id}/stats', [EmployeeSurveysController::class, 'stats']);
     Route::post('/employee-surveys/{id}/responses', [EmployeeSurveysController::class, 'submitResponse']);
     Route::delete('/employee-surveys/{id}', [EmployeeSurveysController::class, 'destroy']);
+});
+
+// --- Services RH : employés, congés et demandes RH (réservé au compte
+// entreprise, vérifié dans les contrôleurs — voir ResolvesEnterpriseCompany).
+// /employees/hireable-candidatures est déclaré avant le wildcard {id}. ---
+Route::middleware('auth:api')->group(function () {
+    Route::get('/employees', [EmployeesController::class, 'index']);
+    Route::get('/employees/hireable-candidatures', [EmployeesController::class, 'hireableCandidatures']);
+    Route::post('/employees', [EmployeesController::class, 'store']);
+    Route::get('/employees/{id}', [EmployeesController::class, 'show']);
+    Route::patch('/employees/{id}', [EmployeesController::class, 'update']);
+    Route::delete('/employees/{id}', [EmployeesController::class, 'destroy']);
+
+    Route::get('/employees/{employeeId}/leaves', [EmployeeLeavesController::class, 'index']);
+    Route::post('/employees/{employeeId}/leaves', [EmployeeLeavesController::class, 'store']);
+    Route::patch('/employee-leaves/{id}/status', [EmployeeLeavesController::class, 'updateStatus']);
+    Route::delete('/employee-leaves/{id}', [EmployeeLeavesController::class, 'destroy']);
+
+    Route::get('/employees/{employeeId}/hr-requests', [HrRequestsController::class, 'index']);
+    Route::post('/employees/{employeeId}/hr-requests', [HrRequestsController::class, 'store']);
+    Route::patch('/hr-requests/{id}/status', [HrRequestsController::class, 'updateStatus']);
+    Route::delete('/hr-requests/{id}', [HrRequestsController::class, 'destroy']);
 });
 
 // --- Articles (blog Goriya) ---
