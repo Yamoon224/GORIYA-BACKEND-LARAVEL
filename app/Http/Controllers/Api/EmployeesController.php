@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Concerns\ResolvesEnterpriseCompany;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ExtractEmployeeCvRequest;
 use App\Http\Requests\SaveEmployeeRequest;
 use App\Http\Resources\EmployeeResource;
 use App\Models\Employee;
@@ -61,6 +62,37 @@ class EmployeesController extends Controller
         $companyId = $this->enterpriseCompanyId($request);
 
         return response()->json($this->employees->hireableCandidatures($companyId));
+    }
+
+    #[OA\Post(
+        path: '/employees/extract-cv',
+        tags: ['Employees'],
+        summary: "Extrait identité/coordonnées/poste d'un CV pour pré-remplir le formulaire d'ajout d'employé",
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(ref: '#/components/schemas/ExtractEmployeeCvRequest')),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "Champs extraits — chacun `null` s'il n'a pas pu être déterminé",
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'firstName', type: 'string', nullable: true),
+                    new OA\Property(property: 'lastName', type: 'string', nullable: true),
+                    new OA\Property(property: 'email', type: 'string', nullable: true),
+                    new OA\Property(property: 'phone', type: 'string', nullable: true),
+                    new OA\Property(property: 'address', type: 'string', nullable: true),
+                    new OA\Property(property: 'jobTitle', type: 'string', nullable: true),
+                ])
+            ),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+            new OA\Response(response: 403, description: 'Réservé aux comptes entreprise'),
+            new OA\Response(response: 422, description: 'Fichier invalide'),
+        ]
+    )]
+    public function extractCv(ExtractEmployeeCvRequest $request)
+    {
+        $this->enterpriseCompanyId($request);
+
+        return response()->json($this->employees->extractFromCv($request->file('file')));
     }
 
     #[OA\Post(

@@ -2,16 +2,21 @@
 
 namespace App\Services;
 
+use App\Contracts\AiAnalysisServiceInterface;
 use App\Enums\CandidatureStatus;
 use App\Enums\EmployeeStatus;
 use App\Enums\HrWorkflowStatus;
 use App\Enums\LeaveType;
 use App\Http\Resources\EmployeeResource;
+use App\Mail\EmployeeHiredMail;
 use App\Models\Candidature;
 use App\Models\Employee;
 use App\Models\EmployeeLeave;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use App\Services\Concerns\MapsFieldsToColumns;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -29,6 +34,8 @@ class EmployeeService
         private readonly EmployeeContractService $contracts,
         private readonly RecruitmentService $recruitment,
         private readonly EmployeeDocumentService $documents,
+        private readonly NotificationService $notifications,
+        private readonly AiAnalysisServiceInterface $aiAnalysisService,
     ) {}
 
     /** Correspondance champs d'API (camelCase) → colonnes. */
@@ -122,7 +129,64 @@ class EmployeeService
             return $employee;
         });
 
-        return $this->find($employee->id, $companyId);
+        $employee = $this->find($employee->id, $companyId);
+        $this->notifyOnboarding($employee, (bool) $candidature);
+
+        return $employee;
+    }
+
+    /**
+     * Notification d'embauche — best-effort : ni la notification in-app ni
+     * l'email ne doivent faire échouer la création de la fiche.
+     *
+     * - Depuis une candidature Goriya : notification in-app (l'employé a un
+     *   compte) + email.
+     * - Saisie manuelle : email seul, quand une adresse est renseignée —
+     *   l'employé n'a pas forcément de compte Goriya pour recevoir un in-app.
+     */
+    private function notifyOnboarding(Employee $employee, bool $fromCandidature): void
+    {
+        try {
+            if ($fromCandidature) {
+                $this->notifications->notifyHired($employee);
+            }
+
+            if ($employee->email) {
+                Mail::to($employee->email)->send(new EmployeeHiredMail($employee, $employee->company));
+            }
+        } catch (\Throwable $e) {
+            Log::error('Employee onboarding notification failed: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Fiche employé la plus récente de cet utilisateur, tous employeurs
+     * confondus — sert l'espace employé (standard/app/(protected)/espace-employe) :
+     * le bouton du tableau de bord et les demandes de congés/RH s'appuient
+     * dessus plutôt que sur `User.company_id`, qui n'est jamais renseigné pour
+     * un compte USER (voir EmployeeSurveysController::requireCompanyId).
+     */
+    public function findByUser(string $userId): ?Employee
+    {
+        return $this->withListingData(Employee::query()->where('user_id', $userId))
+            ->orderByDesc('hire_date')
+            ->first();
+    }
+
+    /**
+     * Extrait identité/coordonnées/poste d'un CV pour pré-remplir le
+     * formulaire d'ajout d'employé — l'utilisateur RH vérifie et complète
+     * ensuite (contrat, salaire…), rien n'est enregistré ici.
+     *
+     * @return array{firstName: ?string, lastName: ?string, email: ?string, phone: ?string, address: ?string, jobTitle: ?string}
+     */
+    public function extractFromCv(UploadedFile $file): array
+    {
+        return $this->aiAnalysisService->extractEmployeeInfoFromCv(
+            $file->get(),
+            (string) $file->getMimeType(),
+            $file->getClientOriginalName(),
+        );
     }
 
     /**

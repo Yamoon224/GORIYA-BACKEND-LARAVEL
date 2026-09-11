@@ -50,6 +50,7 @@ use App\Http\Controllers\Api\RecruitmentInterviewsController;
 use App\Http\Controllers\Api\LunionMeetWebhookController;
 use App\Http\Controllers\Api\MatchingResultsController;
 use App\Http\Controllers\Api\MessagesController;
+use App\Http\Controllers\Api\MyEmployeeController;
 use App\Http\Controllers\Api\MyProfileController;
 use App\Http\Controllers\Api\MyResumesController;
 use App\Http\Controllers\Api\NewsletterController;
@@ -180,6 +181,19 @@ Route::middleware('auth:api')->group(function () {
     Route::delete('/me/cv', [CvController::class, 'destroy']);
 });
 
+// --- Espace employé : fiche employé (tous employeurs confondus) + congés et
+// demandes RH en libre-service, pour tout USER ayant été embauché sur Goriya
+// (résolu depuis Employee.user_id, jamais depuis un identifiant du path). ---
+Route::middleware('auth:api')->group(function () {
+    Route::get('/me/employee', [MyEmployeeController::class, 'show']);
+    Route::get('/me/employee/leaves', [MyEmployeeController::class, 'leaves']);
+    Route::post('/me/employee/leaves', [MyEmployeeController::class, 'storeLeave']);
+    Route::delete('/me/employee/leaves/{id}', [MyEmployeeController::class, 'destroyLeave']);
+    Route::get('/me/employee/hr-requests', [MyEmployeeController::class, 'hrRequests']);
+    Route::post('/me/employee/hr-requests', [MyEmployeeController::class, 'storeHrRequest']);
+    Route::delete('/me/employee/hr-requests/{id}', [MyEmployeeController::class, 'destroyHrRequest']);
+});
+
 // --- Portfolios ---
 Route::get('/portfolios', [PortfoliosController::class, 'index']);
 Route::get('/portfolios/paginate', [PortfoliosController::class, 'paginate']);
@@ -291,6 +305,7 @@ Route::middleware('auth:api')->group(function () {
 Route::middleware('auth:api')->group(function () {
     Route::get('/employees', [EmployeesController::class, 'index']);
     Route::get('/employees/hireable-candidatures', [EmployeesController::class, 'hireableCandidatures']);
+    Route::post('/employees/extract-cv', [EmployeesController::class, 'extractCv']);
     Route::post('/employees', [EmployeesController::class, 'store']);
     Route::get('/employees/{id}', [EmployeesController::class, 'show']);
     Route::patch('/employees/{id}', [EmployeesController::class, 'update']);

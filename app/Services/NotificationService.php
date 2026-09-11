@@ -9,6 +9,7 @@ use App\Enums\UserRole;
 use App\Models\Candidature;
 use App\Models\Conversation;
 use App\Models\DeviceToken;
+use App\Models\Employee;
 use App\Models\Notification;
 use App\Models\RecruitmentInterview;
 use App\Models\User;
@@ -149,6 +150,34 @@ class NotificationService
             ]);
 
             $this->pushToUser($recipient, $title, $body);
+        }
+    }
+
+    /**
+     * Embauche depuis une candidature Goriya : notification in-app pour le
+     * candidat devenu employé (voir EmployeeService::create). Rien n'est créé
+     * pour une saisie manuelle — l'employé n'a alors pas nécessairement de
+     * compte Goriya, il reçoit uniquement l'email (EmployeeHiredMail).
+     */
+    public function notifyHired(Employee $employee): void
+    {
+        if (! $employee->user_id) {
+            return;
+        }
+
+        $title = 'Vous avez été embauché·e !';
+        $body = "{$employee->company?->name} vous a ajouté·e comme employé·e — poste : {$employee->job_title}. Accédez à votre espace employé pour suivre vos congés et demandes RH.";
+
+        Notification::create([
+            'user_id' => $employee->user_id,
+            'type' => NotificationType::SYSTEM,
+            'title' => $title,
+            'body' => $body,
+            'link' => '/espace-employe',
+        ]);
+
+        if ($employee->user) {
+            $this->pushToUser($employee->user, $title, $body);
         }
     }
 

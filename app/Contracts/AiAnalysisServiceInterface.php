@@ -17,6 +17,16 @@ interface AiAnalysisServiceInterface
     public function analyzeCV(string $binary, string $mimeType, string $fileName): array;
 
     /**
+     * Extrait les champs identité/coordonnées/poste d'un CV, pour pré-remplir
+     * le formulaire d'ajout d'employé (Services RH). Chaque champ est `null`
+     * quand l'information est absente du CV ou n'a pas pu être extraite —
+     * jamais de valeur inventée.
+     *
+     * @return array{firstName: ?string, lastName: ?string, email: ?string, phone: ?string, address: ?string, jobTitle: ?string}
+     */
+    public function extractEmployeeInfoFromCv(string $binary, string $mimeType, string $fileName): array;
+
+    /**
      * @return array{overallScore: int, criteria: array<string, int>, feedback: string}
      */
     public function scoreCandidate(string $candidateName, string $candidateEmail, string $position): array;

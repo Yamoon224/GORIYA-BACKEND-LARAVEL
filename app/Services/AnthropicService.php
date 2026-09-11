@@ -194,6 +194,75 @@ PROMPT;
         }
     }
 
+    private const EXTRACT_EMPLOYEE_INFO_FALLBACK = [
+        'firstName' => null,
+        'lastName' => null,
+        'email' => null,
+        'phone' => null,
+        'address' => null,
+        'jobTitle' => null,
+    ];
+
+    /**
+     * @return array{firstName: ?string, lastName: ?string, email: ?string, phone: ?string, address: ?string, jobTitle: ?string}
+     */
+    public function extractEmployeeInfoFromCv(string $binary, string $mimeType, string $fileName): array
+    {
+        $fallback = self::EXTRACT_EMPLOYEE_INFO_FALLBACK;
+
+        if (! $this->hasClaudeClient()) {
+            return $fallback;
+        }
+
+        try {
+            $cvText = $this->extractTextFromBuffer($binary, $mimeType, $fileName);
+            if (trim($cvText) === '') {
+                Log::warning('Could not extract text from CV file for employee prefill, using fallback');
+
+                return $fallback;
+            }
+
+            $prompt = <<<PROMPT
+Vous êtes un assistant RH. Extrayez les informations d'identité et de contact de ce CV, pour pré-remplir un formulaire.
+
+Contenu du CV :
+---
+{$this->truncateForClaude($cvText, 6000)}
+---
+
+Retournez UNIQUEMENT un objet JSON valide (sans markdown, sans texte avant ou après) avec exactement cette structure :
+{
+  "firstName": "<prénom, ou null si absent>",
+  "lastName": "<nom, ou null si absent>",
+  "email": "<adresse e-mail, ou null si absente>",
+  "phone": "<numéro de téléphone tel qu'écrit dans le CV, ou null si absent>",
+  "address": "<ville et pays de résidence, ou null si absent>",
+  "jobTitle": "<intitulé de poste le plus récent ou le plus représentatif du profil, ou null si indéterminable>"
+}
+
+N'inventez aucune valeur : un champ absent du CV doit rester `null`. N'incluez jamais d'explication, uniquement le JSON.
+PROMPT;
+
+            $text = $this->requestClaudeText($prompt, 512);
+            $parsed = $this->parseClaudeJson($text, $fallback);
+
+            $clean = fn (mixed $v): ?string => is_string($v) && trim($v) !== '' ? trim($v) : null;
+
+            return [
+                'firstName' => $clean($parsed['firstName'] ?? null),
+                'lastName' => $clean($parsed['lastName'] ?? null),
+                'email' => $clean($parsed['email'] ?? null),
+                'phone' => $clean($parsed['phone'] ?? null),
+                'address' => $clean($parsed['address'] ?? null),
+                'jobTitle' => $clean($parsed['jobTitle'] ?? null),
+            ];
+        } catch (Throwable $e) {
+            Log::error('CV employee info extraction failed: '.$e->getMessage());
+
+            return $fallback;
+        }
+    }
+
     /*
     |--------------------------------------------------------------------------
     | CANDIDATE SCORING
