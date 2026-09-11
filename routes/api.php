@@ -31,6 +31,7 @@ use App\Http\Controllers\Api\CvAnalysisController;
 use App\Http\Controllers\Api\CvController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DeviceTokensController;
+use App\Http\Controllers\Api\EmployeeContractsController;
 use App\Http\Controllers\Api\EmployeeLeavesController;
 use App\Http\Controllers\Api\EmployeeSurveysController;
 use App\Http\Controllers\Api\EmployeesController;
@@ -285,6 +286,17 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/employees/{id}', [EmployeesController::class, 'show']);
     Route::patch('/employees/{id}', [EmployeesController::class, 'update']);
     Route::delete('/employees/{id}', [EmployeesController::class, 'destroy']);
+
+    Route::get('/employee-contracts', [EmployeeContractsController::class, 'companyIndex']);
+    Route::get('/employees/{employeeId}/contracts', [EmployeeContractsController::class, 'index']);
+    Route::post('/employees/{employeeId}/contracts', [EmployeeContractsController::class, 'store']);
+    Route::patch('/employee-contracts/{id}', [EmployeeContractsController::class, 'update']);
+    Route::patch('/employee-contracts/{id}/status', [EmployeeContractsController::class, 'updateStatus']);
+    Route::delete('/employee-contracts/{id}', [EmployeeContractsController::class, 'destroy']);
+    Route::post('/employee-contracts/{id}/document', [EmployeeContractsController::class, 'uploadDocument']);
+    Route::get('/employee-contracts/{id}/document', [EmployeeContractsController::class, 'downloadDocument']);
+    Route::delete('/employee-contracts/{id}/document', [EmployeeContractsController::class, 'deleteDocument']);
+    Route::get('/employee-contracts/{id}/draft', [EmployeeContractsController::class, 'draft']);
 
     Route::get('/employee-leaves', [EmployeeLeavesController::class, 'companyIndex']);
     Route::get('/employee-leaves/balances', [EmployeeLeavesController::class, 'balances']);

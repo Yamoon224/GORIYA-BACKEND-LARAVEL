@@ -79,7 +79,7 @@ class EmployeesController extends Controller
     public function store(SaveEmployeeRequest $request)
     {
         $companyId = $this->enterpriseCompanyId($request);
-        $employee = $this->employees->create($companyId, $request->validated());
+        $employee = $this->employees->create($companyId, $request->validated(), $request->user());
 
         return (new EmployeeResource($employee))->response()->setStatusCode(201);
     }

@@ -55,6 +55,16 @@ use OpenApi\Attributes as OA;
             new OA\Property(property: 'pending', type: 'integer'),
             new OA\Property(property: 'remaining', type: 'integer'),
         ]),
+        new OA\Property(property: 'activeContract', type: 'object', nullable: true, properties: [
+            new OA\Property(property: 'id', type: 'string', format: 'uuid'),
+            new OA\Property(property: 'reference', type: 'string'),
+            new OA\Property(property: 'kind', type: 'string'),
+            new OA\Property(property: 'type', type: 'string'),
+            new OA\Property(property: 'startDate', type: 'string', format: 'date'),
+            new OA\Property(property: 'endDate', type: 'string', format: 'date', nullable: true),
+            new OA\Property(property: 'trialEndDate', type: 'string', format: 'date', nullable: true),
+            new OA\Property(property: 'signed', type: 'boolean'),
+        ]),
         new OA\Property(property: 'createdAt', type: 'string', format: 'date-time'),
         new OA\Property(property: 'updatedAt', type: 'string', format: 'date-time'),
     ]
@@ -146,6 +156,18 @@ class EmployeeResource extends JsonResource
             'emergencyContactPhone' => $this->emergency_contact_phone,
             'notes' => $this->notes,
             'leaveBalance' => $this->when($this->leaveBalance !== null, fn () => $this->leaveBalance),
+            // Contrat en vigueur : dit d'où viennent type, date de fin et salaire,
+            // qui ne se modifient plus depuis la fiche tant qu'il existe.
+            'activeContract' => $this->whenLoaded('activeContract', fn () => $this->activeContract ? [
+                'id' => $this->activeContract->id,
+                'reference' => $this->activeContract->reference,
+                'kind' => $this->activeContract->kind?->value,
+                'type' => $this->activeContract->type?->value,
+                'startDate' => $this->activeContract->start_date?->toDateString(),
+                'endDate' => $this->activeContract->end_date?->toDateString(),
+                'trialEndDate' => $this->activeContract->trial_end_date?->toDateString(),
+                'signed' => $this->activeContract->signed_at !== null || $this->activeContract->document_path !== null,
+            ] : null),
             'createdAt' => $this->created_at,
             'updatedAt' => $this->updated_at,
         ];

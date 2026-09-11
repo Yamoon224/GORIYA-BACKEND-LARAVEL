@@ -10,6 +10,8 @@ use App\Http\Resources\EmployeeResource;
 use App\Models\Candidature;
 use App\Models\Employee;
 use App\Models\EmployeeLeave;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use App\Services\Concerns\MapsFieldsToColumns;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -22,6 +24,8 @@ use Illuminate\Database\Eloquent\Collection;
 class EmployeeService
 {
     use MapsFieldsToColumns;
+
+    public function __construct(private readonly EmployeeContractService $contracts) {}
 
     /** Correspondance champs d'API (camelCase) → colonnes. */
     private const FIELDS = [
@@ -79,7 +83,7 @@ class EmployeeService
     /**
      * @param  array<string, mixed>  $data  Champs validés (camelCase)
      */
-    public function create(string $companyId, array $data): Employee
+    public function create(string $companyId, array $data, ?User $author = null): Employee
     {
         $attributes = $this->mapFields($data, self::FIELDS);
         $this->assertManager($companyId, $attributes['manager_id'] ?? null, null);
@@ -100,7 +104,14 @@ class EmployeeService
             }
         }
 
-        $employee = Employee::create($attributes + ['company_id' => $companyId]);
+        // Le formulaire d'ajout porte type, dates et salaire : ils ouvrent le
+        // contrat initial, pour que l'historique des contrats commence avec la fiche.
+        $employee = DB::transaction(function () use ($attributes, $companyId, $author) {
+            $employee = Employee::create($attributes + ['company_id' => $companyId]);
+            $this->contracts->createInitialFor($employee, $author);
+
+            return $employee;
+        });
 
         return $this->find($employee->id, $companyId);
     }
@@ -125,6 +136,19 @@ class EmployeeService
             }
         }
 
+        // Type, date de fin et salaire suivent le contrat en vigueur : les changer
+        // ici désynchroniserait la fiche du contrat. Les renvoyer à l'identique
+        // (le formulaire complet les contient) reste permis.
+        $contractColumns = array_intersect_key($attributes, array_flip(['contract_type', 'contract_end_date', 'salary']));
+        if ($contractColumns !== [] && $employee->activeContract()->exists()) {
+            foreach ($contractColumns as $column => $value) {
+                if ($this->comparable($employee->{$column}) !== $this->comparable($value)) {
+                    abort(400, "Le type de contrat, la date de fin et le salaire suivent le contrat en vigueur : modifiez-les par un avenant depuis l'onglet Contrats.");
+                }
+            }
+            $attributes = array_diff_key($attributes, $contractColumns);
+        }
+
         $employee->update($attributes);
 
         return $this->find($employee->id, $employee->company_id);
@@ -132,7 +156,28 @@ class EmployeeService
 
     public function delete(Employee $employee): void
     {
+        // Les lignes partent en cascade, pas les fichiers des contrats signés.
+        $this->contracts->deleteDocumentsOf($employee);
         $employee->delete();
+    }
+
+    /** Valeur comparable entre une colonne castée et une valeur de requête. */
+    private function comparable(mixed $value): ?string
+    {
+        if ($value instanceof \BackedEnum) {
+            return (string) $value->value;
+        }
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}/', $value)) {
+            return substr($value, 0, 10);
+        }
+
+        return (string) $value;
     }
 
     /**
@@ -313,7 +358,7 @@ class EmployeeService
     private function withListingData(Builder $query): Builder
     {
         return $query
-            ->with(['manager', 'currentLeaves', 'candidature.jobOffer'])
+            ->with(['manager', 'currentLeaves', 'candidature.jobOffer', 'activeContract'])
             ->withCount([
                 'leaves as pending_leaves_count' => fn (Builder $q) => $q->where('status', HrWorkflowStatus::PENDING->value),
                 'hrRequests as pending_requests_count' => fn (Builder $q) => $q->whereIn('status', [

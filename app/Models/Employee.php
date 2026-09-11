@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Concerns\Auditable;
 use App\Concerns\HasUuid;
+use App\Enums\ContractStatus;
 use App\Enums\EmployeeStatus;
 use App\Enums\HrWorkflowStatus;
 use App\Enums\JobType;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Fiche d'un collaborateur, tenue par le service RH de l'entreprise.
@@ -120,5 +122,16 @@ class Employee extends Model
     public function hrRequests(): HasMany
     {
         return $this->hasMany(HrRequest::class);
+    }
+
+    public function contracts(): HasMany
+    {
+        return $this->hasMany(EmployeeContract::class);
+    }
+
+    /** Contrat en vigueur — jamais plus d'un, garanti par EmployeeContractService. */
+    public function activeContract(): HasOne
+    {
+        return $this->hasOne(EmployeeContract::class)->where('status', ContractStatus::ACTIVE->value);
     }
 }

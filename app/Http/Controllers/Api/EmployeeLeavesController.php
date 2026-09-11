@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\HrWorkflowStatus;
 use App\Enums\LeaveType;
 use App\Http\Concerns\ResolvesEnterpriseCompany;
+use App\Http\Concerns\SplitsListQuery;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateEmployeeLeaveRequest;
 use App\Http\Requests\UpdateHrWorkflowStatusRequest;
@@ -20,7 +21,7 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: 'Employee Leaves', description: "Services RH — congés des employés")]
 class EmployeeLeavesController extends Controller
 {
-    use ResolvesEnterpriseCompany;
+    use ResolvesEnterpriseCompany, SplitsListQuery;
 
     public function __construct(
         private readonly EmployeeService $employees,
@@ -51,13 +52,7 @@ class EmployeeLeavesController extends Controller
     {
         $companyId = $this->enterpriseCompanyId($request);
 
-        // « PENDING,APPROVED » comme `status[]=PENDING&status[]=APPROVED`.
-        foreach (['status', 'type'] as $key) {
-            $value = $request->query($key);
-            if (is_string($value)) {
-                $request->merge([$key => array_values(array_filter(explode(',', $value)))]);
-            }
-        }
+        $this->splitListQuery($request, ['status', 'type']);
 
         $to = ['nullable', 'date'];
         if ($request->filled('from')) {
