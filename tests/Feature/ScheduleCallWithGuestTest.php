@@ -22,6 +22,7 @@ class ScheduleCallWithGuestTest extends TestCase
         // La création de la room passe par le fournisseur externe lunion.meet
         // (voir LunionMeetService::createRoom) — on le simule plutôt que
         // d'appeler le vrai service depuis les tests.
+        config(['services.lunion_meet.api_key' => 'test-key']);
         Http::fake(['*/sdk/rooms' => Http::response(['slug' => 'test-room-'.uniqid()], 200)]);
     }
 
@@ -43,7 +44,7 @@ class ScheduleCallWithGuestTest extends TestCase
 
         $sessionId = $this->actingAs($host, 'api')
             ->postJson('/calls', ['title' => 'Échange RH', 'guestIds' => [$guest->id]])
-            ->assertOk()
+            ->assertStatus(201)
             ->json('id');
 
         $this->actingAs($guest, 'api')
@@ -60,7 +61,7 @@ class ScheduleCallWithGuestTest extends TestCase
 
         $this->actingAs($host, 'api')
             ->postJson('/calls', ['title' => 'Échange RH', 'guestIds' => [$guest->id]])
-            ->assertOk();
+            ->assertStatus(201);
 
         $this->actingAs($stranger, 'api')->getJson('/calls')->assertOk()->assertJsonCount(0);
     }
