@@ -330,7 +330,7 @@ class EmployeesTest extends TestCase
             ->assertJsonPath('decidedByName', $user->name);
     }
 
-    public function test_approved_leave_updates_the_balance_and_is_cancelled_not_deleted(): void
+    public function test_approved_leave_updates_the_balance_and_can_only_be_deleted_not_cancelled(): void
     {
         [$user, $id] = $this->enterpriseWithEmployee();
 
@@ -346,15 +346,34 @@ class EmployeesTest extends TestCase
             ->assertJsonPath('leaveBalance.taken', 5)
             ->assertJsonPath('leaveBalance.remaining', 21);
 
-        $this->actingAs($user, 'api')->deleteJson("/employee-leaves/{$leave}")->assertStatus(400);
+        // Une décision finale (y compris l'annulation) ne se rouvre plus une fois approuvée.
         $this->actingAs($user, 'api')
             ->patchJson("/employee-leaves/{$leave}/status", ['status' => 'CANCELLED'])
-            ->assertOk();
-        // Une décision finale ne se rouvre pas.
-        $this->actingAs($user, 'api')
-            ->patchJson("/employee-leaves/{$leave}/status", ['status' => 'APPROVED'])
             ->assertStatus(400);
+
         $this->actingAs($user, 'api')->deleteJson("/employee-leaves/{$leave}")->assertOk();
+    }
+
+    public function test_leaves_can_be_deleted_in_bulk(): void
+    {
+        [$user, $id] = $this->enterpriseWithEmployee();
+
+        $pending = $this->actingAs($user, 'api')
+            ->postJson("/employees/{$id}/leaves", ['type' => 'SICK', 'startDate' => '2026-09-14', 'endDate' => '2026-09-15'])
+            ->json('id');
+        $approved = $this->actingAs($user, 'api')
+            ->postJson("/employees/{$id}/leaves", ['type' => 'PAID', 'startDate' => '2026-10-05', 'endDate' => '2026-10-06'])
+            ->json('id');
+        $this->actingAs($user, 'api')
+            ->patchJson("/employee-leaves/{$approved}/status", ['status' => 'APPROVED'])
+            ->assertOk();
+
+        $this->actingAs($user, 'api')
+            ->postJson('/employee-leaves/bulk-delete', ['ids' => [$pending, $approved]])
+            ->assertOk()
+            ->assertJsonPath('deleted', 2);
+
+        $this->actingAs($user, 'api')->getJson('/employee-leaves')->assertJsonCount(0);
     }
 
     public function test_an_employee_on_approved_leave_today_is_flagged(): void

@@ -159,12 +159,11 @@ class EmployeeLeavesController extends Controller
     #[OA\Delete(
         path: '/employee-leaves/{id}',
         tags: ['Employee Leaves'],
-        summary: 'Supprime un congé non approuvé',
+        summary: 'Supprime un congé, quel que soit son statut',
         security: [['bearerAuth' => []]],
         parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [
             new OA\Response(response: 200, description: 'Congé supprimé'),
-            new OA\Response(response: 400, description: 'Congé approuvé : à annuler, pas à supprimer'),
             new OA\Response(response: 404, description: 'Congé introuvable'),
         ]
     )]
@@ -173,6 +172,38 @@ class EmployeeLeavesController extends Controller
         $this->leaves->delete($this->leaveOrFail($id, $request));
 
         return response()->json(['message' => 'Congé supprimé']);
+    }
+
+    #[OA\Post(
+        path: '/employee-leaves/bulk-delete',
+        tags: ['Employee Leaves'],
+        summary: 'Supprime plusieurs congés en une fois (sélection multiple)',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['ids'],
+                properties: [new OA\Property(property: 'ids', type: 'array', items: new OA\Items(type: 'string', format: 'uuid'))],
+            ),
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Nombre de congés supprimés'),
+            new OA\Response(response: 400, description: 'Liste vide ou invalide'),
+            new OA\Response(response: 403, description: 'Réservé aux comptes entreprise'),
+        ]
+    )]
+    public function bulkDestroy(Request $request)
+    {
+        $companyId = $this->enterpriseCompanyId($request);
+
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['uuid'],
+        ]);
+
+        $deleted = $this->leaves->bulkDelete($data['ids'], $companyId);
+
+        return response()->json(['deleted' => $deleted]);
     }
 
     private function employeeOrFail(string $employeeId, Request $request): Employee

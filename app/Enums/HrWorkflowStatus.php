@@ -7,8 +7,8 @@ namespace App\Enums;
  *
  * IN_PROGRESS ne concerne que les demandes (une attestation « en cours de
  * rédaction ») : un congé passe directement de PENDING à une décision.
- * APPROVED, REJECTED et CANCELLED sont finaux, sauf l'annulation d'un congé
- * déjà approuvé.
+ * APPROVED, REJECTED et CANCELLED sont finaux : un congé approuvé ne
+ * s'annule plus, il se supprime (cf. EmployeeLeaveService).
  */
 enum HrWorkflowStatus: string
 {

@@ -19,13 +19,12 @@ use Illuminate\Database\Eloquent\Collection;
 class EmployeeLeaveService
 {
     /**
-     * Transitions autorisées depuis chaque statut. Un congé approuvé peut
-     * encore être annulé (retour anticipé, report) ; un refus ou une
-     * annulation sont définitifs.
+     * Transitions autorisées depuis chaque statut. Un congé approuvé est
+     * définitif : un retour anticipé ou une erreur d'approbation se
+     * rattrapent par suppression, pas par annulation (cf. delete()).
      */
     private const TRANSITIONS = [
         'PENDING' => ['APPROVED', 'REJECTED', 'CANCELLED'],
-        'APPROVED' => ['CANCELLED'],
     ];
 
     public function __construct(
@@ -157,16 +156,32 @@ class EmployeeLeaveService
     }
 
     /**
-     * Un congé approuvé fait partie de l'historique (paie, solde) : on l'annule,
-     * on ne l'efface pas.
+     * Un congé se supprime quel que soit son statut, approuvé compris : la
+     * paie et les soldes déjà calculés à partir de ce congé n'en dépendent
+     * pas rétroactivement.
      */
     public function delete(EmployeeLeave $leave): void
     {
-        if ($leave->status === HrWorkflowStatus::APPROVED) {
-            abort(400, "Un congé approuvé ne se supprime pas : annulez-le d'abord.");
+        $leave->delete();
+    }
+
+    /**
+     * Suppression groupée (sélection multiple sur la page Congés). Un congé
+     * à la fois pour que chacun déclenche son propre évènement `deleted`
+     * (journal d'audit) ; les identifiants hors de l'entreprise sont ignorés.
+     *
+     * @param  list<string>  $ids
+     * @return int  Nombre de congés effectivement supprimés.
+     */
+    public function bulkDelete(array $ids, string $companyId): int
+    {
+        $leaves = EmployeeLeave::where('company_id', $companyId)->whereIn('id', $ids)->get();
+
+        foreach ($leaves as $leave) {
+            $leave->delete();
         }
 
-        $leave->delete();
+        return $leaves->count();
     }
 
     /**
