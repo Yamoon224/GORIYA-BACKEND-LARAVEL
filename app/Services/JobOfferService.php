@@ -13,6 +13,9 @@ use App\Repositories\Contracts\JobOfferRepositoryInterface;
 use App\Services\Concerns\MapsFieldsToColumns;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Mirroir de backend/src/job-offers/job-offers.service.ts. Utilisé par
@@ -30,11 +33,22 @@ class JobOfferService
         private readonly AiAnalysisServiceInterface $aiAnalysisService,
     ) {}
 
-    public function create(array $data): JobOffer
+    /**
+     * Offre publiée par le compte ENTREPRISE de $data['companyId'] — flux
+     * habituel. Côté admin (AdminJobsController), companyId est facultatif :
+     * une offre peut être postée sans entreprise rattachée (annonce générique
+     * Goriya, ou entreprise pas encore inscrite sur la plateforme) — voir
+     * JobOfferResource, qui rend déjà `company` nullable.
+     */
+    public function create(array $data, ?UploadedFile $image = null): JobOffer
     {
-        $company = $this->companyRepository->find($data['companyId']);
-        if (! $company) {
-            abort(404, "Company with id {$data['companyId']} not found");
+        $companyId = $data['companyId'] ?? null;
+        $company = null;
+        if ($companyId) {
+            $company = $this->companyRepository->find($companyId);
+            if (! $company) {
+                abort(404, "Company with id {$companyId} not found");
+            }
         }
 
         // Tout est facultatif sauf le titre : un brouillon (status = DRAFT)
@@ -51,7 +65,7 @@ class JobOfferService
             'requirements' => $data['requirements'] ?? null,
             'publish_date' => $data['publishDate'] ?? null,
             'end_date' => $data['endDate'] ?? null,
-            'company_id' => $company->id,
+            'company_id' => $company?->id,
         ];
 
         // Colonnes avec défaut DB (status='ACTIVE', applicants=0) : ne les inclure
@@ -62,6 +76,10 @@ class JobOfferService
         }
         if (array_key_exists('applicants', $data)) {
             $payload['applicants'] = $data['applicants'];
+        }
+
+        if ($image) {
+            $payload['image'] = $this->storeJobOfferImage($image);
         }
 
         // Sans `status`, la colonne prend son défaut ACTIVE : l'offre est donc
@@ -83,12 +101,22 @@ class JobOfferService
         return $jobOffer->fresh(self::RELATIONS);
     }
 
-    public function update(JobOffer $jobOffer, array $data): JobOffer
+    public function update(JobOffer $jobOffer, array $data, ?UploadedFile $image = null, bool $removeImage = false): JobOffer
     {
         $mapped = [];
 
         if (array_key_exists('companyId', $data)) {
-            $mapped['company_id'] = $data['companyId'];
+            $mapped['company_id'] = $data['companyId'] ?: null;
+        }
+
+        if ($image) {
+            if ($jobOffer->image) {
+                $this->deleteJobOfferImage($jobOffer->image);
+            }
+            $mapped['image'] = $this->storeJobOfferImage($image);
+        } elseif ($removeImage && $jobOffer->image) {
+            $this->deleteJobOfferImage($jobOffer->image);
+            $mapped['image'] = null;
         }
 
         $mapped += $this->mapFields($data, [
@@ -275,7 +303,35 @@ class JobOfferService
 
     public function remove(JobOffer $jobOffer): void
     {
+        if ($jobOffer->image) {
+            $this->deleteJobOfferImage($jobOffer->image);
+        }
+
         $this->jobOfferRepository->delete($jobOffer);
+    }
+
+    private const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+
+    /**
+     * Image de couverture optionnelle d'une offre — utile notamment quand
+     * l'offre n'est pas rattachée à une entreprise (donc pas de coverImage à
+     * afficher en repli, voir explorer-emplois/[slug] côté standard/).
+     */
+    private function storeJobOfferImage(UploadedFile $file): string
+    {
+        if (! in_array($file->getMimeType(), self::ALLOWED_IMAGE_TYPES, true)) {
+            abort(400, 'Unsupported image type');
+        }
+
+        $filename = Str::uuid().'.'.$file->getClientOriginalExtension();
+        Storage::disk('public')->putFileAs('job-offers', $file, $filename);
+
+        return "/storage/job-offers/{$filename}";
+    }
+
+    private function deleteJobOfferImage(string $path): void
+    {
+        Storage::disk('public')->delete('job-offers/'.basename($path));
     }
 
     /**

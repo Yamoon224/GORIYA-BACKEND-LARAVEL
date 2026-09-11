@@ -169,7 +169,7 @@ class AdminJobsController extends Controller
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
-                required: ['title', 'location', 'type', 'experience', 'salary', 'description', 'benefits', 'requirements', 'publishDate', 'endDate', 'companyId'],
+                required: ['title', 'location', 'type', 'experience', 'salary', 'description', 'benefits', 'requirements', 'publishDate', 'endDate'],
                 properties: [
                     new OA\Property(property: 'title', type: 'string'),
                     new OA\Property(property: 'location', type: 'string'),
@@ -183,7 +183,8 @@ class AdminJobsController extends Controller
                     new OA\Property(property: 'publishDate', type: 'string', format: 'date'),
                     new OA\Property(property: 'endDate', type: 'string', format: 'date'),
                     new OA\Property(property: 'applicants', type: 'integer', nullable: true),
-                    new OA\Property(property: 'companyId', type: 'string', format: 'uuid'),
+                    new OA\Property(property: 'companyId', type: 'string', format: 'uuid', nullable: true, description: "Facultatif côté admin : une offre peut être créée sans entreprise rattachée"),
+                    new OA\Property(property: 'image', type: 'string', format: 'binary', nullable: true, description: "Image de couverture optionnelle (multipart/form-data)"),
                 ]
             )
         ),
@@ -202,7 +203,7 @@ class AdminJobsController extends Controller
     )]
     public function storeJobOffer(Request $request)
     {
-        $jobOffer = $this->jobOfferService->create($request->all());
+        $jobOffer = $this->jobOfferService->create($request->except('image'), $request->file('image'));
 
         return ApiResponse::success(new JobOfferResource($jobOffer));
     }
@@ -396,7 +397,9 @@ class AdminJobsController extends Controller
                 new OA\Property(property: 'publishDate', type: 'string', format: 'date', nullable: true),
                 new OA\Property(property: 'endDate', type: 'string', format: 'date', nullable: true),
                 new OA\Property(property: 'applicants', type: 'integer', nullable: true),
-                new OA\Property(property: 'companyId', type: 'string', format: 'uuid', nullable: true),
+                new OA\Property(property: 'companyId', type: 'string', format: 'uuid', nullable: true, description: "null pour détacher l'offre de toute entreprise"),
+                new OA\Property(property: 'image', type: 'string', format: 'binary', nullable: true, description: "Nouvelle image de couverture (multipart/form-data ; PHP ignorant les corps multipart sur un vrai PATCH, envoyer un POST avec _method=PATCH)"),
+                new OA\Property(property: 'removeImage', type: 'boolean', nullable: true, description: "true pour retirer l'image existante sans la remplacer"),
             ])
         ),
         responses: [
@@ -421,7 +424,12 @@ class AdminJobsController extends Controller
             abort(404, "JobOffer with id {$id} not found");
         }
 
-        $updated = $this->jobOfferService->update($jobOffer, $request->all());
+        $updated = $this->jobOfferService->update(
+            $jobOffer,
+            $request->except(['image', 'removeImage']),
+            $request->file('image'),
+            $request->boolean('removeImage'),
+        );
 
         return ApiResponse::success(new JobOfferResource($updated));
     }
