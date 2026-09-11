@@ -24,7 +24,7 @@ class EmployeeSurveyService
 
     public function listForCompany(string $companyId): Collection
     {
-        return EmployeeSurvey::where('company_id', $companyId)->orderByDesc('created_at')->get();
+        return EmployeeSurvey::where('company_id', $companyId)->withCount('responses')->orderByDesc('created_at')->get();
     }
 
     public function find(string $id, string $companyId): ?EmployeeSurvey
@@ -83,6 +83,38 @@ class EmployeeSurveyService
     public function updateStatus(EmployeeSurvey $survey, SurveyStatus $status): EmployeeSurvey
     {
         $survey->update(['status' => $status]);
+
+        return $survey;
+    }
+
+    /**
+     * Modifie une évaluation. Titre, description, échéance et département
+     * restent modifiables à tout moment ; les questions ne le sont plus dès
+     * qu'une réponse a été reçue — les changer romprait le sens des réponses
+     * déjà enregistrées (et de leurs statistiques agrégées).
+     *
+     * @param  array{title?: string, description?: ?string, questions?: array<int, array{id: string, question: string, type: string}>, dueDate?: ?string, department?: ?string}  $data
+     */
+    public function update(EmployeeSurvey $survey, array $data): EmployeeSurvey
+    {
+        if (array_key_exists('questions', $data) && $survey->responses()->exists()) {
+            abort(400, 'Les questions ne sont plus modifiables : cette évaluation a déjà reçu des réponses.');
+        }
+
+        $attributes = [];
+        foreach (['title', 'description', 'questions'] as $key) {
+            if (array_key_exists($key, $data)) {
+                $attributes[$key] = $data[$key];
+            }
+        }
+        if (array_key_exists('dueDate', $data)) {
+            $attributes['due_date'] = $data['dueDate'];
+        }
+        if (array_key_exists('department', $data)) {
+            $attributes['department'] = $data['department'];
+        }
+
+        $survey->update($attributes);
 
         return $survey;
     }

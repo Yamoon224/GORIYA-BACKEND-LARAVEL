@@ -19,6 +19,16 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'decidedAt', type: 'string', format: 'date-time', nullable: true),
         new OA\Property(property: 'decidedByName', type: 'string', nullable: true),
         new OA\Property(property: 'decisionComment', type: 'string', nullable: true),
+        new OA\Property(property: 'employee', type: 'object', nullable: true, description: "Liste de l'entreprise uniquement", properties: [
+            new OA\Property(property: 'id', type: 'string', format: 'uuid'),
+            new OA\Property(property: 'fullName', type: 'string'),
+            new OA\Property(property: 'firstName', type: 'string'),
+            new OA\Property(property: 'lastName', type: 'string'),
+            new OA\Property(property: 'matricule', type: 'string'),
+            new OA\Property(property: 'jobTitle', type: 'string'),
+            new OA\Property(property: 'department', type: 'string', nullable: true),
+            new OA\Property(property: 'status', type: 'string'),
+        ]),
         new OA\Property(property: 'createdAt', type: 'string', format: 'date-time'),
     ]
 )]
@@ -40,6 +50,9 @@ class HrRequestResource extends JsonResource
             'decidedAt' => $this->decided_at,
             'decidedByName' => $this->whenLoaded('decider', fn () => $this->decider?->name),
             'decisionComment' => $this->decision_comment,
+            // Présent sur la liste de l'entreprise (page Demandes RH) : on y
+            // lit une demande sans être sur la fiche de l'employé.
+            'employee' => $this->whenLoaded('employee', fn () => $this->employee ? EmployeeResource::summary($this->employee) : null),
             // Avance sur salaire déjà retenue sur un bulletin de paie validé.
             'payslipId' => $this->payslip_id,
             // Attestation délivrée en réponse à la demande (Documents RH).

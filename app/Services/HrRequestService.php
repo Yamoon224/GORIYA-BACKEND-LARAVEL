@@ -28,6 +28,42 @@ class HrRequestService
         return $employee->hrRequests()->with(['decider', 'document'])->orderByDesc('created_at')->get();
     }
 
+    /**
+     * Demandes RH de toute l'entreprise, avec l'employé concerné : alimente
+     * la page Demandes RH — jusqu'ici, une demande n'était visible que depuis
+     * la fiche de son employé, sans vue d'ensemble côté entreprise.
+     *
+     * @param  array{status?: ?list<string>, type?: ?list<string>, employeeId?: ?string, department?: ?string, search?: ?string}  $filters
+     */
+    public function listForCompany(string $companyId, array $filters = []): Collection
+    {
+        $query = HrRequest::query()
+            ->where('company_id', $companyId)
+            ->with(['decider', 'document', 'employee']);
+
+        if (! empty($filters['status'])) {
+            $query->whereIn('status', $filters['status']);
+        }
+        if (! empty($filters['type'])) {
+            $query->whereIn('type', $filters['type']);
+        }
+        if ($employeeId = $filters['employeeId'] ?? null) {
+            $query->where('employee_id', $employeeId);
+        }
+        if ($department = $filters['department'] ?? null) {
+            $query->whereHas('employee', fn ($q) => $q->where('department', $department));
+        }
+        if ($search = trim((string) ($filters['search'] ?? ''))) {
+            $query->whereHas('employee', fn ($q) => $q->where(function ($w) use ($search) {
+                foreach (['first_name', 'last_name', 'matricule'] as $column) {
+                    $w->orWhere($column, 'like', "%{$search}%");
+                }
+            }));
+        }
+
+        return $query->orderByDesc('created_at')->get();
+    }
+
     public function find(string $id, string $companyId): ?HrRequest
     {
         return HrRequest::where('company_id', $companyId)->with(['decider', 'document'])->find($id);

@@ -24,6 +24,8 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'status', type: 'string', enum: ['DRAFT', 'ACTIVE', 'CLOSED']),
         new OA\Property(property: 'dueDate', type: 'string', format: 'date', nullable: true),
         new OA\Property(property: 'department', type: 'string', nullable: true),
+        new OA\Property(property: 'hasResponses', type: 'boolean', description: 'Au moins une réponse reçue — les questions ne sont alors plus modifiables.'),
+        new OA\Property(property: 'answered', type: 'boolean', description: "L'employé consultant a déjà répondu — présent seulement sur /me/employee/evaluations, non signifiant côté entreprise."),
         new OA\Property(property: 'createdAt', type: 'string', format: 'date-time'),
     ]
 )]
@@ -42,6 +44,12 @@ class EmployeeSurveyResource extends JsonResource
             'status' => $this->status,
             'dueDate' => $this->due_date?->toDateString(),
             'department' => $this->department,
+            // `withCount('responses')` évite un aller-retour par évaluation ;
+            // repli sur une requête directe si jamais absent (fiabilité > coût).
+            'hasResponses' => (int) ($this->responses_count ?? $this->responses()->count()) > 0,
+            // Fixé par MyEmployeeController::evaluations() (attribut ad hoc, pas
+            // en base) — absent ailleurs, donc toujours `false` par défaut.
+            'answered' => (bool) ($this->answered ?? false),
             'createdAt' => $this->created_at,
         ];
     }

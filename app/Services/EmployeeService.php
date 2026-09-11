@@ -7,6 +7,7 @@ use App\Enums\CandidatureStatus;
 use App\Enums\EmployeeStatus;
 use App\Enums\HrWorkflowStatus;
 use App\Enums\LeaveType;
+use App\Enums\UserRole;
 use App\Http\Resources\EmployeeResource;
 use App\Mail\EmployeeHiredMail;
 use App\Models\Candidature;
@@ -104,6 +105,18 @@ class EmployeeService
             $candidature = $this->hireableCandidature($companyId, $data['candidatureId']);
             $attributes['candidature_id'] = $candidature->id;
             $attributes['user_id'] = $candidature->user_id;
+        } elseif (! empty($attributes['email'])) {
+            // Saisie manuelle : la personne a peut-être déjà un compte Goriya
+            // (candidat trouvé hors plateforme, ou dont la candidature n'a pas
+            // été gardée) — le relier active son espace employé, sans quoi
+            // EmployeeService::findByUser() ne le trouverait jamais.
+            $existingAccount = User::query()
+                ->where('role', UserRole::USER)
+                ->whereRaw('LOWER(email) = ?', [mb_strtolower($attributes['email'])])
+                ->first();
+            if ($existingAccount) {
+                $attributes['user_id'] = $existingAccount->id;
+            }
         }
 
         if (empty($attributes['matricule'])) {
@@ -130,7 +143,7 @@ class EmployeeService
         });
 
         $employee = $this->find($employee->id, $companyId);
-        $this->notifyOnboarding($employee, (bool) $candidature);
+        $this->notifyOnboarding($employee);
 
         return $employee;
     }
@@ -139,17 +152,16 @@ class EmployeeService
      * Notification d'embauche — best-effort : ni la notification in-app ni
      * l'email ne doivent faire échouer la création de la fiche.
      *
-     * - Depuis une candidature Goriya : notification in-app (l'employé a un
-     *   compte) + email.
-     * - Saisie manuelle : email seul, quand une adresse est renseignée —
-     *   l'employé n'a pas forcément de compte Goriya pour recevoir un in-app.
+     * L'in-app (NotificationService::notifyHired) se déclenche dès que la
+     * fiche porte un `user_id` — qu'il vienne d'une candidature Goriya, ou
+     * d'un compte existant relié par email à une saisie manuelle (voir
+     * create() ci-dessus) ; elle s'abstient elle-même sinon. L'email part
+     * dans tous les cas, dès qu'une adresse est renseignée.
      */
-    private function notifyOnboarding(Employee $employee, bool $fromCandidature): void
+    private function notifyOnboarding(Employee $employee): void
     {
         try {
-            if ($fromCandidature) {
-                $this->notifications->notifyHired($employee);
-            }
+            $this->notifications->notifyHired($employee);
 
             if ($employee->email) {
                 Mail::to($employee->email)->send(new EmployeeHiredMail($employee, $employee->company));

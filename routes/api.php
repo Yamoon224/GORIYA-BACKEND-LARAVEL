@@ -294,6 +294,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/employee-surveys', [EmployeeSurveysController::class, 'index']);
     Route::post('/employee-surveys', [EmployeeSurveysController::class, 'store']);
     Route::get('/employee-surveys/{id}', [EmployeeSurveysController::class, 'show']);
+    Route::patch('/employee-surveys/{id}', [EmployeeSurveysController::class, 'update']);
     Route::patch('/employee-surveys/{id}/status', [EmployeeSurveysController::class, 'updateStatus']);
     Route::get('/employee-surveys/{id}/stats', [EmployeeSurveysController::class, 'stats']);
     Route::post('/employee-surveys/{id}/responses', [EmployeeSurveysController::class, 'submitResponse']);
@@ -347,6 +348,7 @@ Route::middleware('auth:api')->group(function () {
     Route::patch('/employee-leaves/{id}/status', [EmployeeLeavesController::class, 'updateStatus']);
     Route::delete('/employee-leaves/{id}', [EmployeeLeavesController::class, 'destroy']);
 
+    Route::get('/hr-requests', [HrRequestsController::class, 'companyIndex']);
     Route::get('/employees/{employeeId}/hr-requests', [HrRequestsController::class, 'index']);
     Route::post('/employees/{employeeId}/hr-requests', [HrRequestsController::class, 'store']);
     Route::patch('/hr-requests/{id}/status', [HrRequestsController::class, 'updateStatus']);

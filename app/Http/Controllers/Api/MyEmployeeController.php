@@ -12,7 +12,9 @@ use App\Http\Resources\EmployeeSurveyResource;
 use App\Http\Resources\MyEmployeeResource;
 use App\Models\Employee;
 use App\Models\EmployeeLeave;
+use App\Models\EmployeeSurvey;
 use App\Models\HrRequest;
+use App\Models\SurveyResponse;
 use App\Services\EmployeeLeaveService;
 use App\Services\EmployeeService;
 use App\Services\EmployeeSurveyService;
@@ -184,7 +186,23 @@ class MyEmployeeController extends Controller
     )]
     public function evaluations(Request $request)
     {
-        return EmployeeSurveyResource::collection($this->surveys->listForEmployee($this->myEmployeeOrFail($request)));
+        $employee = $this->myEmployeeOrFail($request);
+        $surveys = $this->surveys->listForEmployee($employee);
+
+        // Une évaluation déjà répondue le reste après rechargement de la page
+        // (pas seulement pour la session en cours) : sans ça, le formulaire
+        // réapparaîtrait à chaque visite alors qu'une réponse n'est possible
+        // qu'une seule fois (contrainte unique (survey_id, user_id)).
+        $answeredIds = $employee->user_id
+            ? SurveyResponse::where('user_id', $employee->user_id)
+                ->whereIn('survey_id', $surveys->pluck('id'))
+                ->pluck('survey_id')
+                ->all()
+            : [];
+
+        $surveys->each(fn (EmployeeSurvey $survey) => $survey->answered = in_array($survey->id, $answeredIds, true));
+
+        return EmployeeSurveyResource::collection($surveys);
     }
 
     private function myEmployee(Request $request): ?Employee

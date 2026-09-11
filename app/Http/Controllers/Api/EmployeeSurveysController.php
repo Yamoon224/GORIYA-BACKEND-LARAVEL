@@ -7,6 +7,7 @@ use App\Http\Concerns\AuthorizesOwnership;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateEmployeeSurveyRequest;
 use App\Http\Requests\SubmitSurveyResponseRequest;
+use App\Http\Requests\UpdateEmployeeSurveyRequest;
 use App\Http\Requests\UpdateSurveyStatusRequest;
 use App\Http\Resources\EmployeeSurveyResource;
 use App\Models\EmployeeSurvey;
@@ -87,6 +88,32 @@ class EmployeeSurveysController extends Controller
         $survey = $this->findSurveyOrFail($id, $request);
 
         return new EmployeeSurveyResource($survey);
+    }
+
+    #[OA\Patch(
+        path: '/employee-surveys/{id}',
+        tags: ['Employee Surveys'],
+        summary: "Modifie une évaluation (titre, description, échéance, département — questions refusées si des réponses existent déjà)",
+        security: [['bearerAuth' => []]],
+        parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(ref: '#/components/schemas/UpdateEmployeeSurveyRequest')
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Enquête modifiée', content: new OA\JsonContent(ref: '#/components/schemas/EmployeeSurvey')),
+            new OA\Response(response: 400, description: 'Questions non modifiables : des réponses ont déjà été reçues'),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+            new OA\Response(response: 404, description: 'Enquête introuvable'),
+            new OA\Response(response: 422, description: 'Validation échouée'),
+        ]
+    )]
+    public function update(string $id, UpdateEmployeeSurveyRequest $request)
+    {
+        $survey = $this->findSurveyOrFail($id, $request);
+        $updated = $this->surveyService->update($survey, $request->validated());
+
+        return new EmployeeSurveyResource($updated);
     }
 
     #[OA\Patch(
