@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateCheckoutRequest;
 use App\Http\Requests\SubscribeRequest;
@@ -138,6 +139,47 @@ class SubscriptionsController extends Controller
         $this->subscriptionService->cancel($userId);
 
         return response()->json(['message' => 'Abonnement annulé avec succès']);
+    }
+
+    /*
+    |----------------------------------------------------------------------
+    | TRANSACTIONS (historique des factures)
+    |----------------------------------------------------------------------
+    */
+    #[OA\Get(
+        path: '/subscriptions/me/{userId}/transactions',
+        tags: ['Subscriptions'],
+        summary: "Historique des paiements de l'utilisateur (userId du path, réservé à son propriétaire ou à un ADMIN)",
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')),
+            new OA\Parameter(name: 'page', in: 'query', schema: new OA\Schema(type: 'integer', default: 1)),
+            new OA\Parameter(name: 'limit', in: 'query', schema: new OA\Schema(type: 'integer', default: 20)),
+        ],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Page de résultats',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'data', type: 'array', items: new OA\Items(ref: '#/components/schemas/Transaction')),
+                    new OA\Property(property: 'meta', ref: '#/components/schemas/PaginationMeta'),
+                ])
+            ),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+            new OA\Response(response: 403, description: "userId d'un autre compte, sans être ADMIN"),
+        ]
+    )]
+    public function transactions(string $userId, Request $request)
+    {
+        $actor = $request->user();
+        if ($actor && $actor->role !== UserRole::ADMIN && $actor->id !== $userId) {
+            abort(403, 'Vous ne pouvez consulter que votre propre historique de facturation');
+        }
+
+        $page = (int) $request->query('page', 1);
+        $limit = (int) $request->query('limit', 20);
+
+        return $this->subscriptionService->transactions($userId, $page, $limit);
     }
 
     /*

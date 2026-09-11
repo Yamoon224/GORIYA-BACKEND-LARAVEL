@@ -8,6 +8,7 @@ use App\Enums\SubscriptionStatus;
 use App\Enums\TransactionStatus;
 use App\Enums\UserRole;
 use App\Http\Resources\SubscriptionPlanResource;
+use App\Http\Resources\TransactionResource;
 use App\Http\Resources\UserSubscriptionResource;
 use App\Models\Transaction;
 use App\Models\User;
@@ -98,6 +99,25 @@ class SubscriptionService
     public function cancel(string $userId): void
     {
         $this->userSubscriptionRepository->cancelActiveForUser($userId);
+    }
+
+    /**
+     * Historique des transactions de paiement de l'utilisateur (« Historique
+     * des factures » côté entreprise) — une par tentative, y compris échouée.
+     */
+    public function transactions(string $userId, int $page, int $limit)
+    {
+        $paginator = Transaction::query()
+            ->with('plan')
+            ->where('user_id', $userId)
+            ->orderByDesc('created_at')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        $paginator->setCollection(
+            $paginator->getCollection()->map(fn (Transaction $transaction) => (new TransactionResource($transaction))->resolve())
+        );
+
+        return ApiResponse::paginated($paginator);
     }
 
     /**

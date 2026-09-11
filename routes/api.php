@@ -7,8 +7,10 @@ use App\Http\Controllers\Api\AdminAuthController;
 use App\Http\Controllers\Api\AdminCompaniesController;
 use App\Http\Controllers\Api\AdminDashboardController;
 use App\Http\Controllers\Api\AdminJobsController;
+use App\Http\Controllers\Api\AdminMailCampaignsController;
 use App\Http\Controllers\Api\AdminPlanningController;
 use App\Http\Controllers\Api\AdminPortfoliosController;
+use App\Http\Controllers\Api\AdminPotentialPartnersController;
 use App\Http\Controllers\Api\AdminStudentsController;
 use App\Http\Controllers\Api\AdminSystemController;
 use App\Http\Controllers\Api\AnalyticsController;
@@ -53,6 +55,7 @@ use App\Http\Controllers\Api\MyResumesController;
 use App\Http\Controllers\Api\NewsletterController;
 use App\Http\Controllers\Api\NotificationsController;
 use App\Http\Controllers\Api\PaiementProWebhookController;
+use App\Http\Controllers\Api\PartnerUnsubscribeController;
 use App\Http\Controllers\Api\PayrollRunsController;
 use App\Http\Controllers\Api\PayrollSettingsController;
 use App\Http\Controllers\Api\PayslipsController;
@@ -476,6 +479,7 @@ Route::get('/subscriptions/check/{userId}', [SubscriptionsController::class, 'ch
 Route::post('/subscriptions/subscribe', [SubscriptionsController::class, 'subscribe'])->middleware('auth:api');
 Route::get('/subscriptions/me/{userId}', [SubscriptionsController::class, 'mySubscription'])->middleware('auth:api');
 Route::delete('/subscriptions/me/{userId}', [SubscriptionsController::class, 'cancel'])->middleware('auth:api');
+Route::get('/subscriptions/me/{userId}/transactions', [SubscriptionsController::class, 'transactions'])->middleware('auth:api');
 Route::post('/subscriptions/checkout', [SubscriptionsController::class, 'checkout'])->middleware('auth:api');
 Route::get('/subscriptions/checkout/verify/{transactionId}', [SubscriptionsController::class, 'verifyCheckout'])->middleware('auth:api');
 // Notification serveur-à-serveur Paiement Pro — authentifiée par jeton d'URL +
@@ -685,4 +689,34 @@ Route::middleware(['auth:api', 'role:ADMIN'])->group(function () {
     Route::get('/admin/audit-logs/paginate', [AdminAuditLogsController::class, 'paginate']);
     Route::get('/admin/audit-logs/actions', [AdminAuditLogsController::class, 'actions']);
     Route::get('/admin/audit-logs/{id}', [AdminAuditLogsController::class, 'show']);
+
+    // --- Admin: Potentiels Partenaires — fiches d'entreprises ciblées pour
+    // les campagnes de mailing partenariat. Segments statiques déclarés
+    // avant les wildcards {id}, même règle que le reste du fichier.
+    Route::get('/admin/potential-partners/paginate', [AdminPotentialPartnersController::class, 'paginate']);
+    Route::get('/admin/potential-partners/stats', [AdminPotentialPartnersController::class, 'stats']);
+    Route::get('/admin/potential-partners/filters', [AdminPotentialPartnersController::class, 'filters']);
+    Route::post('/admin/potential-partners/import', [AdminPotentialPartnersController::class, 'import']);
+    Route::post('/admin/potential-partners', [AdminPotentialPartnersController::class, 'store']);
+    Route::get('/admin/potential-partners/{id}', [AdminPotentialPartnersController::class, 'show']);
+    Route::patch('/admin/potential-partners/{id}', [AdminPotentialPartnersController::class, 'update']);
+    Route::patch('/admin/potential-partners/{id}/status', [AdminPotentialPartnersController::class, 'updateStatus']);
+    Route::delete('/admin/potential-partners/{id}', [AdminPotentialPartnersController::class, 'destroy']);
+
+    // --- Admin: Campagnes de mailing vers les partenaires potentiels ---
+    Route::get('/admin/mail-campaigns/paginate', [AdminMailCampaignsController::class, 'paginate']);
+    Route::get('/admin/mail-campaigns/preview-recipients', [AdminMailCampaignsController::class, 'previewRecipients']);
+    Route::post('/admin/mail-campaigns', [AdminMailCampaignsController::class, 'store']);
+    Route::get('/admin/mail-campaigns/{id}', [AdminMailCampaignsController::class, 'show']);
+    Route::patch('/admin/mail-campaigns/{id}', [AdminMailCampaignsController::class, 'update']);
+    Route::delete('/admin/mail-campaigns/{id}', [AdminMailCampaignsController::class, 'destroy']);
+    Route::post('/admin/mail-campaigns/{id}/test-send', [AdminMailCampaignsController::class, 'testSend']);
+    Route::post('/admin/mail-campaigns/{id}/send', [AdminMailCampaignsController::class, 'send']);
+    Route::get('/admin/mail-campaigns/{id}/recipients', [AdminMailCampaignsController::class, 'recipients']);
 });
+
+// --- Partenaires potentiels : lien de désabonnement des campagnes (public,
+// protégé par la signature de l'URL — voir PartnerCampaignMail) ---
+Route::get('/partners/{partner}/unsubscribe', [PartnerUnsubscribeController::class, 'unsubscribe'])
+    ->name('partners.unsubscribe')
+    ->middleware('signed');

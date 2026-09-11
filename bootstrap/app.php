@@ -21,6 +21,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => \App\Http\Middleware\RoleMiddleware::class,
             'auth.apikey' => \App\Http\Middleware\EnsureValidApiKey::class,
+            // Non enregistré par défaut dans le skeleton Laravel 11+ (seul
+            // withRouting() en a besoin implicitement) — requis explicitement
+            // ici pour le lien de désabonnement des campagnes (voir
+            // PartnerUnsubscribeController).
+            'signed' => \Illuminate\Routing\Middleware\ValidateSignature::class,
         ]);
 
         // Résout App::getLocale() pour chaque requête (validation Laravel +
