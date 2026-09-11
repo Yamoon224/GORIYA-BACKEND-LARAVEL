@@ -35,6 +35,48 @@ class EmployeeLeaveService
         return $employee->leaves()->with('decider')->orderByDesc('start_date')->get();
     }
 
+    /**
+     * Congés de toute l'entreprise, avec l'employé concerné : alimente la page
+     * Congés (liste à valider, planning). Filtres cumulables ; la période retient
+     * tout congé qui la chevauche, pas seulement ceux qui y commencent.
+     *
+     * @param  array{status?: ?list<string>, type?: ?list<string>, employeeId?: ?string, department?: ?string, search?: ?string, from?: ?string, to?: ?string}  $filters
+     */
+    public function listForCompany(string $companyId, array $filters = []): Collection
+    {
+        $query = EmployeeLeave::query()
+            ->where('company_id', $companyId)
+            ->with(['decider', 'employee']);
+
+        if (! empty($filters['status'])) {
+            $query->whereIn('status', $filters['status']);
+        }
+        if (! empty($filters['type'])) {
+            $query->whereIn('type', $filters['type']);
+        }
+        if ($employeeId = $filters['employeeId'] ?? null) {
+            $query->where('employee_id', $employeeId);
+        }
+        if ($from = $filters['from'] ?? null) {
+            $query->whereDate('end_date', '>=', $from);
+        }
+        if ($to = $filters['to'] ?? null) {
+            $query->whereDate('start_date', '<=', $to);
+        }
+        if ($department = $filters['department'] ?? null) {
+            $query->whereHas('employee', fn ($q) => $q->where('department', $department));
+        }
+        if ($search = trim((string) ($filters['search'] ?? ''))) {
+            $query->whereHas('employee', fn ($q) => $q->where(function ($w) use ($search) {
+                foreach (['first_name', 'last_name', 'matricule'] as $column) {
+                    $w->orWhere($column, 'like', "%{$search}%");
+                }
+            }));
+        }
+
+        return $query->orderByDesc('start_date')->get();
+    }
+
     public function find(string $id, string $companyId): ?EmployeeLeave
     {
         return EmployeeLeave::where('company_id', $companyId)->with('decider')->find($id);

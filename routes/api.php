@@ -286,6 +286,8 @@ Route::middleware('auth:api')->group(function () {
     Route::patch('/employees/{id}', [EmployeesController::class, 'update']);
     Route::delete('/employees/{id}', [EmployeesController::class, 'destroy']);
 
+    Route::get('/employee-leaves', [EmployeeLeavesController::class, 'companyIndex']);
+    Route::get('/employee-leaves/balances', [EmployeeLeavesController::class, 'balances']);
     Route::get('/employees/{employeeId}/leaves', [EmployeeLeavesController::class, 'index']);
     Route::post('/employees/{employeeId}/leaves', [EmployeeLeavesController::class, 'store']);
     Route::patch('/employee-leaves/{id}/status', [EmployeeLeavesController::class, 'updateStatus']);

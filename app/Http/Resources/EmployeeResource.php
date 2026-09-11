@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Employee;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use OpenApi\Attributes as OA;
@@ -75,6 +76,26 @@ class EmployeeResource extends JsonResource
         $this->leaveBalance = $balance;
 
         return $this;
+    }
+
+    /**
+     * Identité minimale d'un employé, embarquée là où l'on affiche un congé ou
+     * un solde hors de sa fiche (page Congés).
+     *
+     * @return array{id: string, fullName: string, firstName: string, lastName: string, matricule: string, jobTitle: string, department: ?string, status: ?string}
+     */
+    public static function summary(Employee $employee): array
+    {
+        return [
+            'id' => $employee->id,
+            'fullName' => $employee->full_name,
+            'firstName' => $employee->first_name,
+            'lastName' => $employee->last_name,
+            'matricule' => $employee->matricule,
+            'jobTitle' => $employee->job_title,
+            'department' => $employee->department,
+            'status' => $employee->status?->value,
+        ];
     }
 
     /**

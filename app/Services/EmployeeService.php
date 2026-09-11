@@ -3,10 +3,13 @@
 namespace App\Services;
 
 use App\Enums\CandidatureStatus;
+use App\Enums\EmployeeStatus;
 use App\Enums\HrWorkflowStatus;
 use App\Enums\LeaveType;
+use App\Http\Resources\EmployeeResource;
 use App\Models\Candidature;
 use App\Models\Employee;
+use App\Models\EmployeeLeave;
 use App\Services\Concerns\MapsFieldsToColumns;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -151,14 +154,72 @@ class EmployeeService
             ->groupBy('status')
             ->pluck('total', 'status');
 
-        $taken = (int) ($sums[HrWorkflowStatus::APPROVED->value] ?? 0);
-        $entitlement = (int) $employee->annual_leave_days;
+        return $this->balance(
+            $year,
+            (int) $employee->annual_leave_days,
+            (int) ($sums[HrWorkflowStatus::APPROVED->value] ?? 0),
+            (int) ($sums[HrWorkflowStatus::PENDING->value] ?? 0),
+        );
+    }
 
+    /**
+     * Soldes de congés payés de tous les employés présents (hors départs), pour
+     * la page Congés. Une seule agrégation pour l'entreprise plutôt qu'un calcul
+     * par employé : la page reste rapide quel que soit l'effectif.
+     *
+     * @return list<array<string, mixed>> Identité de l'employé + solde de l'année
+     */
+    public function leaveBalances(string $companyId, ?int $year = null): array
+    {
+        $year ??= (int) now()->year;
+
+        // `toBase()` : lignes brutes, sans le cast enum de `status` qui fausserait
+        // la comparaison avec les chaînes ci-dessous.
+        $sums = EmployeeLeave::query()
+            ->where('company_id', $companyId)
+            ->where('type', LeaveType::PAID->value)
+            ->whereYear('start_date', $year)
+            ->whereIn('status', [HrWorkflowStatus::APPROVED->value, HrWorkflowStatus::PENDING->value])
+            ->selectRaw('employee_id, status, SUM(days) as total')
+            ->groupBy('employee_id', 'status')
+            ->toBase()
+            ->get()
+            ->groupBy('employee_id');
+
+        return Employee::query()
+            ->where('company_id', $companyId)
+            ->where('status', '!=', EmployeeStatus::TERMINATED->value)
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->get()
+            ->map(function (Employee $employee) use ($sums, $year) {
+                $rows = $sums->get($employee->id, collect());
+                $total = fn (HrWorkflowStatus $status) => (int) ($rows->firstWhere('status', $status->value)?->total ?? 0);
+
+                return ['employee' => EmployeeResource::summary($employee)] + $this->balance(
+                    $year,
+                    (int) $employee->annual_leave_days,
+                    $total(HrWorkflowStatus::APPROVED),
+                    $total(HrWorkflowStatus::PENDING),
+                );
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Formule unique du solde : le reste disponible ne déduit que les jours
+     * approuvés — les jours en attente sont signalés, pas encore consommés.
+     *
+     * @return array{year: int, entitlement: int, taken: int, pending: int, remaining: int}
+     */
+    private function balance(int $year, int $entitlement, int $taken, int $pending): array
+    {
         return [
             'year' => $year,
             'entitlement' => $entitlement,
             'taken' => $taken,
-            'pending' => (int) ($sums[HrWorkflowStatus::PENDING->value] ?? 0),
+            'pending' => $pending,
             'remaining' => $entitlement - $taken,
         ];
     }
