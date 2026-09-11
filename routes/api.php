@@ -50,6 +50,9 @@ use App\Http\Controllers\Api\MyResumesController;
 use App\Http\Controllers\Api\NewsletterController;
 use App\Http\Controllers\Api\NotificationsController;
 use App\Http\Controllers\Api\PaiementProWebhookController;
+use App\Http\Controllers\Api\PayrollRunsController;
+use App\Http\Controllers\Api\PayrollSettingsController;
+use App\Http\Controllers\Api\PayslipsController;
 use App\Http\Controllers\Api\PitchController;
 use App\Http\Controllers\Api\PortfoliosController;
 use App\Http\Controllers\Api\PostsController;
@@ -286,6 +289,23 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/employees/{id}', [EmployeesController::class, 'show']);
     Route::patch('/employees/{id}', [EmployeesController::class, 'update']);
     Route::delete('/employees/{id}', [EmployeesController::class, 'destroy']);
+
+    Route::get('/payroll/settings', [PayrollSettingsController::class, 'show']);
+    Route::put('/payroll/settings', [PayrollSettingsController::class, 'update']);
+    Route::post('/payroll/settings/reset', [PayrollSettingsController::class, 'reset']);
+    Route::get('/payroll/runs', [PayrollRunsController::class, 'index']);
+    Route::post('/payroll/runs', [PayrollRunsController::class, 'store']);
+    Route::get('/payroll/runs/{id}', [PayrollRunsController::class, 'show']);
+    Route::delete('/payroll/runs/{id}', [PayrollRunsController::class, 'destroy']);
+    Route::post('/payroll/runs/{id}/recompute', [PayrollRunsController::class, 'recompute']);
+    Route::post('/payroll/runs/{id}/validate', [PayrollRunsController::class, 'validateRun']);
+    Route::post('/payroll/runs/{id}/reopen', [PayrollRunsController::class, 'reopen']);
+    Route::post('/payroll/runs/{id}/pay', [PayrollRunsController::class, 'pay']);
+    Route::get('/payroll/runs/{id}/export', [PayrollRunsController::class, 'export']);
+    Route::get('/payslips/{id}', [PayslipsController::class, 'show']);
+    Route::patch('/payslips/{id}', [PayslipsController::class, 'update']);
+    Route::get('/payslips/{id}/document', [PayslipsController::class, 'document']);
+    Route::get('/employees/{employeeId}/payslips', [PayslipsController::class, 'employeeIndex']);
 
     Route::get('/employee-contracts', [EmployeeContractsController::class, 'companyIndex']);
     Route::get('/employees/{employeeId}/contracts', [EmployeeContractsController::class, 'index']);

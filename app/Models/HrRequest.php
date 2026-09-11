@@ -33,6 +33,8 @@ class HrRequest extends Model
         'decided_by',
         'decided_at',
         'decision_comment',
+        // Avance sur salaire : bulletin validé sur lequel elle a été retenue.
+        'payslip_id',
     ];
 
     /**

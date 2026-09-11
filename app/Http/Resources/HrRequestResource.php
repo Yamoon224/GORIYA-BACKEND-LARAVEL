@@ -40,6 +40,8 @@ class HrRequestResource extends JsonResource
             'decidedAt' => $this->decided_at,
             'decidedByName' => $this->whenLoaded('decider', fn () => $this->decider?->name),
             'decisionComment' => $this->decision_comment,
+            // Avance sur salaire déjà retenue sur un bulletin de paie validé.
+            'payslipId' => $this->payslip_id,
             'createdAt' => $this->created_at,
         ];
     }
