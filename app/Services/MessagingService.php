@@ -87,6 +87,9 @@ class MessagingService
 
         return [
             'id' => $conversation->id,
+            // Utile au frontend pour inviter l'autre participant à une session
+            // Goriya Meet planifiée depuis la conversation (voir /calls).
+            'otherUserId' => $other?->id,
             'name' => $other?->name ?? '—',
             'role' => $other?->role?->value ?? '',
             'lastMessageAt' => $conversation->last_message_at,
