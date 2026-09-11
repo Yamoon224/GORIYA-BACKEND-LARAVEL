@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Contracts\VideoCallProviderInterface;
 use App\Models\Candidature;
 use App\Models\Company;
 use App\Models\JobOffer;
@@ -29,10 +30,39 @@ class RecruitmentTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** Faux lunion.meet : salles numérotées, suppressions retenues. */
+    private object $meet;
+
     protected function setUp(): void
     {
         parent::setUp();
         Carbon::setTestNow('2026-09-10 09:00:00');
+
+        $this->meet = new class implements VideoCallProviderInterface
+        {
+            /** @var list<string> */
+            public array $deleted = [];
+
+            private int $rooms = 0;
+
+            public function createRoom(string $name, ?string $scheduledAt = null, ?string $description = null): array
+            {
+                $this->rooms++;
+
+                return ['id' => "room-{$this->rooms}", 'slug' => "entretien-{$this->rooms}", 'name' => $name, 'scheduledAt' => $scheduledAt, 'createdAt' => now()->toIso8601String()];
+            }
+
+            public function deleteRoom(string $slug): void
+            {
+                $this->deleted[] = $slug;
+            }
+
+            public function issueToken(string $slug, string $identity, ?string $name = null, array $grants = [], int $ttlSeconds = 21600): array
+            {
+                return ['token' => "jeton-{$identity}", 'url' => 'wss://meet.test', 'room' => $slug, 'identity' => $identity, 'expiresAt' => now()->addHours(6)->toIso8601String()];
+            }
+        };
+        $this->app->instance(VideoCallProviderInterface::class, $this->meet);
     }
 
     protected function tearDown(): void
@@ -195,16 +225,33 @@ class RecruitmentTest extends TestCase
                 'type' => 'VIDEO',
                 'scheduledAt' => '2026-09-15T10:00:00Z',
                 'durationMinutes' => 45,
-                'meetingUrl' => 'https://meet.example.com/goriya-rh',
                 'interviewers' => 'Awa (RH), Koffi (CTO)',
             ])
             ->assertCreated()
             ->assertJsonPath('status', 'SCHEDULED')
             ->assertJsonPath('durationMinutes', 45)
+            ->assertJsonPath('callSession.status', 'SCHEDULED')
             ->json();
         $this->assertStringStartsWith('2026-09-15T10:00:00', $interview['scheduledAt']);
         $this->assertStringStartsWith('2026-09-15T10:45:00', $interview['endsAt']);
         $this->assertNotNull($interview['candidateNotifiedAt']);
+        $call = $interview['callSession']['id'];
+
+        // La salle GORIYA Meet : l'hôte est le recruteur, le candidat la retrouve dans son espace et la rejoint.
+        $this->actingAs($rh, 'api')->getJson('/calls')->assertOk()->assertJsonCount(1)->assertJsonPath('0.isHost', true);
+        $candidat = User::find($candidature->user_id);
+        $this->app['auth']->forgetGuards();
+        $this->actingAs($candidat, 'api')
+            ->getJson('/calls')
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonPath('0.id', $call)
+            ->assertJsonPath('0.isHost', false)
+            ->assertJsonPath('0.hostName', $rh->name)
+            ->assertJsonPath('0.title', 'Entretien Développeuse Full-Stack · Goriya Test SARL — Marie Dubois');
+        $this->actingAs($candidat, 'api')->postJson("/calls/{$call}/join")->assertOk()->assertJsonPath('identity', $candidat->id);
+        $this->actingAs($candidat, 'api')->postJson("/calls/{$call}/end")->assertForbidden();
+        $this->app['auth']->forgetGuards();
 
         // Planifier un entretien fait passer le candidat à l'étape « Entretien ».
         $this->actingAs($rh, 'api')
@@ -226,6 +273,7 @@ class RecruitmentTest extends TestCase
             ->patchJson("/recruitment/interviews/{$interview['id']}", ['scheduledAt' => '2026-09-16T14:00:00Z'])
             ->assertOk();
         $this->assertContains('Entretien déplacé', $this->notificationTitles($candidature));
+        $this->assertStringStartsWith('2026-09-16T14:00:00', (string) $this->actingAs($rh, 'api')->getJson("/calls/{$call}")->json('scheduledAt'));
 
         Carbon::setTestNow('2026-09-16 16:00:00');
         $this->actingAs($rh, 'api')
@@ -245,7 +293,10 @@ class RecruitmentTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('status', 'COMPLETED')
-            ->assertJsonPath('outcomeByName', $rh->name);
+            ->assertJsonPath('outcomeByName', $rh->name)
+            ->assertJsonPath('callSession.status', 'ENDED');
+        // Entretien passé : la salle est fermée chez lunion.meet.
+        $this->assertSame(['entretien-1'], $this->meet->deleted);
 
         $this->actingAs($rh, 'api')
             ->getJson("/recruitment/candidates/{$candidature->id}")
@@ -260,14 +311,16 @@ class RecruitmentTest extends TestCase
         // Écarter un candidat annule ses entretiens à venir ; un candidat écarté n'en reçoit plus.
         $autre = $this->candidature($offer, 'Yao Kouassi');
         $prevu = $this->actingAs($rh, 'api')
-            ->postJson("/recruitment/candidates/{$autre->id}/interviews", ['type' => 'ONSITE', 'scheduledAt' => '2026-09-21T09:00:00Z', 'location' => 'Plateau, Abidjan'])
+            ->postJson("/recruitment/candidates/{$autre->id}/interviews", ['type' => 'VIDEO', 'scheduledAt' => '2026-09-21T09:00:00Z'])
             ->assertCreated()
             ->json('id');
         $this->actingAs($rh, 'api')->patchJson("/recruitment/candidates/{$autre->id}/stage", ['stage' => 'REJECTED'])->assertOk();
         $this->actingAs($rh, 'api')
             ->getJson("/recruitment/candidates/{$autre->id}")
             ->assertJsonPath('interviews.0.id', $prevu)
-            ->assertJsonPath('interviews.0.status', 'CANCELLED');
+            ->assertJsonPath('interviews.0.status', 'CANCELLED')
+            ->assertJsonPath('interviews.0.callSession.status', 'ENDED');
+        $this->assertSame(['entretien-1', 'entretien-2'], $this->meet->deleted);
         $this->actingAs($rh, 'api')
             ->postJson("/recruitment/candidates/{$autre->id}/interviews", ['type' => 'PHONE', 'scheduledAt' => '2026-09-22T09:00:00Z'])
             ->assertStatus(400);
@@ -281,7 +334,17 @@ class RecruitmentTest extends TestCase
         $id = $this->actingAs($rh, 'api')
             ->postJson("/recruitment/candidates/{$candidature->id}/interviews", ['type' => 'PHONE', 'scheduledAt' => '2026-09-14T11:00:00Z'])
             ->assertCreated()
+            ->assertJsonPath('callSession', null)
             ->json('id');
+
+        // Passé en visio, l'entretien reçoit sa salle ; revenu au téléphone, elle est fermée.
+        $this->actingAs($rh, 'api')
+            ->patchJson("/recruitment/interviews/{$id}", ['type' => 'VIDEO', 'location' => 'ignoré'])
+            ->assertOk()
+            ->assertJsonPath('callSession.status', 'SCHEDULED')
+            ->assertJsonPath('location', null);
+        $this->actingAs($rh, 'api')->patchJson("/recruitment/interviews/{$id}", ['type' => 'PHONE'])->assertOk()->assertJsonPath('callSession', null);
+        $this->assertSame(['entretien-1'], $this->meet->deleted);
 
         $this->actingAs($rh, 'api')
             ->patchJson("/recruitment/interviews/{$id}/outcome", ['status' => 'CANCELLED', 'feedback' => 'Poste gelé'])

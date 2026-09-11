@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Enums\CallSessionStatus;
 use App\Enums\JobStatus;
 use App\Enums\RecruitmentInterviewStatus;
+use App\Enums\RecruitmentInterviewType;
 use App\Enums\RecruitmentStage;
 use App\Models\Candidature;
 use App\Models\JobOffer;
@@ -25,7 +27,9 @@ use Illuminate\Support\Facades\DB;
  *  - l'étape et le statut public avancent ensemble : le candidat est notifié
  *    exactement comme depuis la page Candidatures ;
  *  - « Embauché » ne s'atteint qu'en créant la fiche employé, et n'en sort plus ;
- *  - chaque changement d'étape laisse une trace datée et signée.
+ *  - chaque changement d'étape laisse une trace datée et signée ;
+ *  - un entretien en visioconférence a sa salle GORIYA Meet, ouverte tant
+ *    qu'il reste planifié et fermée dès qu'il est passé, annulé ou supprimé.
  */
 class RecruitmentService
 {
@@ -34,16 +38,15 @@ class RecruitmentService
     /** Cartes du pipeline : compétences, CV, note IA et entretiens sans requête par carte. */
     private const LIST_RELATIONS = ['user.portfolios', 'user.cv', 'jobOffer', 'resume', 'answers', 'assessment', 'employee', 'interviews'];
 
-    private const DETAIL_RELATIONS = ['stageEvents.creator', 'recruitmentNotes.author', 'interviews.creator', 'interviews.outcomeAuthor'];
+    private const DETAIL_RELATIONS = ['stageEvents.creator', 'recruitmentNotes.author', 'interviews.creator', 'interviews.outcomeAuthor', 'interviews.callSession'];
 
-    private const INTERVIEW_RELATIONS = ['candidature.jobOffer', 'candidature.employee', 'creator', 'outcomeAuthor'];
+    private const INTERVIEW_RELATIONS = ['candidature.jobOffer', 'candidature.employee', 'creator', 'outcomeAuthor', 'callSession'];
 
     private const INTERVIEW_FIELDS = [
         'type' => 'type',
         'scheduledAt' => 'scheduled_at',
         'durationMinutes' => 'duration_minutes',
         'location' => 'location',
-        'meetingUrl' => 'meeting_url',
         'interviewers' => 'interviewers',
         'description' => 'description',
     ];
@@ -57,6 +60,7 @@ class RecruitmentService
     public function __construct(
         private readonly CandidatureService $candidatures,
         private readonly NotificationService $notifications,
+        private readonly CallSessionService $calls,
     ) {}
 
     /**
@@ -158,23 +162,26 @@ class RecruitmentService
             return $candidature;
         }
 
-        DB::transaction(function () use ($candidature, $from, $to, $author, $comment) {
-            if ($to === RecruitmentStage::REJECTED) {
-                // Un candidat écarté n'a plus d'entretien à passer.
-                $candidature->interviews()
-                    ->where('status', RecruitmentInterviewStatus::SCHEDULED->value)
-                    ->update([
-                        'status' => RecruitmentInterviewStatus::CANCELLED->value,
-                        'outcome_by' => $author->id,
-                        'outcome_at' => now(),
-                    ]);
+        // Un candidat écarté n'a plus d'entretien à passer.
+        $cancelled = $to === RecruitmentStage::REJECTED
+            ? $candidature->interviews()->where('status', RecruitmentInterviewStatus::SCHEDULED->value)->with('callSession')->get()
+            : new Collection;
+
+        DB::transaction(function () use ($candidature, $from, $to, $author, $comment, $cancelled) {
+            foreach ($cancelled as $interview) {
+                $interview->update([
+                    'status' => RecruitmentInterviewStatus::CANCELLED,
+                    'outcome_by' => $author->id,
+                    'outcome_at' => now(),
+                ]);
             }
 
             $this->record($candidature, $from, $to, $author, $comment);
         });
 
-        // Statut public en dernier, hors transaction : sa mise à jour notifie le
-        // candidat et déclenche les webhooks de l'entreprise.
+        // Hors transaction : fermeture des salles GORIYA Meet et statut public,
+        // dont la mise à jour notifie le candidat et déclenche les webhooks.
+        $cancelled->each(fn (RecruitmentInterview $interview) => $this->closeCall($interview));
         if ($candidature->status !== $to->candidatureStatus()) {
             $this->candidatures->update($candidature, ['status' => $to->candidatureStatus()->value]);
         }
@@ -243,9 +250,18 @@ class RecruitmentService
             abort(400, 'Ce candidat a été écarté : replacez-le dans le pipeline avant de planifier un entretien.');
         }
 
-        $interview = RecruitmentInterview::create($this->interviewAttributes($data) + [
+        $attributes = $this->interviewAttributes($data);
+
+        // Visioconférence : la salle GORIYA Meet est ouverte d'avance, candidat
+        // invité. Créée avant l'entretien — si lunion.meet échoue, rien n'est enregistré.
+        $call = RecruitmentInterviewType::tryFrom((string) ($attributes['type'] ?? '')) === RecruitmentInterviewType::VIDEO
+            ? $this->calls->schedule($author, $this->callTitle($candidature), $attributes['scheduled_at'], [$candidature->user_id])
+            : null;
+
+        $interview = RecruitmentInterview::create($attributes + [
             'company_id' => $candidature->jobOffer->company_id,
             'candidature_id' => $candidature->id,
+            'call_session_id' => $call?->id,
             'status' => RecruitmentInterviewStatus::SCHEDULED,
             'created_by' => $author->id,
         ]);
@@ -263,17 +279,22 @@ class RecruitmentService
     /**
      * @param  array<string, mixed>  $data  Champs validés (camelCase)
      */
-    public function updateInterview(RecruitmentInterview $interview, array $data): RecruitmentInterview
+    public function updateInterview(RecruitmentInterview $interview, User $author, array $data): RecruitmentInterview
     {
         if ($interview->status !== RecruitmentInterviewStatus::SCHEDULED) {
             abort(400, 'Seul un entretien encore planifié se modifie : complétez plutôt son compte rendu.');
         }
 
-        $previous = $interview->scheduled_at->getTimestamp();
+        $previousTime = $interview->scheduled_at->getTimestamp();
+        $previousType = $interview->type;
         $interview->update($this->interviewAttributes($data));
 
-        if ($interview->scheduled_at->getTimestamp() !== $previous) {
-            $this->notifyIfRequested($interview, $data, true);
+        $moved = $interview->scheduled_at->getTimestamp() !== $previousTime;
+        $this->syncCall($interview->load(['callSession', 'candidature.jobOffer.company']), $author, $moved);
+
+        // Nouvel horaire ou nouveau format : le candidat reçoit une convocation à jour.
+        if ($moved || $interview->type !== $previousType) {
+            $this->notifyIfRequested($interview, $data, $moved);
         }
 
         return $this->reloadInterview($interview);
@@ -300,6 +321,9 @@ class RecruitmentService
             'outcome_at' => now(),
         ]);
 
+        // L'entretien a eu lieu ou n'aura pas lieu : sa salle n'a plus de raison d'être.
+        $this->closeCall($interview);
+
         // On ne prévient d'une annulation que le candidat qui avait été convoqué.
         if ($status === RecruitmentInterviewStatus::CANCELLED
             && ($data['notifyCandidate'] ?? true)
@@ -317,6 +341,7 @@ class RecruitmentService
             abort(400, 'Un entretien passé et son compte rendu font partie du dossier du candidat : il ne se supprime pas.');
         }
 
+        $this->closeCall($interview);
         $interview->delete();
     }
 
@@ -339,6 +364,51 @@ class RecruitmentService
     }
 
     /**
+     * Aligne la salle GORIYA Meet sur l'entretien modifié : ouverte s'il passe
+     * en visio (ou si l'ancienne a été fermée), replanifiée s'il est déplacé,
+     * fermée s'il quitte la visio.
+     */
+    private function syncCall(RecruitmentInterview $interview, User $author, bool $moved): void
+    {
+        $call = $interview->callSession;
+        $open = $call && $call->status !== CallSessionStatus::ENDED;
+
+        if ($interview->type !== RecruitmentInterviewType::VIDEO) {
+            if ($call) {
+                $this->calls->close($call);
+                $interview->update(['call_session_id' => null]);
+            }
+
+            return;
+        }
+
+        if (! $open) {
+            $candidature = $interview->candidature;
+            $call = $this->calls->schedule($author, $this->callTitle($candidature), $interview->scheduled_at, [$candidature->user_id]);
+            $interview->update(['call_session_id' => $call->id]);
+        } elseif ($moved) {
+            $call->update(['scheduled_at' => $interview->scheduled_at]);
+        }
+    }
+
+    private function closeCall(RecruitmentInterview $interview): void
+    {
+        $call = $interview->callSession;
+        if ($call) {
+            $this->calls->close($call);
+        }
+    }
+
+    /** Titre de la salle, lisible par le recruteur comme par le candidat. */
+    private function callTitle(Candidature $candidature): string
+    {
+        $offer = $candidature->jobOffer;
+        $company = $offer?->company?->name;
+
+        return 'Entretien '.($offer?->title ?? 'de recrutement').($company ? " · {$company}" : '')." — {$candidature->candidate_name}";
+    }
+
+    /**
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
@@ -352,6 +422,10 @@ class RecruitmentService
         }
         if (array_key_exists('duration_minutes', $attributes) && $attributes['duration_minutes'] === null) {
             unset($attributes['duration_minutes']);
+        }
+        // La visio se tient sur GORIYA Meet : pas d'adresse à conserver.
+        if (($attributes['type'] ?? null) === RecruitmentInterviewType::VIDEO->value) {
+            $attributes['location'] = null;
         }
 
         return $attributes;

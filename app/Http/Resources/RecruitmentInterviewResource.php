@@ -17,7 +17,10 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'endsAt', type: 'string', format: 'date-time'),
         new OA\Property(property: 'durationMinutes', type: 'integer'),
         new OA\Property(property: 'location', type: 'string', nullable: true),
-        new OA\Property(property: 'meetingUrl', type: 'string', nullable: true),
+        new OA\Property(property: 'callSession', type: 'object', nullable: true, description: 'Salle GORIYA Meet (entretien VIDEO)', properties: [
+            new OA\Property(property: 'id', type: 'string', format: 'uuid'),
+            new OA\Property(property: 'status', type: 'string', enum: ['SCHEDULED', 'ACTIVE', 'ENDED']),
+        ]),
         new OA\Property(property: 'interviewers', type: 'string', nullable: true),
         new OA\Property(property: 'description', type: 'string', nullable: true),
         new OA\Property(property: 'status', type: 'string', enum: ['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW']),
@@ -51,7 +54,11 @@ class RecruitmentInterviewResource extends JsonResource
             'endsAt' => $this->scheduled_at?->addMinutes($this->duration_minutes ?? 45)->toIso8601String(),
             'durationMinutes' => $this->duration_minutes,
             'location' => $this->location,
-            'meetingUrl' => $this->meeting_url,
+            // Visioconférence : salle GORIYA Meet, rejointe par POST /calls/{id}/join.
+            'callSession' => $this->callSession ? [
+                'id' => $this->callSession->id,
+                'status' => $this->callSession->status?->value,
+            ] : null,
             'interviewers' => $this->interviewers,
             'description' => $this->description,
             'status' => $this->status?->value,

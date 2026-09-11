@@ -168,13 +168,16 @@ class NotificationService
         $title = $rescheduled ? 'Entretien déplacé' : 'Entretien programmé';
         $body = "{$company} ".($rescheduled ? 'a déplacé ton entretien' : "te propose un entretien {$interview->type->label()}")
             ." pour \"{$candidature->jobOffer?->title}\" : {$this->interviewDate($interview)}.";
-        if ($interview->meeting_url) {
-            $body .= " Lien : {$interview->meeting_url}";
+
+        $video = $interview->call_session_id !== null;
+        if ($video) {
+            $body .= ' Rejoins la salle depuis ton espace Goriya Meet.';
         } elseif ($interview->location) {
             $body .= " Lieu : {$interview->location}";
         }
 
-        $this->notifyCandidate($candidature, $title, $body);
+        // Visio : le lien mène à GORIYA Meet, où la salle attend le candidat.
+        $this->notifyCandidate($candidature, $title, $body, $video ? '/appels' : '/mes-offres');
     }
 
     public function notifyInterviewCancelled(RecruitmentInterview $interview): void
@@ -196,14 +199,14 @@ class NotificationService
         return $interview->scheduled_at->setTimezone('Africa/Abidjan')->locale('fr')->isoFormat('dddd D MMMM YYYY [à] HH[h]mm');
     }
 
-    private function notifyCandidate(Candidature $candidature, string $title, string $body): void
+    private function notifyCandidate(Candidature $candidature, string $title, string $body, string $link = '/mes-offres'): void
     {
         Notification::create([
             'user_id' => $candidature->user_id,
             'type' => NotificationType::APPLICATION_STATUS,
             'title' => $title,
             'body' => $body,
-            'link' => '/mes-offres',
+            'link' => $link,
         ]);
 
         if ($candidature->user) {

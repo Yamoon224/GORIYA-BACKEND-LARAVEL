@@ -8,6 +8,7 @@ use App\Enums\CallSessionStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -54,5 +55,14 @@ class CallSession extends Model
     public function participants(): HasMany
     {
         return $this->hasMany(CallParticipant::class);
+    }
+
+    /**
+     * Invités qui voient la session dans leur liste sans en être l'hôte — le
+     * candidat convoqué à un entretien de recrutement.
+     */
+    public function guests(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'call_session_guests')->withTimestamps();
     }
 }

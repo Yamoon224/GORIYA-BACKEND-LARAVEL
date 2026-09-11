@@ -11,6 +11,8 @@ use OpenApi\Attributes as OA;
     properties: [
         new OA\Property(property: 'id', type: 'string', format: 'uuid'),
         new OA\Property(property: 'hostId', type: 'string', format: 'uuid'),
+        new OA\Property(property: 'isHost', type: 'boolean', description: "L'utilisateur connecté est l'hôte (sinon invité)"),
+        new OA\Property(property: 'hostName', type: 'string', nullable: true, description: 'Liste des sessions uniquement'),
         new OA\Property(property: 'title', type: 'string'),
         new OA\Property(property: 'roomSlug', type: 'string'),
         new OA\Property(property: 'scheduledAt', type: 'string', format: 'date-time', nullable: true),
@@ -30,6 +32,9 @@ class CallSessionResource extends JsonResource
         return [
             'id' => $this->id,
             'hostId' => $this->host_id,
+            // Un invité (candidat convoqué) rejoint la session mais ne la clôture pas.
+            'isHost' => $request->user()?->id === $this->host_id,
+            'hostName' => $this->whenLoaded('host', fn () => $this->host?->name),
             'title' => $this->title,
             'roomSlug' => $this->room_slug,
             'scheduledAt' => $this->scheduled_at,

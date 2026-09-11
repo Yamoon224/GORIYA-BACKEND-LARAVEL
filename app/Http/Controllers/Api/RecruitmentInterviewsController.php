@@ -62,8 +62,7 @@ class RecruitmentInterviewsController extends Controller
             new OA\Property(property: 'type', type: 'string', enum: ['PHONE', 'VIDEO', 'ONSITE']),
             new OA\Property(property: 'scheduledAt', type: 'string', format: 'date-time'),
             new OA\Property(property: 'durationMinutes', type: 'integer', example: 45),
-            new OA\Property(property: 'location', type: 'string', nullable: true),
-            new OA\Property(property: 'meetingUrl', type: 'string', nullable: true),
+            new OA\Property(property: 'location', type: 'string', nullable: true, description: 'Adresse ou numéro ; VIDEO ouvre une salle GORIYA Meet'),
             new OA\Property(property: 'interviewers', type: 'string', nullable: true),
             new OA\Property(property: 'description', type: 'string', nullable: true),
             new OA\Property(property: 'notifyCandidate', type: 'boolean', example: true),
@@ -103,7 +102,7 @@ class RecruitmentInterviewsController extends Controller
         $interview = $this->interviewOrFail($id, $request);
 
         return new RecruitmentInterviewResource(
-            $this->recruitment->updateInterview($interview, $request->validate($this->rules(true), $this->messages())),
+            $this->recruitment->updateInterview($interview, $request->user(), $request->validate($this->rules(true), $this->messages())),
         );
     }
 
@@ -175,7 +174,6 @@ class RecruitmentInterviewsController extends Controller
             'scheduledAt' => [$required, 'date'],
             'durationMinutes' => ['nullable', 'integer', 'min:10', 'max:480'],
             'location' => ['nullable', 'string', 'max:255'],
-            'meetingUrl' => ['nullable', 'url', 'max:500'],
             'interviewers' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'notifyCandidate' => ['nullable', 'boolean'],
@@ -189,7 +187,6 @@ class RecruitmentInterviewsController extends Controller
     {
         return [
             'scheduledAt.required' => "Indiquez la date et l'heure de l'entretien.",
-            'meetingUrl.url' => 'Le lien de visioconférence doit être une adresse web complète (https://…).',
             'durationMinutes.min' => "Un entretien dure au moins 10 minutes.",
         ];
     }

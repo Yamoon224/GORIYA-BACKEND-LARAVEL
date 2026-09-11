@@ -28,7 +28,7 @@ class RecruitmentInterview extends Model
         'scheduled_at',
         'duration_minutes',
         'location',
-        'meeting_url',
+        'call_session_id',
         'interviewers',
         'description',
         'status',
@@ -62,6 +62,12 @@ class RecruitmentInterview extends Model
     public function candidature(): BelongsTo
     {
         return $this->belongsTo(Candidature::class);
+    }
+
+    /** Salle GORIYA Meet d'un entretien en visioconférence. */
+    public function callSession(): BelongsTo
+    {
+        return $this->belongsTo(CallSession::class);
     }
 
     public function creator(): BelongsTo
