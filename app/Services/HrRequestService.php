@@ -23,12 +23,12 @@ class HrRequestService
 
     public function listFor(Employee $employee): Collection
     {
-        return $employee->hrRequests()->with('decider')->orderByDesc('created_at')->get();
+        return $employee->hrRequests()->with(['decider', 'document'])->orderByDesc('created_at')->get();
     }
 
     public function find(string $id, string $companyId): ?HrRequest
     {
-        return HrRequest::where('company_id', $companyId)->with('decider')->find($id);
+        return HrRequest::where('company_id', $companyId)->with(['decider', 'document'])->find($id);
     }
 
     /**

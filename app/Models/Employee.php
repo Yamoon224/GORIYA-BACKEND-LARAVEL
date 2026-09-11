@@ -129,6 +129,11 @@ class Employee extends Model
         return $this->hasMany(EmployeeContract::class);
     }
 
+    public function documents(): HasMany
+    {
+        return $this->hasMany(EmployeeDocument::class);
+    }
+
     /** Contrat en vigueur — jamais plus d'un, garanti par EmployeeContractService. */
     public function activeContract(): HasOne
     {

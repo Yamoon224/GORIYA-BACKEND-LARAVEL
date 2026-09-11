@@ -42,6 +42,12 @@ class HrRequestResource extends JsonResource
             'decisionComment' => $this->decision_comment,
             // Avance sur salaire déjà retenue sur un bulletin de paie validé.
             'payslipId' => $this->payslip_id,
+            // Attestation délivrée en réponse à la demande (Documents RH).
+            'document' => $this->whenLoaded('document', fn () => $this->document ? [
+                'id' => $this->document->id,
+                'title' => $this->document->title,
+                'fileName' => $this->document->file_name,
+            ] : null),
             'createdAt' => $this->created_at,
         ];
     }

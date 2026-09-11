@@ -10,6 +10,7 @@ use App\Models\Candidature;
 use App\Models\Conversation;
 use App\Models\DeviceToken;
 use App\Models\Notification;
+use App\Models\RecruitmentInterview;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -148,6 +149,65 @@ class NotificationService
             ]);
 
             $this->pushToUser($recipient, $title, $body);
+        }
+    }
+
+    /**
+     * Entretien planifié — ou déplacé — par le service RH qui recrute. L'heure
+     * est donnée à l'heure d'Abidjan, celle des entreprises de la plateforme :
+     * le serveur ne connaît pas le fuseau du candidat.
+     */
+    public function notifyInterviewScheduled(RecruitmentInterview $interview, bool $rescheduled = false): void
+    {
+        $candidature = $interview->candidature()->with(['jobOffer.company', 'user'])->first();
+        if (! $candidature) {
+            return;
+        }
+
+        $company = $candidature->jobOffer?->company?->name ?? "L'entreprise";
+        $title = $rescheduled ? 'Entretien déplacé' : 'Entretien programmé';
+        $body = "{$company} ".($rescheduled ? 'a déplacé ton entretien' : "te propose un entretien {$interview->type->label()}")
+            ." pour \"{$candidature->jobOffer?->title}\" : {$this->interviewDate($interview)}.";
+        if ($interview->meeting_url) {
+            $body .= " Lien : {$interview->meeting_url}";
+        } elseif ($interview->location) {
+            $body .= " Lieu : {$interview->location}";
+        }
+
+        $this->notifyCandidate($candidature, $title, $body);
+    }
+
+    public function notifyInterviewCancelled(RecruitmentInterview $interview): void
+    {
+        $candidature = $interview->candidature()->with(['jobOffer', 'user'])->first();
+        if (! $candidature) {
+            return;
+        }
+
+        $this->notifyCandidate(
+            $candidature,
+            'Entretien annulé',
+            "Ton entretien du {$this->interviewDate($interview)} pour \"{$candidature->jobOffer?->title}\" est annulé.",
+        );
+    }
+
+    private function interviewDate(RecruitmentInterview $interview): string
+    {
+        return $interview->scheduled_at->setTimezone('Africa/Abidjan')->locale('fr')->isoFormat('dddd D MMMM YYYY [à] HH[h]mm');
+    }
+
+    private function notifyCandidate(Candidature $candidature, string $title, string $body): void
+    {
+        Notification::create([
+            'user_id' => $candidature->user_id,
+            'type' => NotificationType::APPLICATION_STATUS,
+            'title' => $title,
+            'body' => $body,
+            'link' => '/mes-offres',
+        ]);
+
+        if ($candidature->user) {
+            $this->pushToUser($candidature->user, $title, $body);
         }
     }
 

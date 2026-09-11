@@ -9,6 +9,7 @@ use App\Enums\HrWorkflowStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Demande RH d'un employé : attestation, avance sur salaire, formation,
@@ -58,5 +59,11 @@ class HrRequest extends Model
     public function decider(): BelongsTo
     {
         return $this->belongsTo(User::class, 'decided_by');
+    }
+
+    /** Attestation délivrée en réponse à la demande, le cas échéant. */
+    public function document(): HasOne
+    {
+        return $this->hasOne(EmployeeDocument::class);
     }
 }

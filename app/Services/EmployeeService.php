@@ -25,7 +25,11 @@ class EmployeeService
 {
     use MapsFieldsToColumns;
 
-    public function __construct(private readonly EmployeeContractService $contracts) {}
+    public function __construct(
+        private readonly EmployeeContractService $contracts,
+        private readonly RecruitmentService $recruitment,
+        private readonly EmployeeDocumentService $documents,
+    ) {}
 
     /** Correspondance champs d'API (camelCase) → colonnes. */
     private const FIELDS = [
@@ -88,6 +92,7 @@ class EmployeeService
         $attributes = $this->mapFields($data, self::FIELDS);
         $this->assertManager($companyId, $attributes['manager_id'] ?? null, null);
 
+        $candidature = null;
         if (! empty($data['candidatureId'])) {
             $candidature = $this->hireableCandidature($companyId, $data['candidatureId']);
             $attributes['candidature_id'] = $candidature->id;
@@ -106,9 +111,13 @@ class EmployeeService
 
         // Le formulaire d'ajout porte type, dates et salaire : ils ouvrent le
         // contrat initial, pour que l'historique des contrats commence avec la fiche.
-        $employee = DB::transaction(function () use ($attributes, $companyId, $author) {
+        $employee = DB::transaction(function () use ($attributes, $companyId, $author, $candidature) {
             $employee = Employee::create($attributes + ['company_id' => $companyId]);
             $this->contracts->createInitialFor($employee, $author);
+            // Le candidat quitte le pipeline de recrutement : étape « Embauché ».
+            if ($candidature) {
+                $this->recruitment->markHired($candidature, $author);
+            }
 
             return $employee;
         });
@@ -156,8 +165,9 @@ class EmployeeService
 
     public function delete(Employee $employee): void
     {
-        // Les lignes partent en cascade, pas les fichiers des contrats signés.
+        // Les lignes partent en cascade, pas les fichiers : contrats signés et documents RH.
         $this->contracts->deleteDocumentsOf($employee);
+        $this->documents->deleteFilesOf($employee);
         $employee->delete();
     }
 

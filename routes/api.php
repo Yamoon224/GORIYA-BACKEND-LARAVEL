@@ -42,6 +42,9 @@ use App\Http\Controllers\Api\External\ExternalJobOffersController;
 use App\Http\Controllers\Api\HrRequestsController;
 use App\Http\Controllers\Api\InterviewSessionsController;
 use App\Http\Controllers\Api\JobOffersController;
+use App\Http\Controllers\Api\EmployeeDocumentsController;
+use App\Http\Controllers\Api\RecruitmentController;
+use App\Http\Controllers\Api\RecruitmentInterviewsController;
 use App\Http\Controllers\Api\LunionMeetWebhookController;
 use App\Http\Controllers\Api\MatchingResultsController;
 use App\Http\Controllers\Api\MessagesController;
@@ -329,6 +332,25 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/employees/{employeeId}/hr-requests', [HrRequestsController::class, 'store']);
     Route::patch('/hr-requests/{id}/status', [HrRequestsController::class, 'updateStatus']);
     Route::delete('/hr-requests/{id}', [HrRequestsController::class, 'destroy']);
+
+    Route::get('/recruitment/job-offers', [RecruitmentController::class, 'jobOffers']);
+    Route::get('/recruitment/candidates', [RecruitmentController::class, 'candidates']);
+    Route::get('/recruitment/candidates/{id}', [RecruitmentController::class, 'show']);
+    Route::patch('/recruitment/candidates/{id}/stage', [RecruitmentController::class, 'moveStage']);
+    Route::post('/recruitment/candidates/{id}/notes', [RecruitmentController::class, 'storeNote']);
+    Route::delete('/recruitment/notes/{id}', [RecruitmentController::class, 'destroyNote']);
+    Route::get('/recruitment/interviews', [RecruitmentInterviewsController::class, 'index']);
+    Route::post('/recruitment/candidates/{id}/interviews', [RecruitmentInterviewsController::class, 'store']);
+    Route::patch('/recruitment/interviews/{id}', [RecruitmentInterviewsController::class, 'update']);
+    Route::patch('/recruitment/interviews/{id}/outcome', [RecruitmentInterviewsController::class, 'outcome']);
+    Route::delete('/recruitment/interviews/{id}', [RecruitmentInterviewsController::class, 'destroy']);
+
+    Route::get('/hr-documents', [EmployeeDocumentsController::class, 'index']);
+    Route::post('/hr-documents', [EmployeeDocumentsController::class, 'store']);
+    Route::patch('/hr-documents/{id}', [EmployeeDocumentsController::class, 'update']);
+    Route::delete('/hr-documents/{id}', [EmployeeDocumentsController::class, 'destroy']);
+    Route::get('/hr-documents/{id}/download', [EmployeeDocumentsController::class, 'download']);
+    Route::post('/employees/{employeeId}/documents/generate', [EmployeeDocumentsController::class, 'generate']);
 });
 
 // --- Articles (blog Goriya) ---
