@@ -64,8 +64,8 @@ class SubscriptionPlanSeeder extends Seeder
                 // Offre de découverte entreprise : activable sans paiement
                 // (SubscriptionService::subscribe n'accepte que les plans à 0)
                 // pour permettre de tester l'espace recrutement avant de
-                // souscrire. Les fonctionnalités premium (Services RH, appels
-                // vidéo, intégrations API) restent fermées — voir
+                // souscrire. Les Services RH y sont inclus ; restent fermés les
+                // appels vidéo Goriya Meet et les intégrations API — voir
                 // entreprise/lib/plan-access.ts.
                 'name' => 'Offre gratuite',
                 'price' => 0,
@@ -78,6 +78,7 @@ class SubscriptionPlanSeeder extends Seeder
                     'Suivi des candidatures',
                     'Messagerie avec les candidats',
                     'Profil entreprise complet',
+                    'Services RH : employés, recrutements, contrats, congés, paie et documents',
                 ],
                 'is_active' => true,
             ],
