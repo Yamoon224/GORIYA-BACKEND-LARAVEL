@@ -20,7 +20,10 @@ return new class extends Migration
             $table->timestamp('sent_at')->nullable();
             $table->timestamps();
 
-            $table->unique(['mail_campaign_id', 'potential_partner_id']);
+            // Nom explicite et court : le nom auto-généré par Laravel pour ces
+            // deux colonnes dépasse la limite de 64 caractères d'un identifiant
+            // MySQL (erreur 1059).
+            $table->unique(['mail_campaign_id', 'potential_partner_id'], 'campaign_recipients_unique');
         });
     }
 
