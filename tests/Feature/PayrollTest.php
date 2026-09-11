@@ -74,7 +74,8 @@ class PayrollTest extends TestCase
     }
 
     /** @return array<string, mixed> */
-    private function run(User $rh, int $year = 2026, int $month = 9): array
+    /** Nommée ainsi : `run()` est une méthode finale de PHPUnit\Framework\TestCase. */
+    private function openRun(User $rh, int $year = 2026, int $month = 9): array
     {
         return $this->actingAs($rh, 'api')
             ->postJson('/payroll/runs', ['year' => $year, 'month' => $month])
@@ -93,7 +94,7 @@ class PayrollTest extends TestCase
             ->assertJsonPath('preset', 'CI')
             ->assertJsonCount(6, 'contributions');
 
-        $run = $this->run($rh);
+        $run = $this->openRun($rh);
         $this->assertSame('DRAFT', $run['status']);
         $this->assertSame(1, $run['employeesCount']);
 
@@ -127,7 +128,7 @@ class PayrollTest extends TestCase
             ->json('id');
         $this->actingAs($rh, 'api')->patchJson("/employee-leaves/{$leave}/status", ['status' => 'APPROVED'])->assertOk();
 
-        $payslip = $this->run($rh)['payslips'][0];
+        $payslip = $this->openRun($rh)['payslips'][0];
 
         // 13 jours ouvrés couverts (du 14 au 30) dont 2 d'absence non rémunérée.
         $this->assertSame(11, $payslip['workedDays']);
@@ -142,7 +143,7 @@ class PayrollTest extends TestCase
         $this->employee($rh, ['contractType' => 'CDD', 'contractEndDate' => '2026-09-18', 'salary' => 440000]);
         $this->employee($rh, ['firstName' => 'Yao', 'lastName' => "N'Guessan", 'contractType' => 'CDD', 'contractEndDate' => '2026-08-31']);
 
-        $run = $this->run($rh);
+        $run = $this->openRun($rh);
 
         $this->assertSame(1, $run['employeesCount']);
         // Du 1er au 18 : 14 jours ouvrés, 8 non couverts.
@@ -158,7 +159,7 @@ class PayrollTest extends TestCase
             ->json('id');
         $this->actingAs($rh, 'api')->patchJson("/hr-requests/{$advance}/status", ['status' => 'APPROVED'])->assertOk();
 
-        $september = $this->run($rh);
+        $september = $this->openRun($rh);
         $this->assertSame(150000, $september['payslips'][0]['advances']);
         $this->assertSame(236500, $september['payslips'][0]['net']);
 
@@ -166,7 +167,7 @@ class PayrollTest extends TestCase
         $this->assertNotNull($this->actingAs($rh, 'api')->getJson("/employees/{$id}/hr-requests")->json('0.payslipId'));
 
         Carbon::setTestNow('2026-10-05 09:00:00');
-        $october = $this->run($rh, 2026, 10);
+        $october = $this->openRun($rh, 2026, 10);
         $this->assertSame(0, $october['payslips'][0]['advances']);
         $this->assertSame(386500, $october['payslips'][0]['net']);
     }
@@ -175,7 +176,7 @@ class PayrollTest extends TestCase
     {
         $rh = $this->enterprise();
         $this->employee($rh);
-        $run = $this->run($rh);
+        $run = $this->openRun($rh);
         $payslip = $run['payslips'][0]['id'];
 
         $this->actingAs($rh, 'api')->postJson('/payroll/runs', ['year' => 2026, 'month' => 9])->assertStatus(400);
@@ -219,7 +220,7 @@ class PayrollTest extends TestCase
     {
         $rh = $this->enterprise();
         $id = $this->employee($rh, ['salary' => null]);
-        $run = $this->run($rh);
+        $run = $this->openRun($rh);
 
         $this->assertSame('MISSING_SALARY', $run['payslips'][0]['warnings'][0]['code']);
         $this->actingAs($rh, 'api')->postJson("/payroll/runs/{$run['id']}/validate")->assertStatus(400);
@@ -259,7 +260,7 @@ class PayrollTest extends TestCase
         $put(array_merge($valid, ['taxBrackets' => [['upTo' => null, 'rate' => 150]]]))->assertStatus(400);
         $put($valid)->assertOk()->assertJsonPath('preset', 'CUSTOM')->assertJsonPath('taxLabel', 'IRPP');
 
-        $payslip = $this->run($rh)['payslips'][0];
+        $payslip = $this->openRun($rh)['payslips'][0];
         $this->assertSame(25000, $payslip['employeeContributions']);
         $this->assertSame(50000, $payslip['employerContributions']);
         // (500 000 − 25 000) × 80 % = 380 000 ; (380 000 − 100 000) × 10 %.
@@ -274,7 +275,7 @@ class PayrollTest extends TestCase
     {
         $rh = $this->enterprise();
         $this->employee($rh);
-        $run = $this->run($rh);
+        $run = $this->openRun($rh);
 
         $export = $this->actingAs($rh, 'api')->get("/payroll/runs/{$run['id']}/export");
         $export->assertOk()->assertDownload('journal-paie-2026-09.csv');
@@ -291,7 +292,7 @@ class PayrollTest extends TestCase
     {
         $rh = $this->enterprise();
         $id = $this->employee($rh);
-        $run = $this->run($rh);
+        $run = $this->openRun($rh);
 
         $this->actingAs($rh, 'api')->getJson("/employees/{$id}/payslips")->assertOk()->assertJsonCount(1)->assertJsonPath('0.run.month', 9);
 
