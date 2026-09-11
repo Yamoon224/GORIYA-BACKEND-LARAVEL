@@ -10,6 +10,7 @@ use App\Http\Requests\SubmitSurveyResponseRequest;
 use App\Http\Requests\UpdateSurveyStatusRequest;
 use App\Http\Resources\EmployeeSurveyResource;
 use App\Models\EmployeeSurvey;
+use App\Services\EmployeeService;
 use App\Services\EmployeeSurveyService;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
@@ -19,7 +20,10 @@ class EmployeeSurveysController extends Controller
 {
     use AuthorizesOwnership;
 
-    public function __construct(private readonly EmployeeSurveyService $surveyService) {}
+    public function __construct(
+        private readonly EmployeeSurveyService $surveyService,
+        private readonly EmployeeService $employees,
+    ) {}
 
     #[OA\Get(
         path: '/employee-surveys',
@@ -156,7 +160,16 @@ class EmployeeSurveysController extends Controller
             abort(404, 'EmployeeSurvey not found');
         }
 
-        $this->authorizeOwnerOrAdmin($user, $user->company_id === $survey->company_id);
+        // L'appelant n'est jamais un compte ENTREPRISE (User.company_id) ici
+        // mais l'employé lui-même : l'autorisation passe donc par sa fiche
+        // Employee, pas par User.company_id (toujours vide pour un USER).
+        $employee = $user ? $this->employees->findByUser($user->id) : null;
+        $isCompanyEmployee = $employee && $employee->company_id === $survey->company_id;
+        $this->authorizeOwnerOrAdmin($user, $isCompanyEmployee, "Réservé aux employés de l'entreprise concernée.");
+
+        if ($isCompanyEmployee && $survey->department && $employee->department !== $survey->department) {
+            abort(403, "Cette évaluation est réservée au département {$survey->department}.");
+        }
 
         $this->surveyService->submitResponse($survey, $user, $request->validated()['answers']);
 

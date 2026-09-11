@@ -4,12 +4,15 @@ namespace App\Services;
 
 use App\Contracts\PushNotificationServiceInterface;
 use App\Enums\CandidatureStatus;
+use App\Enums\HrWorkflowStatus;
 use App\Enums\NotificationType;
 use App\Enums\UserRole;
 use App\Models\Candidature;
 use App\Models\Conversation;
 use App\Models\DeviceToken;
 use App\Models\Employee;
+use App\Models\EmployeeLeave;
+use App\Models\HrRequest;
 use App\Models\Notification;
 use App\Models\RecruitmentInterview;
 use App\Models\User;
@@ -178,6 +181,68 @@ class NotificationService
 
         if ($employee->user) {
             $this->pushToUser($employee->user, $title, $body);
+        }
+    }
+
+    private const LEAVE_STATUS_LABEL = [
+        'APPROVED' => 'a été approuvée',
+        'REJECTED' => 'a été refusée',
+        'CANCELLED' => 'a été annulée',
+    ];
+
+    /**
+     * Décision de l'entreprise sur une demande de congé — voir
+     * EmployeeLeaveService::decide(). Rien n'est envoyé pour une fiche sans
+     * compte Goriya lié (employé ajouté manuellement, jamais associé).
+     */
+    public function notifyLeaveDecided(EmployeeLeave $leave): void
+    {
+        if (! $leave->employee?->user_id) {
+            return;
+        }
+
+        $label = self::LEAVE_STATUS_LABEL[$leave->status->value] ?? 'a été mise à jour';
+        $title = 'Demande de congé mise à jour';
+        $body = "Votre demande de congé du {$leave->start_date->format('d/m/Y')} au {$leave->end_date->format('d/m/Y')} {$label}.";
+
+        Notification::create([
+            'user_id' => $leave->employee->user_id,
+            'type' => NotificationType::SYSTEM,
+            'title' => $title,
+            'body' => $body,
+            'link' => '/espace-employe',
+        ]);
+
+        if ($leave->employee->user) {
+            $this->pushToUser($leave->employee->user, $title, $body);
+        }
+    }
+
+    /**
+     * Décision de l'entreprise sur une demande RH (attestation, avance…) —
+     * voir HrRequestService::decide(). « En cours » n'est pas une décision,
+     * on ne notifie pas cette étape intermédiaire.
+     */
+    public function notifyHrRequestDecided(HrRequest $hrRequest): void
+    {
+        if (! $hrRequest->employee?->user_id || $hrRequest->status === HrWorkflowStatus::IN_PROGRESS) {
+            return;
+        }
+
+        $label = self::LEAVE_STATUS_LABEL[$hrRequest->status->value] ?? 'a été mise à jour';
+        $title = 'Demande RH mise à jour';
+        $body = "Votre demande « {$hrRequest->subject} » {$label}.";
+
+        Notification::create([
+            'user_id' => $hrRequest->employee->user_id,
+            'type' => NotificationType::SYSTEM,
+            'title' => $title,
+            'body' => $body,
+            'link' => '/espace-employe',
+        ]);
+
+        if ($hrRequest->employee->user) {
+            $this->pushToUser($hrRequest->employee->user, $title, $body);
         }
     }
 

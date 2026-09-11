@@ -22,6 +22,8 @@ use OpenApi\Attributes as OA;
             ])
         ),
         new OA\Property(property: 'status', type: 'string', enum: ['DRAFT', 'ACTIVE', 'CLOSED']),
+        new OA\Property(property: 'dueDate', type: 'string', format: 'date', nullable: true),
+        new OA\Property(property: 'department', type: 'string', nullable: true),
         new OA\Property(property: 'createdAt', type: 'string', format: 'date-time'),
     ]
 )]
@@ -38,6 +40,8 @@ class EmployeeSurveyResource extends JsonResource
             'description' => $this->description,
             'questions' => $this->questions,
             'status' => $this->status,
+            'dueDate' => $this->due_date?->toDateString(),
+            'department' => $this->department,
             'createdAt' => $this->created_at,
         ];
     }

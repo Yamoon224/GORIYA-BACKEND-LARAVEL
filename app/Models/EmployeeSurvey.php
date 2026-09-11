@@ -31,6 +31,8 @@ class EmployeeSurvey extends Model
         'description',
         'questions',
         'status',
+        'due_date',
+        'department',
     ];
 
     /**
@@ -43,6 +45,7 @@ class EmployeeSurvey extends Model
         return [
             'status' => SurveyStatus::class,
             'questions' => 'array',
+            'due_date' => 'date',
         ];
     }
 

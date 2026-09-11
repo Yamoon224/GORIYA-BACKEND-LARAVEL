@@ -192,6 +192,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/me/employee/hr-requests', [MyEmployeeController::class, 'hrRequests']);
     Route::post('/me/employee/hr-requests', [MyEmployeeController::class, 'storeHrRequest']);
     Route::delete('/me/employee/hr-requests/{id}', [MyEmployeeController::class, 'destroyHrRequest']);
+    Route::get('/me/employee/evaluations', [MyEmployeeController::class, 'evaluations']);
 });
 
 // --- Portfolios ---

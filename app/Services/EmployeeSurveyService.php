@@ -5,10 +5,12 @@ namespace App\Services;
 use App\Contracts\HrInsightsServiceInterface;
 use App\Enums\SurveyQuestionType;
 use App\Enums\SurveyStatus;
+use App\Models\Employee;
 use App\Models\EmployeeSurvey;
 use App\Models\SurveyResponse;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
 
 /**
  * Enquêtes internes (satisfaction/évaluation) — création côté entreprise,
@@ -31,7 +33,24 @@ class EmployeeSurveyService
     }
 
     /**
-     * @param  array{title: string, description?: string, questions: array<int, array{id: string, question: string, type: string}>}  $data
+     * Évaluations actives visibles par cet employé dans son espace employé :
+     * celles de son entreprise, non ciblées sur un département (`null`) ou
+     * ciblées sur le sien.
+     */
+    public function listForEmployee(Employee $employee): Collection
+    {
+        return EmployeeSurvey::where('company_id', $employee->company_id)
+            ->where('status', SurveyStatus::ACTIVE)
+            ->where(function ($query) use ($employee) {
+                $query->whereNull('department')
+                    ->orWhere('department', $employee->department);
+            })
+            ->orderByDesc('created_at')
+            ->get();
+    }
+
+    /**
+     * @param  array{title: string, description?: string, questions: array<int, array{id: string, question: string, type: string}>, dueDate?: ?string, department?: ?string}  $data
      */
     public function create(User $companyUser, array $data): EmployeeSurvey
     {
@@ -42,7 +61,23 @@ class EmployeeSurveyService
             'description' => $data['description'] ?? null,
             'questions' => $data['questions'],
             'status' => SurveyStatus::DRAFT,
+            'due_date' => $data['dueDate'] ?? null,
+            'department' => $data['department'] ?? null,
         ]);
+    }
+
+    /**
+     * Clôture automatique des évaluations actives dont l'échéance est
+     * dépassée — appelé par CloseExpiredSurveysCommand (planifié quotidien).
+     *
+     * @return int Nombre d'évaluations clôturées
+     */
+    public function closeExpired(): int
+    {
+        return EmployeeSurvey::where('status', SurveyStatus::ACTIVE)
+            ->whereNotNull('due_date')
+            ->where('due_date', '<', Carbon::today())
+            ->update(['status' => SurveyStatus::CLOSED]);
     }
 
     public function updateStatus(EmployeeSurvey $survey, SurveyStatus $status): EmployeeSurvey

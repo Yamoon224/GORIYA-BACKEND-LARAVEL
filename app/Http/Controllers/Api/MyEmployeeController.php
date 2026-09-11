@@ -8,12 +8,14 @@ use App\Http\Requests\CreateEmployeeLeaveRequest;
 use App\Http\Requests\CreateHrRequestRequest;
 use App\Http\Resources\EmployeeLeaveResource;
 use App\Http\Resources\HrRequestResource;
+use App\Http\Resources\EmployeeSurveyResource;
 use App\Http\Resources\MyEmployeeResource;
 use App\Models\Employee;
 use App\Models\EmployeeLeave;
 use App\Models\HrRequest;
 use App\Services\EmployeeLeaveService;
 use App\Services\EmployeeService;
+use App\Services\EmployeeSurveyService;
 use App\Services\HrRequestService;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
@@ -37,6 +39,7 @@ class MyEmployeeController extends Controller
         private readonly EmployeeService $employees,
         private readonly EmployeeLeaveService $leaves,
         private readonly HrRequestService $hrRequests,
+        private readonly EmployeeSurveyService $surveys,
     ) {}
 
     #[OA\Get(
@@ -167,6 +170,21 @@ class MyEmployeeController extends Controller
         $this->hrRequests->delete($this->myHrRequestOrFail($id, $request));
 
         return response()->json(['message' => 'Demande supprimée']);
+    }
+
+    #[OA\Get(
+        path: '/me/employee/evaluations',
+        tags: ['My Employee'],
+        summary: "Évaluations actives visibles par l'employé (toute l'entreprise, ou son département si ciblée)",
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Évaluations', content: new OA\JsonContent(type: 'array', items: new OA\Items(ref: '#/components/schemas/EmployeeSurvey'))),
+            new OA\Response(response: 404, description: "Vous n'avez jamais été employé sur Goriya"),
+        ]
+    )]
+    public function evaluations(Request $request)
+    {
+        return EmployeeSurveyResource::collection($this->surveys->listForEmployee($this->myEmployeeOrFail($request)));
     }
 
     private function myEmployee(Request $request): ?Employee

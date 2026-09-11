@@ -20,6 +20,8 @@ use OpenApi\Attributes as OA;
                 new OA\Property(property: 'type', type: 'string', enum: ['RATING', 'TEXT']),
             ])
         ),
+        new OA\Property(property: 'dueDate', type: 'string', format: 'date', nullable: true, description: 'Passée cette date, une évaluation ACTIVE est clôturée automatiquement.'),
+        new OA\Property(property: 'department', type: 'string', nullable: true, description: 'Département ciblé — absent/null = toute l\'entreprise.'),
     ]
 )]
 class CreateEmployeeSurveyRequest extends FormRequest
@@ -41,6 +43,8 @@ class CreateEmployeeSurveyRequest extends FormRequest
             'questions.*.id' => ['required', 'string'],
             'questions.*.question' => ['required', 'string'],
             'questions.*.type' => ['required', 'string', 'in:RATING,TEXT'],
+            'dueDate' => ['nullable', 'date'],
+            'department' => ['nullable', 'string', 'max:100'],
         ];
     }
 }

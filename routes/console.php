@@ -24,3 +24,7 @@ Artisan::command('inspire', function () {
 Schedule::command('queue:work --stop-when-empty --max-time=55 --tries=3')
     ->everyMinute()
     ->withoutOverlapping();
+
+// Clôture les évaluations (EmployeeSurvey) actives dont l'échéance est
+// dépassée — voir CloseExpiredSurveysCommand.
+Schedule::command('surveys:close-expired')->daily();

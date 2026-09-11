@@ -28,7 +28,10 @@ class EmployeeLeaveService
         'APPROVED' => ['CANCELLED'],
     ];
 
-    public function __construct(private readonly EmployeeService $employees) {}
+    public function __construct(
+        private readonly EmployeeService $employees,
+        private readonly NotificationService $notifications,
+    ) {}
 
     public function listFor(Employee $employee): Collection
     {
@@ -147,6 +150,8 @@ class EmployeeLeaveService
             'decided_at' => now(),
             'decision_comment' => $comment,
         ]);
+
+        $this->notifications->notifyLeaveDecided($leave);
 
         return $leave->load('decider');
     }

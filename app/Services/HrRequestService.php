@@ -21,6 +21,8 @@ class HrRequestService
         'IN_PROGRESS' => ['APPROVED', 'REJECTED', 'CANCELLED'],
     ];
 
+    public function __construct(private readonly NotificationService $notifications) {}
+
     public function listFor(Employee $employee): Collection
     {
         return $employee->hrRequests()->with(['decider', 'document'])->orderByDesc('created_at')->get();
@@ -66,6 +68,8 @@ class HrRequestService
             'decided_at' => $isDecision ? now() : null,
             'decision_comment' => $comment ?? $hrRequest->decision_comment,
         ]);
+
+        $this->notifications->notifyHrRequestDecided($hrRequest);
 
         return $hrRequest->load('decider');
     }
