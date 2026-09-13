@@ -24,6 +24,7 @@ class UserSubscription extends Model
         'status',
         'start_date',
         'end_date',
+        'period_months',
         'auto_renew',
     ];
 
@@ -38,6 +39,7 @@ class UserSubscription extends Model
             'status' => SubscriptionStatus::class,
             'start_date' => 'datetime',
             'end_date' => 'datetime',
+            'period_months' => 'integer',
             'auto_renew' => 'boolean',
         ];
     }

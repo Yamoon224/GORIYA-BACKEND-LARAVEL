@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Contracts\HostedCheckoutGatewayInterface;
-use App\Enums\BillingPeriod;
 use App\Enums\SubscriptionStatus;
 use App\Enums\TransactionStatus;
 use App\Enums\UserRole;
@@ -160,10 +159,20 @@ class SubscriptionService
             abort(400, 'Ce plan est gratuit, utilisez /subscribe directement');
         }
 
+        // Périodicité entreprise (1/3/6/12 mois) : le prix catalogue est
+        // toujours mensuel, le montant facturé se multiplie par la durée
+        // choisie. Les plans USER (Standard/Premium) n'ont pas
+        // `available_periods` -> restent fixés à 1 mois quoi qu'on envoie.
+        $periodMonths = (int) ($data['periodMonths'] ?? 1);
+        if (! in_array($periodMonths, $plan->allowedPeriods(), true)) {
+            $periodMonths = 1;
+        }
+
         $gatewayName = $data['gateway'] ?? $this->paymentGatewayManager->defaultGatewayName();
         $currency = $data['currency'] ?? 'XOF';
+        $basePrice = (float) $plan->price * $periodMonths;
         // XOF n'a pas de sous-unité décimale — le montant doit être un entier.
-        $amount = $currency === 'XOF' ? (int) round((float) $plan->price) : (float) $plan->price;
+        $amount = $currency === 'XOF' ? (int) round($basePrice) : $basePrice;
         $clientReference = "{$data['userId']}_{$data['planId']}_".(int) round(microtime(true) * 1000);
 
         if ($this->paymentGatewayManager->supportsHostedCheckout($gatewayName)) {
@@ -179,7 +188,7 @@ class SubscriptionService
                 ...$this->customerDetails($data['userId'], $data['planId'], $data['customerPhone'] ?? null),
             ]);
 
-            $this->recordTransaction($data['userId'], $data['planId'], $gatewayName, $session['sessionId'], $amount, $currency);
+            $this->recordTransaction($data['userId'], $data['planId'], $gatewayName, $session['sessionId'], $amount, $currency, $periodMonths);
 
             return [
                 'gateway' => $gatewayName,
@@ -188,7 +197,7 @@ class SubscriptionService
             ];
         }
 
-        $this->recordTransaction($data['userId'], $data['planId'], $gatewayName, $clientReference, $amount, $currency);
+        $this->recordTransaction($data['userId'], $data['planId'], $gatewayName, $clientReference, $amount, $currency, $periodMonths);
 
         return [
             'gateway' => $gatewayName,
@@ -220,7 +229,15 @@ class SubscriptionService
             return new UserSubscriptionResource($existing);
         }
 
-        $sub = $this->performSubscribe($userId, $planId);
+        // Durée effectivement payée : tracée sur la Transaction au moment du
+        // checkout (pas reprise du query string, non fiable) — 1 mois par
+        // défaut si absente (anciennes transactions, ou plan sans période
+        // choisissable).
+        $periodMonths = (int) (Transaction::query()
+            ->where('gateway_transaction_id', $transactionId)
+            ->value('period_months') ?? 1);
+
+        $sub = $this->performSubscribe($userId, $planId, $periodMonths);
 
         return new UserSubscriptionResource($sub->load('plan'));
     }
@@ -304,7 +321,7 @@ class SubscriptionService
     | et verifyCheckout() pour éviter de dupliquer la logique.
     |----------------------------------------------------------------------
     */
-    private function performSubscribe(string $userId, string $planId): UserSubscription
+    private function performSubscribe(string $userId, string $planId, int $periodMonths = 1): UserSubscription
     {
         $plan = $this->subscriptionPlanRepository->find($planId);
         if (! $plan) {
@@ -313,10 +330,12 @@ class SubscriptionService
 
         $this->userSubscriptionRepository->cancelActiveForUser($userId);
 
+        // La durée vient de la période achetée (1/3/6/12 mois pour les
+        // plans entreprise à période choisissable) plutôt que de
+        // billing_period, qui ne distingue plus que MONTHLY/ANNUAL pour
+        // l'affichage catalogue.
         $startDate = now();
-        $endDate = $plan->billing_period === BillingPeriod::ANNUAL
-            ? $startDate->copy()->addYear()
-            : $startDate->copy()->addMonth();
+        $endDate = $startDate->copy()->addMonths(max(1, $periodMonths));
 
         return $this->userSubscriptionRepository->create([
             'user_id' => $userId,
@@ -324,6 +343,7 @@ class SubscriptionService
             'status' => SubscriptionStatus::ACTIVE,
             'start_date' => $startDate,
             'end_date' => $endDate,
+            'period_months' => max(1, $periodMonths),
             'auto_renew' => false,
         ]);
     }
@@ -350,7 +370,7 @@ class SubscriptionService
         ];
     }
 
-    private function recordTransaction(string $userId, string $planId, string $gateway, string $gatewayTransactionId, int|float $amount, string $currency): void
+    private function recordTransaction(string $userId, string $planId, string $gateway, string $gatewayTransactionId, int|float $amount, string $currency, int $periodMonths = 1): void
     {
         Transaction::create([
             'user_id' => $userId,
@@ -359,6 +379,7 @@ class SubscriptionService
             'gateway_transaction_id' => $gatewayTransactionId,
             'amount' => $amount,
             'currency' => $currency,
+            'period_months' => $periodMonths,
             'status' => TransactionStatus::PENDING,
         ]);
     }

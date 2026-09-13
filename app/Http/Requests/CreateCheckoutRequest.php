@@ -16,6 +16,7 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'successUrl', type: 'string', description: 'Requis pour wave/stripe/paiementpro (session hébergée)'),
         new OA\Property(property: 'errorUrl', type: 'string', description: 'Requis pour wave/stripe/paiementpro (session hébergée)'),
         new OA\Property(property: 'customerPhone', type: 'string', description: 'Téléphone du payeur — utilisé par paiementpro (Mobile Money)'),
+        new OA\Property(property: 'periodMonths', type: 'integer', enum: [1, 3, 6, 12], description: "Durée choisie ; doit figurer dans availablePeriods du plan (sinon 1 par défaut). Le montant facturé = prix mensuel du plan × periodMonths."),
     ]
 )]
 class CreateCheckoutRequest extends FormRequest
@@ -38,6 +39,10 @@ class CreateCheckoutRequest extends FormRequest
             'successUrl' => ['nullable', 'url'],
             'errorUrl' => ['nullable', 'url'],
             'customerPhone' => ['nullable', 'string', 'max:30'],
+            // Pas de whitelist stricte ici : une durée que le plan n'offre pas
+            // n'est pas une erreur de requête, elle retombe simplement à 1
+            // mois (voir SubscriptionService::checkout() -> allowedPeriods()).
+            'periodMonths' => ['nullable', 'integer', 'min:1'],
         ];
     }
 }

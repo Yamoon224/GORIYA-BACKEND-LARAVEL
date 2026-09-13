@@ -23,8 +23,12 @@ class SubscriptionPlan extends Model
         'name',
         'price',
         'billing_period',
+        'available_periods',
         'user_type',
         'features',
+        'notification_level',
+        'attempt_limit',
+        'reset_price',
         'is_active',
     ];
 
@@ -39,9 +43,24 @@ class SubscriptionPlan extends Model
             'billing_period' => BillingPeriod::class,
             'user_type' => SubscriptionUserType::class,
             'price' => 'decimal:2',
+            'available_periods' => 'array',
             'features' => 'array',
+            'attempt_limit' => 'integer',
+            'reset_price' => 'decimal:2',
             'is_active' => 'boolean',
         ];
+    }
+
+    /**
+     * Durées d'engagement permises à l'achat, en mois. Un plan sans
+     * `available_periods` (tous les plans USER) est fixe à 1 mois — voir
+     * SubscriptionService::checkout().
+     *
+     * @return array<int, int>
+     */
+    public function allowedPeriods(): array
+    {
+        return $this->available_periods ?: [1];
     }
 
     public function subscriptions(): HasMany

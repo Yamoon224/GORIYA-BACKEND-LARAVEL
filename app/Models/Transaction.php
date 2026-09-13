@@ -32,6 +32,7 @@ class Transaction extends Model
         'gateway_transaction_id',
         'amount',
         'currency',
+        'period_months',
         'status',
         'raw_payload',
     ];
@@ -47,6 +48,7 @@ class Transaction extends Model
             'gateway' => PaymentGateway::class,
             'status' => TransactionStatus::class,
             'amount' => 'decimal:2',
+            'period_months' => 'integer',
             'raw_payload' => 'array',
         ];
     }
