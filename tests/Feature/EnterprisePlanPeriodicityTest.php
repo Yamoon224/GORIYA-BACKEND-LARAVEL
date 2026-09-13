@@ -128,7 +128,7 @@ class EnterprisePlanPeriodicityTest extends TestCase
         ])->assertOk();
 
         $response->assertJsonPath('amount', 1999);
-        $this->assertSame(5, $plan->attempt_limit);
+        $this->assertSame(['cv_creation' => 5, 'document_generation' => 5, 'cv_analysis' => 5], $plan->feature_limits);
         $this->assertSame(500.0, (float) $plan->reset_price);
     }
 

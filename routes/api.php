@@ -37,6 +37,7 @@ use App\Http\Controllers\Api\EmployeeContractsController;
 use App\Http\Controllers\Api\EmployeeLeavesController;
 use App\Http\Controllers\Api\EmployeeSurveysController;
 use App\Http\Controllers\Api\EmployeesController;
+use App\Http\Controllers\Api\FeatureUsageController;
 use App\Http\Controllers\Api\EnrollmentsController;
 use App\Http\Controllers\Api\External\ExternalCandidateAssessmentsController;
 use App\Http\Controllers\Api\External\ExternalCandidaturesController;
@@ -149,6 +150,11 @@ Route::middleware('auth:api')->group(function () {
 
     // Bibliothèque de CV du candidat (étape « CV » du wizard de candidature).
     // POST pour l'upload : PHP ne parse pas les corps multipart en PATCH/PUT.
+    // Quota des fonctionnalités "Limité" du forfait actif (création de CV,
+    // génération de documents, analyse de CV) — voir FeatureUsageController.
+    Route::get('/me/feature-usage/{featureKey}', [FeatureUsageController::class, 'status']);
+    Route::post('/me/feature-usage/{featureKey}/consume', [FeatureUsageController::class, 'consume']);
+
     Route::get('/me/resumes', [MyResumesController::class, 'index']);
     Route::post('/me/resumes', [MyResumesController::class, 'store']);
     Route::patch('/me/resumes/{id}', [MyResumesController::class, 'update']);

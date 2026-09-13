@@ -16,6 +16,8 @@ use Illuminate\Support\Str;
  */
 class UserResumeService
 {
+    public function __construct(private readonly UserFeatureUsageService $featureUsageService) {}
+
     /**
      * PDF et Word uniquement — ce que les recruteurs peuvent réellement ouvrir,
      * et ce que l'analyse de CV sait déjà traiter.
@@ -60,6 +62,18 @@ class UserResumeService
     public function store(User $user, UploadedFile $file, ?string $name = null, string $source = 'upload'): UserResume
     {
         $source = in_array($source, self::SOURCES, true) ? $source : 'upload';
+
+        // Le quota "Créer un CV" (Standard: 5, Premium: 20) ne s'applique
+        // qu'au créateur de CV Goriya, pas au dépôt d'un CV déjà existant —
+        // voir UserFeatureUsageService et la grille tarifaire sept. 2026.
+        if ($source === 'builder') {
+            $usage = $this->featureUsageService->consume($user, 'cv_creation');
+            if (! $usage['allowed']) {
+                abort(403, $usage['limit'] > 0
+                    ? "Tu as utilisé tes {$usage['limit']} créations de CV incluses dans ton forfait ce mois-ci."
+                    : "La création de CV n'est pas incluse dans ton forfait actuel.");
+            }
+        }
 
         if (! in_array($file->getMimeType(), self::ALLOWED_MIME_TYPES, true)) {
             abort(400, 'Format non supporté : joignez un CV au format PDF ou Word.');

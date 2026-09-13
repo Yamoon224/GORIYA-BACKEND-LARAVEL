@@ -27,7 +27,7 @@ class SubscriptionPlan extends Model
         'user_type',
         'features',
         'notification_level',
-        'attempt_limit',
+        'feature_limits',
         'reset_price',
         'is_active',
     ];
@@ -45,7 +45,7 @@ class SubscriptionPlan extends Model
             'price' => 'decimal:2',
             'available_periods' => 'array',
             'features' => 'array',
-            'attempt_limit' => 'integer',
+            'feature_limits' => 'array',
             'reset_price' => 'decimal:2',
             'is_active' => 'boolean',
         ];
@@ -61,6 +61,18 @@ class SubscriptionPlan extends Model
     public function allowedPeriods(): array
     {
         return $this->available_periods ?: [1];
+    }
+
+    /**
+     * Limite d'utilisations de `$featureKey` pour ce plan ("cv_analysis",
+     * "cv_creation", "document_generation"), ou null si la fonctionnalité
+     * n'est simplement pas incluse dans ce plan — distinct de "illimitée" :
+     * aucun plan actuel n'offre un usage illimité de ces 3 fonctionnalités
+     * (voir UserFeatureUsageService).
+     */
+    public function featureLimit(string $featureKey): ?int
+    {
+        return $this->feature_limits[$featureKey] ?? null;
     }
 
     public function subscriptions(): HasMany

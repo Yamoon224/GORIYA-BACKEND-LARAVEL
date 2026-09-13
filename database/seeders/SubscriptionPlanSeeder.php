@@ -10,11 +10,13 @@ use Illuminate\Database\Seeder;
 /**
  * Grille tarifaire sept. 2026 (voir "FONCTIONNALITÉ GORIYA.pdf" partagé) :
  *  - "Limité" (Créer un CV / Générer des documents / Analyse de CV) veut dire
- *    un nombre de tentatives — 5 pour Standard, 20 pour Premium — épuisées
- *    puis rechargeables via un paiement de `reset_price` (500 XOF) qui les
- *    remet à 0. ⚠️ Catalogue uniquement : le décompte des tentatives et le
- *    paiement de réinitialisation restent à brancher côté fonctionnalités
- *    (création CV / génération documents / analyse CV).
+ *    un nombre de tentatives — 2 pour Grouilleur (analyse seulement), 5 pour
+ *    Standard, 20 pour Premium — par clé de `feature_limits`
+ *    (cv_creation/document_generation/cv_analysis). Une clé absente = la
+ *    fonctionnalité n'est pas incluse dans le plan, pas "illimitée". Épuisées,
+ *    elles se rechargent via un paiement de `reset_price` (500 XOF) qui remet
+ *    le compteur à 0 — voir UserFeatureUsageService et
+ *    SubscriptionService::checkoutUsageReset().
  *  - "Notification (d'offre) prioritaire" : FAIBLE = in-app, ELEVE = in-app
  *    + email (voir entreprise/lib/plan-access.ts et le check() du backend).
  *  - Entreprise (Business, Business+) : `available_periods` rend la
@@ -49,6 +51,7 @@ class SubscriptionPlanSeeder extends Seeder
                     'Valable 2 semaines',
                 ],
                 'notification_level' => 'FAIBLE',
+                'feature_limits' => ['cv_analysis' => 2],
                 'is_active' => true,
             ],
             [
@@ -67,7 +70,7 @@ class SubscriptionPlanSeeder extends Seeder
                     'Support prioritaire',
                 ],
                 'notification_level' => 'ELEVE',
-                'attempt_limit' => 5,
+                'feature_limits' => ['cv_creation' => 5, 'document_generation' => 5, 'cv_analysis' => 5],
                 'reset_price' => 500,
                 'is_active' => true,
             ],
@@ -91,7 +94,7 @@ class SubscriptionPlanSeeder extends Seeder
                     'Support prioritaire',
                 ],
                 'notification_level' => 'ELEVE',
-                'attempt_limit' => 20,
+                'feature_limits' => ['cv_creation' => 20, 'document_generation' => 20, 'cv_analysis' => 20],
                 'reset_price' => 500,
                 'is_active' => true,
             ],

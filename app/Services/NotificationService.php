@@ -7,6 +7,7 @@ use App\Enums\CandidatureStatus;
 use App\Enums\HrWorkflowStatus;
 use App\Enums\NotificationType;
 use App\Enums\UserRole;
+use App\Mail\NotificationMail;
 use App\Models\Candidature;
 use App\Models\Conversation;
 use App\Models\DeviceToken;
@@ -16,8 +17,10 @@ use App\Models\HrRequest;
 use App\Models\Notification;
 use App\Models\RecruitmentInterview;
 use App\Models\User;
+use App\Repositories\Contracts\UserSubscriptionRepositoryInterface;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Mail;
 
 /**
  * Notifications réelles par utilisateur — remplace le stub Cache global de
@@ -25,7 +28,11 @@ use Illuminate\Support\Facades\Cache;
  * (candidats/entreprises), qui restent hors du périmètre /admin/notifications.
  *
  * Chaque Notification créée est aussi relayée en push (voir pushToUser()) —
- * best-effort, ne bloque jamais la création de la notification in-app.
+ * best-effort, ne bloque jamais la création de la notification in-app — et,
+ * si le forfait actif du destinataire porte `notification_level: ELEVE`
+ * (Standard, Premium, Business+ — voir SubscriptionPlanSeeder), doublée par
+ * email (voir maybeEmail()). Les autres forfaits (Grouilleur, Business,
+ * aucun abonnement) restent en notification "Faible" : in-app uniquement.
  */
 class NotificationService
 {
@@ -35,7 +42,10 @@ class NotificationService
         'recommandations' => true,
     ];
 
-    public function __construct(private readonly PushNotificationServiceInterface $pushService) {}
+    public function __construct(
+        private readonly PushNotificationServiceInterface $pushService,
+        private readonly UserSubscriptionRepositoryInterface $userSubscriptionRepository,
+    ) {}
 
     public function listFor(User $user): Collection
     {
@@ -83,18 +93,20 @@ class NotificationService
         $title = 'Nouveau message';
         $body = mb_strimwidth($preview, 0, 140, '…');
 
+        // Chemin relatif : /messages existe dans standard/ comme dans
+        // entreprise/, et le paramètre `conversation` y ouvre directement le
+        // fil concerné plutôt que le premier de la liste.
+        $link = '/messages?conversation='.$conversation->id;
+
         Notification::create([
             'user_id' => $recipient->id,
             'type' => NotificationType::MESSAGE,
             'title' => $title,
             'body' => $body,
-            // Chemin relatif : /messages existe dans standard/ comme dans
-            // entreprise/, et le paramètre `conversation` y ouvre directement
-            // le fil concerné plutôt que le premier de la liste.
-            'link' => '/messages?conversation='.$conversation->id,
+            'link' => $link,
         ]);
 
-        $this->pushToUser($recipient, $title, $body);
+        $this->pushToUser($recipient, $title, $body, $link);
     }
 
     public function notifyApplicationStatusChanged(Candidature $candidature): void
@@ -113,17 +125,19 @@ class NotificationService
         $title = 'Candidature mise à jour';
         $body = "Ta candidature pour \"{$candidature->jobOffer?->title}\" {$label}.";
 
+        // Côté candidat, le suivi des candidatures vit dans /mes-offres.
+        $link = '/mes-offres';
+
         Notification::create([
             'user_id' => $candidature->user_id,
             'type' => NotificationType::APPLICATION_STATUS,
             'title' => $title,
             'body' => $body,
-            // Côté candidat, le suivi des candidatures vit dans /mes-offres.
-            'link' => '/mes-offres',
+            'link' => $link,
         ]);
 
         if ($candidature->user) {
-            $this->pushToUser($candidature->user, $title, $body);
+            $this->pushToUser($candidature->user, $title, $body, $link);
         }
     }
 
@@ -140,6 +154,8 @@ class NotificationService
 
         $title = 'Nouvelle candidature';
         $body = "{$candidature->candidate_name} a postulé à \"{$candidature->jobOffer?->title}\".";
+        // Côté entreprise, les candidatures reçues vivent dans /candidatures.
+        $link = '/candidatures';
 
         foreach ($recipients as $recipient) {
             Notification::create([
@@ -147,12 +163,10 @@ class NotificationService
                 'type' => NotificationType::APPLICATION_STATUS,
                 'title' => $title,
                 'body' => $body,
-                // Côté entreprise, les candidatures reçues vivent dans
-                // /candidatures.
-                'link' => '/candidatures',
+                'link' => $link,
             ]);
 
-            $this->pushToUser($recipient, $title, $body);
+            $this->pushToUser($recipient, $title, $body, $link);
         }
     }
 
@@ -171,16 +185,18 @@ class NotificationService
         $title = 'Vous avez été embauché·e !';
         $body = "{$employee->company?->name} vous a ajouté·e comme employé·e — poste : {$employee->job_title}. Accédez à votre espace employé pour suivre vos congés et demandes RH.";
 
+        $link = '/espace-employe';
+
         Notification::create([
             'user_id' => $employee->user_id,
             'type' => NotificationType::SYSTEM,
             'title' => $title,
             'body' => $body,
-            'link' => '/espace-employe',
+            'link' => $link,
         ]);
 
         if ($employee->user) {
-            $this->pushToUser($employee->user, $title, $body);
+            $this->pushToUser($employee->user, $title, $body, $link);
         }
     }
 
@@ -205,16 +221,18 @@ class NotificationService
         $title = 'Demande de congé mise à jour';
         $body = "Votre demande de congé du {$leave->start_date->format('d/m/Y')} au {$leave->end_date->format('d/m/Y')} {$label}.";
 
+        $link = '/espace-employe';
+
         Notification::create([
             'user_id' => $leave->employee->user_id,
             'type' => NotificationType::SYSTEM,
             'title' => $title,
             'body' => $body,
-            'link' => '/espace-employe',
+            'link' => $link,
         ]);
 
         if ($leave->employee->user) {
-            $this->pushToUser($leave->employee->user, $title, $body);
+            $this->pushToUser($leave->employee->user, $title, $body, $link);
         }
     }
 
@@ -233,16 +251,18 @@ class NotificationService
         $title = 'Demande RH mise à jour';
         $body = "Votre demande « {$hrRequest->subject} » {$label}.";
 
+        $link = '/espace-employe';
+
         Notification::create([
             'user_id' => $hrRequest->employee->user_id,
             'type' => NotificationType::SYSTEM,
             'title' => $title,
             'body' => $body,
-            'link' => '/espace-employe',
+            'link' => $link,
         ]);
 
         if ($hrRequest->employee->user) {
-            $this->pushToUser($hrRequest->employee->user, $title, $body);
+            $this->pushToUser($hrRequest->employee->user, $title, $body, $link);
         }
     }
 
@@ -304,21 +324,47 @@ class NotificationService
         ]);
 
         if ($candidature->user) {
-            $this->pushToUser($candidature->user, $title, $body);
+            $this->pushToUser($candidature->user, $title, $body, $link);
         }
     }
 
     /**
      * Best-effort : ne remonte jamais d'exception, la notification in-app
-     * fait déjà foi. Voir PushNotificationServiceInterface.
+     * fait déjà foi. Voir PushNotificationServiceInterface. Double aussi par
+     * email si le forfait actif du destinataire l'exige (voir maybeEmail()).
      */
-    private function pushToUser(User $user, string $title, string $body): void
+    private function pushToUser(User $user, string $title, string $body, string $link = '/'): void
     {
         $tokens = DeviceToken::where('user_id', $user->id)->pluck('token')->all();
-        if ($tokens === []) {
+        if ($tokens !== []) {
+            $this->pushService->sendToTokens($tokens, $title, $body);
+        }
+
+        $this->maybeEmail($user, $title, $body, $link);
+    }
+
+    /**
+     * "Notification prioritaire" ÉLEVÉE (Standard, Premium, Business+) veut
+     * dire in-app + email ; FAIBLE (Grouilleur, Business, ou aucun
+     * abonnement actif) reste in-app uniquement. Best-effort : un échec
+     * d'envoi ne doit jamais faire échouer l'action déclenchante (candidature,
+     * décision RH, etc.), la notification in-app fait déjà foi.
+     */
+    private function maybeEmail(User $user, string $title, string $body, string $link): void
+    {
+        if (! $user->email) {
             return;
         }
 
-        $this->pushService->sendToTokens($tokens, $title, $body);
+        $subscription = $this->userSubscriptionRepository->findActiveForUser($user->id);
+        if (($subscription?->plan?->notification_level) !== 'ELEVE') {
+            return;
+        }
+
+        try {
+            Mail::to($user->email)->queue(new NotificationMail($user, $title, $body, $link));
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 }

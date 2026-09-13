@@ -9,6 +9,7 @@ use App\Enums\UserRole;
 use App\Http\Resources\SubscriptionPlanResource;
 use App\Http\Resources\TransactionResource;
 use App\Http\Resources\UserSubscriptionResource;
+use App\Models\SubscriptionPlan;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\UserSubscription;
@@ -32,6 +33,7 @@ class SubscriptionService
         private readonly SubscriptionPlanRepositoryInterface $subscriptionPlanRepository,
         private readonly UserSubscriptionRepositoryInterface $userSubscriptionRepository,
         private readonly PaymentGatewayManager $paymentGatewayManager,
+        private readonly UserFeatureUsageService $userFeatureUsageService,
     ) {}
 
     public function plans(?string $userType): AnonymousResourceCollection
@@ -155,6 +157,13 @@ class SubscriptionService
         if (! $plan) {
             abort(404, 'Plan non trouvé');
         }
+
+        // Réinitialisation de quota (500 XOF) plutôt qu'abonnement : même
+        // gateways, montant et suite différents — voir checkoutUsageReset().
+        if (($data['purpose'] ?? 'SUBSCRIPTION') === 'USAGE_RESET') {
+            return $this->checkoutUsageReset($data, $plan);
+        }
+
         if ((float) $plan->price === 0.0) {
             abort(400, 'Ce plan est gratuit, utilisez /subscribe directement');
         }
@@ -207,11 +216,69 @@ class SubscriptionService
         ];
     }
 
-    public function verifyCheckout(string $transactionId, ?string $userId, ?string $planId, ?string $gateway = null): UserSubscriptionResource
+    /**
+     * Checkout d'une réinitialisation de quota (Standard/Premium, une fois
+     * les tentatives "Limité" épuisées) : même infrastructure de gateway que
+     * l'abonnement, montant = `reset_price` du plan actif plutôt que son prix.
+     * La transaction est marquée `purpose: USAGE_RESET` pour que
+     * verifyCheckout() remette le compteur à 0 au lieu d'activer un plan.
+     *
+     * @return array<string, mixed>
+     */
+    private function checkoutUsageReset(array $data, SubscriptionPlan $plan): array
     {
-        $gatewayName = $gateway
-            ?? Transaction::query()->where('gateway_transaction_id', $transactionId)->value('gateway')
-            ?? $this->paymentGatewayManager->defaultGatewayName();
+        $featureKey = $data['featureKey'] ?? null;
+        if (! in_array($featureKey, UserFeatureUsageService::FEATURES, true)) {
+            abort(400, 'Fonctionnalité inconnue.');
+        }
+        if ($plan->reset_price === null || (float) $plan->reset_price <= 0.0) {
+            abort(400, 'Ce forfait ne propose pas de réinitialisation payante.');
+        }
+
+        $gatewayName = $data['gateway'] ?? $this->paymentGatewayManager->defaultGatewayName();
+        $currency = $data['currency'] ?? 'XOF';
+        $price = (float) $plan->reset_price;
+        $amount = $currency === 'XOF' ? (int) round($price) : $price;
+        $clientReference = "{$data['userId']}_reset-{$featureKey}_".(int) round(microtime(true) * 1000);
+
+        if ($this->paymentGatewayManager->supportsHostedCheckout($gatewayName)) {
+            /** @var HostedCheckoutGatewayInterface $gateway */
+            $gateway = $this->paymentGatewayManager->resolve($gatewayName);
+            $session = $gateway->createCheckoutSession([
+                'amount' => $amount,
+                'currency' => $currency,
+                'successUrl' => $data['successUrl'] ?? config('app.url'),
+                'errorUrl' => $data['errorUrl'] ?? config('app.url'),
+                'clientReference' => $clientReference,
+                ...$this->customerDetails($data['userId'], $plan->id, $data['customerPhone'] ?? null),
+            ]);
+
+            $this->recordTransaction($data['userId'], $plan->id, $gatewayName, $session['sessionId'], $amount, $currency, 1, 'USAGE_RESET', $featureKey);
+
+            return [
+                'gateway' => $gatewayName,
+                'checkoutUrl' => $session['checkoutUrl'],
+                'sessionId' => $session['sessionId'],
+            ];
+        }
+
+        $this->recordTransaction($data['userId'], $plan->id, $gatewayName, $clientReference, $amount, $currency, 1, 'USAGE_RESET', $featureKey);
+
+        return [
+            'gateway' => $gatewayName,
+            'amount' => $amount,
+            'currency' => $currency,
+            'clientReference' => $clientReference,
+        ];
+    }
+
+    /**
+     * @return UserSubscriptionResource|array{reset: bool, featureKey: string, allowed: bool, used: int, remaining: int, limit: int}
+     */
+    public function verifyCheckout(string $transactionId, ?string $userId, ?string $planId, ?string $gateway = null): UserSubscriptionResource|array
+    {
+        $transactionRecord = Transaction::query()->where('gateway_transaction_id', $transactionId)->first();
+        $gatewayName = $gateway ?? $transactionRecord?->gateway?->value ?? $this->paymentGatewayManager->defaultGatewayName();
 
         $transaction = $this->paymentGatewayManager->resolve($gatewayName)->verifyTransaction($transactionId);
         $this->markTransactionResult($transactionId, $transaction);
@@ -219,6 +286,21 @@ class SubscriptionService
         if (($transaction['status'] ?? null) !== 'SUCCESS') {
             $status = $transaction['status'] ?? 'inconnu';
             abort(400, "Paiement non confirmé (statut: {$status})");
+        }
+
+        if ($transactionRecord && $transactionRecord->purpose === 'USAGE_RESET') {
+            $user = User::find($transactionRecord->user_id);
+            if (! $user) {
+                abort(404, 'Utilisateur introuvable');
+            }
+
+            $this->userFeatureUsageService->reset($user, $transactionRecord->feature_key);
+
+            return [
+                'reset' => true,
+                'featureKey' => $transactionRecord->feature_key,
+                ...$this->userFeatureUsageService->status($user, $transactionRecord->feature_key),
+            ];
         }
 
         // Idempotence : si déjà activé pour ce couple userId/planId, on
@@ -233,9 +315,7 @@ class SubscriptionService
         // checkout (pas reprise du query string, non fiable) — 1 mois par
         // défaut si absente (anciennes transactions, ou plan sans période
         // choisissable).
-        $periodMonths = (int) (Transaction::query()
-            ->where('gateway_transaction_id', $transactionId)
-            ->value('period_months') ?? 1);
+        $periodMonths = (int) ($transactionRecord?->period_months ?? 1);
 
         $sub = $this->performSubscribe($userId, $planId, $periodMonths);
 
@@ -370,7 +450,7 @@ class SubscriptionService
         ];
     }
 
-    private function recordTransaction(string $userId, string $planId, string $gateway, string $gatewayTransactionId, int|float $amount, string $currency, int $periodMonths = 1): void
+    private function recordTransaction(string $userId, string $planId, string $gateway, string $gatewayTransactionId, int|float $amount, string $currency, int $periodMonths = 1, string $purpose = 'SUBSCRIPTION', ?string $featureKey = null): void
     {
         Transaction::create([
             'user_id' => $userId,
@@ -380,6 +460,8 @@ class SubscriptionService
             'amount' => $amount,
             'currency' => $currency,
             'period_months' => $periodMonths,
+            'purpose' => $purpose,
+            'feature_key' => $featureKey,
             'status' => TransactionStatus::PENDING,
         ]);
     }

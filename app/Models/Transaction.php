@@ -33,6 +33,8 @@ class Transaction extends Model
         'amount',
         'currency',
         'period_months',
+        'purpose',
+        'feature_key',
         'status',
         'raw_payload',
     ];
