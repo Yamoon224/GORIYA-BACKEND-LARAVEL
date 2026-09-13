@@ -9,6 +9,7 @@ use App\Models\JobOffer;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Tests\Concerns\GivesActiveSubscription;
 use Tests\TestCase;
 
 /**
@@ -18,7 +19,15 @@ use Tests\TestCase;
  */
 class EmployeeSurveyTargetingTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, GivesActiveSubscription;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Enquêtes internes : réservées à Business+ depuis la grille
+        // tarifaire sept. 2026 (voir SubscriptionPlanSeeder + plan.feature).
+        $this->seedSubscriptionPlans();
+    }
 
     private function company(string $name = 'Goriya Test SARL'): Company
     {
@@ -32,7 +41,7 @@ class EmployeeSurveyTargetingTest extends TestCase
 
     private function enterprise(Company $company): User
     {
-        return User::create([
+        $rh = User::create([
             'name' => $company->name,
             'email' => 'rh-'.$company->id.'@example.ci',
             'password' => 'motdepasse-solide',
@@ -40,6 +49,9 @@ class EmployeeSurveyTargetingTest extends TestCase
             'status' => 'ACTIVE',
             'company_id' => $company->id,
         ]);
+        $this->giveActiveSubscription($rh, 'Business+');
+
+        return $rh;
     }
 
     /** Embauche $email dans $company, département $department, et retourne le User employé. */

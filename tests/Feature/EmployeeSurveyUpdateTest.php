@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\GivesActiveSubscription;
 use Tests\TestCase;
 
 /**
@@ -14,7 +15,15 @@ use Tests\TestCase;
  */
 class EmployeeSurveyUpdateTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, GivesActiveSubscription;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Enquêtes internes : réservées à Business+ depuis la grille
+        // tarifaire sept. 2026 (voir SubscriptionPlanSeeder + plan.feature).
+        $this->seedSubscriptionPlans();
+    }
 
     private function company(): Company
     {
@@ -25,10 +34,13 @@ class EmployeeSurveyUpdateTest extends TestCase
 
     private function enterprise(Company $company): User
     {
-        return User::create([
+        $rh = User::create([
             'name' => $company->name, 'email' => 'rh@example.ci', 'password' => 'motdepasse-solide',
             'role' => 'ENTREPRISE', 'status' => 'ACTIVE', 'company_id' => $company->id,
         ]);
+        $this->giveActiveSubscription($rh, 'Business+');
+
+        return $rh;
     }
 
     public function test_title_and_targeting_are_editable_anytime(): void

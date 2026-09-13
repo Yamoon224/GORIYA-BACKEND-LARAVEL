@@ -28,6 +28,7 @@ class SubscriptionPlan extends Model
         'features',
         'notification_level',
         'feature_limits',
+        'included_features',
         'reset_price',
         'is_active',
     ];
@@ -46,6 +47,7 @@ class SubscriptionPlan extends Model
             'available_periods' => 'array',
             'features' => 'array',
             'feature_limits' => 'array',
+            'included_features' => 'array',
             'reset_price' => 'decimal:2',
             'is_active' => 'boolean',
         ];
@@ -73,6 +75,18 @@ class SubscriptionPlan extends Model
     public function featureLimit(string $featureKey): ?int
     {
         return $this->feature_limits[$featureKey] ?? null;
+    }
+
+    /**
+     * Le plan inclut-il `featureKey` (Simulation d'entretien, Portfolio,
+     * Goriya Pitch, Goriya Docs, Recherche avancée entreprise ; Enquêtes
+     * internes, Gestion de paie, Intégration API côté entreprise…) ? Pour
+     * les fonctionnalités "Limité" à quota, préférer featureLimit() — celle-
+     * ci ne fait qu'un oui/non. Voir EnsurePlanIncludesFeature.
+     */
+    public function hasFeature(string $featureKey): bool
+    {
+        return in_array($featureKey, $this->included_features ?? [], true);
     }
 
     public function subscriptions(): HasMany

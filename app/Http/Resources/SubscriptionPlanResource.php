@@ -25,6 +25,13 @@ use OpenApi\Attributes as OA;
             additionalProperties: new OA\AdditionalProperties(type: 'integer')
         ),
         new OA\Property(property: 'resetPrice', type: 'number', format: 'float', nullable: true, description: 'Montant XOF pour réinitialiser un compteur de tentatives à 0'),
+        new OA\Property(
+            property: 'includedFeatures',
+            type: 'array',
+            items: new OA\Items(type: 'string'),
+            nullable: true,
+            description: "Clés des fonctionnalités incluses sans quota numérique (ex. simulation_entretien, goriya_pitch, enquetes_internes, gestion_paie) — vérifiées côté backend par le middleware plan.feature."
+        ),
         new OA\Property(property: 'isActive', type: 'boolean'),
         new OA\Property(property: 'createdAt', type: 'string', format: 'date-time'),
         new OA\Property(property: 'updatedAt', type: 'string', format: 'date-time'),
@@ -48,6 +55,7 @@ class SubscriptionPlanResource extends JsonResource
             'notificationLevel' => $this->notification_level,
             'featureLimits' => $this->feature_limits,
             'resetPrice' => $this->reset_price !== null ? (float) $this->reset_price : null,
+            'includedFeatures' => $this->included_features,
             'isActive' => $this->is_active,
             'createdAt' => $this->created_at,
             'updatedAt' => $this->updated_at,

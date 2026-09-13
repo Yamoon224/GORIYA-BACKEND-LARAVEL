@@ -19,6 +19,14 @@ use Illuminate\Database\Seeder;
  *    SubscriptionService::checkoutUsageReset().
  *  - "Notification (d'offre) prioritaire" : FAIBLE = in-app, ELEVE = in-app
  *    + email (voir entreprise/lib/plan-access.ts et le check() du backend).
+ *  - `included_features` couvre les fonctionnalités simplement incluses/
+ *    absentes selon le forfait (pas de quota numérique, contrairement à
+ *    `feature_limits`) : Goriya Meet/Connect, Simulation d'entretien,
+ *    Portfolio, Goriya Pitch/Docs, Recherche avancée entreprise côté USER ;
+ *    Enquêtes internes, Gestion de paie côté ENTERPRISE. Vérifié côté
+ *    backend par le middleware `plan.feature` (voir routes/api.php et
+ *    EnsurePlanIncludesFeature) — une clé absente est un vrai refus HTTP,
+ *    pas seulement une page masquée côté frontend.
  *  - Entreprise (Business, Business+) : `available_periods` rend la
  *    périodicité choisissable (1/3/6/12 mois) au checkout — le prix
  *    ci-dessous reste le prix MENSUEL de base, multiplié par la durée
@@ -52,6 +60,7 @@ class SubscriptionPlanSeeder extends Seeder
                 ],
                 'notification_level' => 'FAIBLE',
                 'feature_limits' => ['cv_analysis' => 2],
+                'included_features' => [],
                 'is_active' => true,
             ],
             [
@@ -71,6 +80,7 @@ class SubscriptionPlanSeeder extends Seeder
                 ],
                 'notification_level' => 'ELEVE',
                 'feature_limits' => ['cv_creation' => 5, 'document_generation' => 5, 'cv_analysis' => 5],
+                'included_features' => ['goriya_meet', 'goriya_connect', 'recherche_entreprise'],
                 'reset_price' => 500,
                 'is_active' => true,
             ],
@@ -95,6 +105,10 @@ class SubscriptionPlanSeeder extends Seeder
                 ],
                 'notification_level' => 'ELEVE',
                 'feature_limits' => ['cv_creation' => 20, 'document_generation' => 20, 'cv_analysis' => 20],
+                'included_features' => [
+                    'goriya_meet', 'goriya_connect', 'recherche_entreprise',
+                    'simulation_entretien', 'portfolio', 'goriya_pitch', 'goriya_docs',
+                ],
                 'reset_price' => 500,
                 'is_active' => true,
             ],
@@ -102,11 +116,13 @@ class SubscriptionPlanSeeder extends Seeder
                 // Offre de découverte entreprise : activable sans paiement
                 // (SubscriptionService::subscribe n'accepte que les plans à 0)
                 // pour permettre de tester l'espace recrutement avant de
-                // souscrire. Les Services RH y sont inclus ; restent fermés les
-                // appels vidéo Goriya Meet et les intégrations API — voir
-                // entreprise/lib/plan-access.ts. N'apparaît pas dans la grille
-                // Business/Business+/Sur Mesure : c'est un 4ᵉ palier propre à
-                // l'app, pas au document tarifaire.
+                // souscrire. Les Services RH y sont inclus (employés, congés,
+                // recrutement, contrats, documents) ; restent fermés Goriya
+                // Meet, les enquêtes internes, la gestion de paie et les
+                // intégrations API — voir entreprise/lib/plan-access.ts.
+                // N'apparaît pas dans la grille Business/Business+/Sur
+                // Mesure : c'est un 4ᵉ palier propre à l'app, pas au document
+                // tarifaire.
                 'name' => 'Offre gratuite',
                 'price' => 0,
                 'billing_period' => BillingPeriod::MONTHLY,
@@ -118,8 +134,9 @@ class SubscriptionPlanSeeder extends Seeder
                     'Suivi des candidatures',
                     'Messagerie avec les candidats',
                     'Profil entreprise complet',
-                    'Services RH : employés, recrutements, contrats, congés, paie et documents',
+                    'Services RH : employés, recrutements, contrats, congés et documents',
                 ],
+                'included_features' => [],
                 'is_active' => true,
             ],
             [
@@ -138,6 +155,7 @@ class SubscriptionPlanSeeder extends Seeder
                     'Notifications prioritaires (in-app)',
                 ],
                 'notification_level' => 'FAIBLE',
+                'included_features' => ['goriya_meet'],
                 'is_active' => true,
             ],
             [
@@ -159,6 +177,7 @@ class SubscriptionPlanSeeder extends Seeder
                     "Notifications prioritaires : in-app + email",
                 ],
                 'notification_level' => 'ELEVE',
+                'included_features' => ['goriya_meet', 'enquetes_internes', 'gestion_paie'],
                 'is_active' => true,
             ],
         ];

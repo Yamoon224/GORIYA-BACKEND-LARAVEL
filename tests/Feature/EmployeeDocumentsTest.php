@@ -8,6 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
+use Tests\Concerns\GivesActiveSubscription;
 use Tests\TestCase;
 
 /**
@@ -24,13 +25,16 @@ use Tests\TestCase;
  */
 class EmployeeDocumentsTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, GivesActiveSubscription;
 
     protected function setUp(): void
     {
         parent::setUp();
         Carbon::setTestNow('2026-09-10 09:00:00');
         Storage::fake('local');
+        // Un des tests valide un bulletin de paie (POST /payroll/runs),
+        // réservé à Business+ depuis la grille tarifaire sept. 2026.
+        $this->seedSubscriptionPlans();
     }
 
     protected function tearDown(): void
@@ -49,7 +53,7 @@ class EmployeeDocumentsTest extends TestCase
             'headquarters' => 'Abidjan',
         ]);
 
-        return User::create([
+        $rh = User::create([
             'name' => "Awa Koné ({$name})",
             'email' => 'rh-'.$company->id.'@example.ci',
             'password' => 'motdepasse-solide',
@@ -57,6 +61,9 @@ class EmployeeDocumentsTest extends TestCase
             'status' => 'ACTIVE',
             'company_id' => $company->id,
         ]);
+        $this->giveActiveSubscription($rh, 'Business+');
+
+        return $rh;
     }
 
     /** @param  array<string, mixed>  $overrides */

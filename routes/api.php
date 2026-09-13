@@ -298,7 +298,9 @@ Route::middleware('auth:api')->group(function () {
 // comptes rattachés à une entreprise, vérifié dans le contrôleur) ---
 Route::middleware('auth:api')->group(function () {
     Route::get('/employee-surveys', [EmployeeSurveysController::class, 'index']);
-    Route::post('/employee-surveys', [EmployeeSurveysController::class, 'store']);
+    // Enquêtes internes : réservées à Business+ (voir SubscriptionPlanSeeder).
+    Route::post('/employee-surveys', [EmployeeSurveysController::class, 'store'])
+        ->middleware('plan.feature:enquetes_internes');
     Route::get('/employee-surveys/{id}', [EmployeeSurveysController::class, 'show']);
     Route::patch('/employee-surveys/{id}', [EmployeeSurveysController::class, 'update']);
     Route::patch('/employee-surveys/{id}/status', [EmployeeSurveysController::class, 'updateStatus']);
@@ -319,11 +321,19 @@ Route::middleware('auth:api')->group(function () {
     Route::patch('/employees/{id}', [EmployeesController::class, 'update']);
     Route::delete('/employees/{id}', [EmployeesController::class, 'destroy']);
 
+    // Gestion de paie : réservée à Business+ (voir SubscriptionPlanSeeder).
+    // Seules les actions qui "utilisent" la fonctionnalité sont gatées —
+    // pas la lecture (payslips déjà émis, historique des runs), disponible
+    // même après un éventuel retour à Business, comme pour les CV/documents
+    // déjà créés (voir UserFeatureUsageService).
     Route::get('/payroll/settings', [PayrollSettingsController::class, 'show']);
-    Route::put('/payroll/settings', [PayrollSettingsController::class, 'update']);
-    Route::post('/payroll/settings/reset', [PayrollSettingsController::class, 'reset']);
+    Route::put('/payroll/settings', [PayrollSettingsController::class, 'update'])
+        ->middleware('plan.feature:gestion_paie');
+    Route::post('/payroll/settings/reset', [PayrollSettingsController::class, 'reset'])
+        ->middleware('plan.feature:gestion_paie');
     Route::get('/payroll/runs', [PayrollRunsController::class, 'index']);
-    Route::post('/payroll/runs', [PayrollRunsController::class, 'store']);
+    Route::post('/payroll/runs', [PayrollRunsController::class, 'store'])
+        ->middleware('plan.feature:gestion_paie');
     Route::get('/payroll/runs/{id}', [PayrollRunsController::class, 'show']);
     Route::delete('/payroll/runs/{id}', [PayrollRunsController::class, 'destroy']);
     Route::post('/payroll/runs/{id}/recompute', [PayrollRunsController::class, 'recompute']);
@@ -421,7 +431,9 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/interview-sessions', [InterviewSessionsController::class, 'index']);
     Route::get('/interview-sessions/paginate', [InterviewSessionsController::class, 'paginate']);
     Route::get('/interview-sessions/{id}', [InterviewSessionsController::class, 'show']);
-    Route::post('/interview-sessions', [InterviewSessionsController::class, 'store']);
+    // Simulation d'entretien : réservée à Premium (voir SubscriptionPlanSeeder).
+    Route::post('/interview-sessions', [InterviewSessionsController::class, 'store'])
+        ->middleware('plan.feature:simulation_entretien');
     Route::patch('/interview-sessions/{id}', [InterviewSessionsController::class, 'update']);
     Route::delete('/interview-sessions/{id}', [InterviewSessionsController::class, 'destroy']);
 
@@ -445,7 +457,9 @@ Route::middleware('auth:api')->group(function () {
 // à l'utilisateur authentifié comme CvAnalysis/InterviewSessions) ---
 Route::middleware('auth:api')->group(function () {
     Route::get('/research', [CompanyResearchController::class, 'index']);
-    Route::post('/research', [CompanyResearchController::class, 'store']);
+    // Recherche avancée sur une entreprise : Standard et Premium seulement.
+    Route::post('/research', [CompanyResearchController::class, 'store'])
+        ->middleware('plan.feature:recherche_entreprise');
     Route::get('/research/{id}', [CompanyResearchController::class, 'show']);
     Route::patch('/research/{id}/favorite', [CompanyResearchController::class, 'toggleFavorite']);
     Route::delete('/research/{id}', [CompanyResearchController::class, 'destroy']);
@@ -455,7 +469,9 @@ Route::middleware('auth:api')->group(function () {
 // authentifié comme Research/CvAnalysis) ---
 Route::middleware('auth:api')->group(function () {
     Route::get('/pitches', [PitchController::class, 'index']);
-    Route::post('/pitches', [PitchController::class, 'store']);
+    // Goriya Pitch : réservé à Premium.
+    Route::post('/pitches', [PitchController::class, 'store'])
+        ->middleware('plan.feature:goriya_pitch');
     Route::get('/pitches/{id}', [PitchController::class, 'show']);
     Route::post('/pitches/{id}/video', [PitchController::class, 'storeVideo']);
     Route::post('/pitches/{id}/avatar-video', [PitchController::class, 'renderAvatar']);
@@ -468,7 +484,9 @@ Route::middleware('auth:api')->group(function () {
 // publique, scopé à l'utilisateur authentifié comme Research/Pitches) ---
 Route::middleware('auth:api')->group(function () {
     Route::get('/presentations', [PresentationsController::class, 'index']);
-    Route::post('/presentations', [PresentationsController::class, 'store']);
+    // Goriya Docs (Présentations & Schémas IA) : réservé à Premium.
+    Route::post('/presentations', [PresentationsController::class, 'store'])
+        ->middleware('plan.feature:goriya_docs');
     Route::get('/presentations/{id}/export-pptx', [PresentationsController::class, 'exportPptx']);
     Route::get('/presentations/{id}', [PresentationsController::class, 'show']);
     Route::delete('/presentations/{id}', [PresentationsController::class, 'destroy']);
