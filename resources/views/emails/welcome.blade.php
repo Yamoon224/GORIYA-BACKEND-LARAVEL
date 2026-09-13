@@ -6,13 +6,16 @@
     <title>{{ $title }}</title>
 </head>
 {{--
-    Gabarit "pleine couleur" : le fond reprend le bleu ciel du Hero du site
-    (#1e7df2) et la carte blanche porte le message. Tout est en tables +
-    styles inline, seule mise en forme fiable dans Outlook/Gmail (pas de flex,
-    pas de <style> externe, pas de classes).
+    Gabarit "pleine couleur" : le fond reprend le dégradé bleu du Hero du site
+    (--brand-gradient : #2b7fff -> #1e7df2 -> #0b2ca8) et la carte blanche
+    porte le message. Tout est en tables + styles inline, seule mise en forme
+    fiable dans Outlook/Gmail (pas de flex, pas de <style> externe, pas de
+    classes). `background-color`/`bgcolor` restent en solide (#1e7df2, le
+    ton médian du dégradé) pour les clients qui ignorent `background` en CSS
+    (Outlook desktop) — le dégradé n'est qu'un rehaussement.
 --}}
-<body style="margin:0;padding:0;background-color:#1e7df2;font-family:Arial,Helvetica,sans-serif;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1e7df2;">
+<body style="margin:0;padding:0;background-color:#1e7df2;background:linear-gradient(135deg,#2b7fff 0%,#1e7df2 45%,#0b2ca8 100%);font-family:Arial,Helvetica,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#1e7df2" style="background-color:#1e7df2;background:linear-gradient(135deg,#2b7fff 0%,#1e7df2 45%,#0b2ca8 100%);">
         <tr>
             <td align="center" style="padding:32px 16px 40px;">
 
@@ -26,10 +29,10 @@
                 </table>
 
                 {{-- Carte --}}
-                <table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:520px;background-color:#ffffff;border-radius:6px;">
+                <table role="presentation" width="580" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:580px;background-color:#ffffff;border-radius:6px;">
                     <tr>
                         <td style="padding:0;font-size:0;line-height:0;">
-                            <img src="{{ $headerImageUrl }}" alt="" width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;border-radius:6px 6px 0 0;">
+                            <img src="{{ $headerImageUrl }}" alt="" width="580" style="display:block;width:100%;max-width:580px;height:auto;border:0;border-radius:6px 6px 0 0;">
                         </td>
                     </tr>
                     <tr>
@@ -78,8 +81,8 @@
                     </tr>
                 </table>
 
-                {{-- Pied de page --}}
-                <table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:520px;">
+                {{-- Pied de page — même largeur que la carte pour rester aligné dessous --}}
+                <table role="presentation" width="580" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:580px;">
                     <tr>
                         <td align="center" style="padding:24px 16px 0;font-size:12px;line-height:1.6;color:#ffffff;">
                             Pour en savoir plus sur la gestion de vos données personnelles,<br>
