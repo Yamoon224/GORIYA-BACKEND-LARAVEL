@@ -26,8 +26,13 @@
 
                 <table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:520px;background-color:#ffffff;border-radius:6px;">
                     <tr>
-                        <td style="padding:36px 32px 28px;font-size:15px;line-height:1.6;color:#1b2331;">
+                        <td style="padding:36px 32px 0;font-size:15px;line-height:1.6;color:#1b2331;">
                             {!! $bodyHtml !!}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:24px 32px 28px;">
+                            <img src="{{ $signatureLogoUrl }}" alt="Goriya" width="80" style="display:block;width:80px;max-width:80px;height:auto;border:0;">
                         </td>
                     </tr>
                     <tr>

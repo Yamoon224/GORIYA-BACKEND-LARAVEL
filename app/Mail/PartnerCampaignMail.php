@@ -59,6 +59,11 @@ class PartnerCampaignMail extends Mailable
             with: [
                 'logoUrl' => ((string) config('app.frontend_url')).'/images/logo-blanc.png',
                 'bodyHtml' => $this->render($this->campaign->body_html),
+                // Logo Goriya (admin/public/images/logo.png) affiché centré après
+                // le corps rédigé par l'admin — distinct du logo d'en-tête
+                // (logo-blanc.png, servi par le front standard) : celui-ci est
+                // servi par l'admin, seule app qui l'héberge (voir admin_frontend_url).
+                'signatureLogoUrl' => ((string) config('app.admin_frontend_url')).'/images/logo.png',
                 'unsubscribeUrl' => URL::signedRoute('partners.unsubscribe', ['partner' => $this->partner->id]),
             ],
         );

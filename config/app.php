@@ -69,6 +69,15 @@ return [
 
     'enterprise_frontend_url' => rtrim((string) env('ENTERPRISE_FRONTEND_URL', 'https://entreprise.goriya.net'), '/'),
 
+    /**
+     * Back-office admin (Next.js, déployé séparément — voir
+     * [[project_architecture]]). Utilisé pour construire l'URL du logo
+     * inséré dans les emails de campagne (PartnerCampaignMail) : le backend
+     * ne partage pas le filesystem de l'admin en production, donc pas de
+     * chemin local possible — seule une URL publique fonctionne.
+     */
+    'admin_frontend_url' => rtrim((string) env('ADMIN_FRONTEND_URL', 'https://admin.goriya.net'), '/'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

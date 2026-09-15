@@ -29,6 +29,7 @@ class UserService
     public function __construct(
         private readonly UserRepositoryInterface $userRepository,
         private readonly CompanyRepositoryInterface $companyRepository,
+        private readonly CompanyService $companyService,
     ) {}
 
     /**
@@ -149,10 +150,25 @@ class UserService
         return $this->userRepository->paginate($page, $limit, $filters);
     }
 
+    /**
+     * Supprime un compte utilisateur. Pour un compte ENTREPRISE, supprime
+     * aussi la company associée (via CompanyService::remove, qui nettoie
+     * logo/cover/gallery et cascade en DB sur job_offers, employees, etc.) —
+     * sans ça la company reste orpheline en base et continue d'apparaître
+     * dans la liste admin des entreprises et sur la page d'accueil publique
+     * (/companies/paginate) alors que son unique compte a été supprimé.
+     */
     public function remove(User $user): void
     {
         if ($user->avatar) {
             $this->deleteAvatar($user->avatar);
+        }
+
+        if ($user->role === UserRole::ENTERPRISE && $user->company_id) {
+            $company = $user->company ?? $this->companyRepository->find($user->company_id);
+            if ($company) {
+                $this->companyService->remove($company);
+            }
         }
 
         $this->userRepository->delete($user);
