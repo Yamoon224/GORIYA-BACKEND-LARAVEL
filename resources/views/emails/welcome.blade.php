@@ -84,7 +84,18 @@
                 {{-- Pied de page — même largeur que la carte pour rester aligné dessous --}}
                 <table role="presentation" width="580" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:580px;">
                     <tr>
-                        <td align="center" style="padding:24px 16px 0;font-size:12px;line-height:1.6;color:#ffffff;">
+                        <td align="center" style="padding:24px 16px 0;font-size:12px;line-height:1.8;color:#ffffff;">
+                            <a href="mailto:{{ $contactEmail }}" style="color:#ffffff;text-decoration:none;">{{ $contactEmail }}</a>
+                            &nbsp;&middot;&nbsp;
+                            <a href="tel:{{ str_replace(' ', '', $contactPhone) }}" style="color:#ffffff;text-decoration:none;">{{ $contactPhone }}</a>
+                            <br>
+                            Candidat ou Chercheur d'emploi : <a href="{{ $candidateUrl }}" style="color:#ffffff;text-decoration:underline;">goriya.net</a>
+                            &nbsp;&middot;&nbsp;
+                            Entreprise ou Business : <a href="{{ $enterpriseUrl }}" style="color:#ffffff;text-decoration:underline;">entreprise.goriya.net</a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:16px 16px 0;font-size:12px;line-height:1.6;color:#ffffff;">
                             Pour en savoir plus sur la gestion de vos données personnelles,<br>
                             veuillez consulter notre
                             <a href="{{ $privacyUrl }}" target="_blank" rel="noopener" style="color:#ffffff;text-decoration:underline;">politique de confidentialité</a>.

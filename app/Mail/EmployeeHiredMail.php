@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\HasContactFooter;
 use App\Models\Company;
 use App\Models\Employee;
 use Illuminate\Bus\Queueable;
@@ -23,7 +24,7 @@ use Illuminate\Queue\SerializesModels;
  */
 class EmployeeHiredMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use HasContactFooter, Queueable, SerializesModels;
 
     public function __construct(
         public readonly Employee $employee,
@@ -62,6 +63,7 @@ class EmployeeHiredMail extends Mailable
                     ? $frontendUrl.'/espace-employe'
                     : $frontendUrl.'/auth/signup?email='.urlencode((string) $this->employee->email),
                 'privacyUrl' => $frontendUrl.'/confidentialite',
+                ...$this->contactFooterData(),
             ],
         );
     }

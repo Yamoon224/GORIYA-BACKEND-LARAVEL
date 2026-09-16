@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\HasContactFooter;
 use App\Models\User;
 use App\Services\OtpService;
 use Illuminate\Bus\Queueable;
@@ -12,7 +13,7 @@ use Illuminate\Queue\SerializesModels;
 
 class OtpMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use HasContactFooter, Queueable, SerializesModels;
 
     public function __construct(
         public readonly User $user,
@@ -41,6 +42,7 @@ class OtpMail extends Mailable
             view: 'emails.otp',
             with: [
                 'name' => $this->user->name,
+                'logoUrl' => ((string) config('app.frontend_url')).'/images/logo-blanc.png',
                 'code' => $this->code,
                 'validMinutes' => $this->validMinutes,
                 'title' => $this->isPasswordReset()
@@ -52,6 +54,7 @@ class OtpMail extends Mailable
                 'footer' => $this->isPasswordReset()
                     ? "Si tu n'es pas à l'origine de cette demande, ignore cet email : ton mot de passe reste inchangé."
                     : "Si tu n'es pas à l'origine de cette demande, tu peux ignorer cet email.",
+                ...$this->contactFooterData(),
             ],
         );
     }

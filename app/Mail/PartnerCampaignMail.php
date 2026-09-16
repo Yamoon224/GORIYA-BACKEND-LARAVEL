@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\HasContactFooter;
 use App\Models\MailCampaign;
 use App\Models\PotentialPartner;
 use Illuminate\Bus\Queueable;
@@ -20,7 +21,7 @@ use Illuminate\Support\Facades\URL;
  */
 class PartnerCampaignMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use HasContactFooter, Queueable, SerializesModels;
 
     public function __construct(
         public readonly MailCampaign $campaign,
@@ -40,7 +41,7 @@ class PartnerCampaignMail extends Mailable
         ];
     }
 
-    private function render(string $text): string
+    private function interpolate(string $text): string
     {
         return strtr($text, $this->placeholders());
     }
@@ -48,7 +49,7 @@ class PartnerCampaignMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: $this->render($this->campaign->subject),
+            subject: $this->interpolate($this->campaign->subject),
         );
     }
 
@@ -58,13 +59,14 @@ class PartnerCampaignMail extends Mailable
             view: 'emails.partner-campaign',
             with: [
                 'logoUrl' => ((string) config('app.frontend_url')).'/images/logo-blanc.png',
-                'bodyHtml' => $this->render($this->campaign->body_html),
+                'bodyHtml' => $this->interpolate($this->campaign->body_html),
                 // Logo Goriya (admin/public/images/logo.png) affiché centré après
                 // le corps rédigé par l'admin — distinct du logo d'en-tête
                 // (logo-blanc.png, servi par le front standard) : celui-ci est
                 // servi par l'admin, seule app qui l'héberge (voir admin_frontend_url).
                 'signatureLogoUrl' => ((string) config('app.admin_frontend_url')).'/images/logo.png',
                 'unsubscribeUrl' => URL::signedRoute('partners.unsubscribe', ['partner' => $this->partner->id]),
+                ...$this->contactFooterData(),
             ],
         );
     }

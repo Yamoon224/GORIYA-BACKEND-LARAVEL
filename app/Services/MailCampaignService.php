@@ -92,6 +92,10 @@ class MailCampaignService
             'sector' => 'Secteur Exemple',
             'city' => 'Abidjan',
         ]);
+        // Modèle jamais persisté : le hook HasUuid (creating) ne se déclenche
+        // pas, donc l'id doit être posé à la main pour que le lien de
+        // désabonnement (signedRoute) puisse être généré.
+        $previewPartner->id = (string) Str::uuid();
 
         Mail::to($email)->send(new PartnerCampaignMail($campaign, $previewPartner));
     }

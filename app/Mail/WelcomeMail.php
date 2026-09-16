@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Enums\UserRole;
+use App\Mail\Concerns\HasContactFooter;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -20,7 +21,7 @@ use Illuminate\Queue\SerializesModels;
  */
 class WelcomeMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use HasContactFooter, Queueable, SerializesModels;
 
     public function __construct(
         public readonly User $user,
@@ -70,6 +71,7 @@ class WelcomeMail extends Mailable
                 'ctaLabel' => $this->isEnterprise() ? 'Accéder à mon espace' : 'Compléter mon profil',
                 'ctaUrl' => $this->isEnterprise() ? $frontendUrl.'/dashboard' : $frontendUrl.'/profil',
                 'privacyUrl' => ((string) config('app.frontend_url')).'/confidentialite',
+                ...$this->contactFooterData(),
             ],
         );
     }

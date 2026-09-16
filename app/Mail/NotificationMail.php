@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Enums\UserRole;
+use App\Mail\Concerns\HasContactFooter;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -22,7 +23,7 @@ use Illuminate\Queue\SerializesModels;
  */
 class NotificationMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use HasContactFooter, Queueable, SerializesModels;
 
     public function __construct(
         public readonly User $user,
@@ -56,6 +57,7 @@ class NotificationMail extends Mailable
                 'ctaLabel' => 'Voir sur Goriya',
                 'ctaUrl' => $ctaUrl,
                 'privacyUrl' => $publicUrl.'/confidentialite',
+                ...$this->contactFooterData(),
             ],
         );
     }

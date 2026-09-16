@@ -7,12 +7,14 @@
 </head>
 {{--
     Même gabarit "pleine couleur" que emails/welcome.blade.php (tables +
-    styles inline pour Outlook/Gmail). Le corps ({{ $bodyHtml }}) est rédigé
-    par l'admin dans le module Potentiels Partenaires et injecté tel quel ;
-    seuls le header et le pied de page (désabonnement) sont fixes.
+    styles inline pour Outlook/Gmail, dégradé --brand-gradient du site avec
+    repli en aplat #1e7df2 pour Outlook desktop qui ignore `background`). Le
+    corps ({{ $bodyHtml }}) est rédigé par l'admin dans le module Potentiels
+    Partenaires et injecté tel quel ; seuls le header et le pied de page
+    (désabonnement) sont fixes.
 --}}
-<body style="margin:0;padding:0;background-color:#1e7df2;font-family:Arial,Helvetica,sans-serif;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1e7df2;">
+<body style="margin:0;padding:0;background-color:#1e7df2;background:linear-gradient(135deg,#2b7fff 0%,#1e7df2 45%,#0b2ca8 100%);font-family:Arial,Helvetica,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#1e7df2" style="background-color:#1e7df2;background:linear-gradient(135deg,#2b7fff 0%,#1e7df2 45%,#0b2ca8 100%);">
         <tr>
             <td align="center" style="padding:32px 16px 40px;">
 
@@ -31,8 +33,19 @@
                         </td>
                     </tr>
                     <tr>
-                        <td align="center" style="padding:24px 32px 28px;">
+                        <td align="center" style="padding:24px 32px 0;">
                             <img src="{{ $signatureLogoUrl }}" alt="Goriya" width="80" style="display:block;width:80px;max-width:80px;height:auto;border:0;">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:16px 32px 28px;font-size:12px;line-height:1.8;color:#5b6472;">
+                            <a href="mailto:{{ $contactEmail }}" style="color:#5b6472;text-decoration:none;">{{ $contactEmail }}</a>
+                            &nbsp;&middot;&nbsp;
+                            <a href="tel:{{ str_replace(' ', '', $contactPhone) }}" style="color:#5b6472;text-decoration:none;">{{ $contactPhone }}</a>
+                            <br>
+                            Candidat ou Chercheur d'emploi : <a href="{{ $candidateUrl }}" style="color:#1e7df2;text-decoration:none;">goriya.net</a>
+                            &nbsp;&middot;&nbsp;
+                            Entreprise ou Business : <a href="{{ $enterpriseUrl }}" style="color:#1e7df2;text-decoration:none;">entreprise.goriya.net</a>
                         </td>
                     </tr>
                     <tr>
