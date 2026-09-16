@@ -15,8 +15,10 @@ Artisan::command('inspire', function () {
  * file est vide au lieu de tourner en boucle ; --max-time=55 la coupe avant
  * le prochain tick cron même s'il reste des jobs (ils seront repris à la
  * minute suivante) ; withoutOverlapping() évite un double traitement si une
- * exécution dépasse la minute. Utilisé par SendCampaignRecipientJob (voir
- * MailCampaignService::send(), jobs dispatchés avec délai croissant).
+ * exécution dépasse la minute. Utilisé par les jobs restés en queue
+ * (webhooks, vidéos de pitch, polling avatar) — les campagnes de mailing
+ * n'y passent plus, voir MailCampaignService::send() (envoi synchrone en
+ * boucle, sans queue).
  *
  * Un seul cron à créer côté hébergeur (hPanel Hostinger) :
  *   * * * * * php /chemin/vers/backend/artisan schedule:run >> /dev/null 2>&1

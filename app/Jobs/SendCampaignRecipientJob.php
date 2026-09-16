@@ -7,28 +7,20 @@ use App\Enums\MailCampaignStatus;
 use App\Mail\PartnerCampaignMail;
 use App\Models\MailCampaign;
 use App\Models\MailCampaignRecipient;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Throwable;
 
 /**
- * Envoie une campagne à un seul destinataire. Dispatché avec un délai croissant
- * par MailCampaignService::send() pour étaler les envois dans le temps — le
- * mailer Hostinger de goriya.net est une boîte partagée, pas un fournisseur
- * transactionnel dimensionné pour un envoi en masse instantané (voir
- * [[smtp_mail_config]]).
+ * Envoie une campagne à un seul destinataire. Exécuté en synchrone
+ * (dispatchSync, pas de queue/worker) par MailCampaignService::send(), qui
+ * boucle dessus pour chaque destinataire PENDING.
  */
-class SendCampaignRecipientJob implements ShouldQueue
+class SendCampaignRecipientJob
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
-
-    public int $tries = 3;
+    use Dispatchable;
 
     public function __construct(public readonly string $recipientId) {}
 

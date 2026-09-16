@@ -16,16 +16,16 @@ use RuntimeException;
 
 /**
  * Création, édition et envoi des campagnes de mailing aux partenaires
- * potentiels. L'envoi étale les jobs dans le temps (voir self::SEND_INTERVAL_SECONDS)
- * plutôt que de tout pousser d'un coup : le mailer configuré (MAIL_MAILER/MAIL_HOST
- * dans .env) est une boîte SMTP mutualisée, pas un fournisseur transactionnel
- * dimensionné pour un envoi en masse instantané.
+ * potentiels. L'envoi se fait en boucle synchrone (dispatchSync), dans la
+ * requête HTTP elle-même : pas de queue, pas de worker — l'hébergement
+ * mutualisé de goriya.net ne peut pas faire tourner `queue:work` en continu.
+ * send() est donc rappelable telle quelle : un appel sur une campagne déjà
+ * 'sending' reprend uniquement les destinataires encore PENDING, ce qui la
+ * rend résiliente à un timeout PHP/serveur en cours de route (il suffit de
+ * recliquer "Envoyer" pour continuer là où ça s'est arrêté).
  */
 class MailCampaignService
 {
-    /** Délai entre deux envois, en secondes — throttling volontaire. */
-    private const SEND_INTERVAL_SECONDS = 3;
-
     public function __construct(
         private readonly PotentialPartnerService $partnerService,
     ) {}
@@ -101,17 +101,24 @@ class MailCampaignService
     }
 
     /**
-     * Résout les destinataires à partir des filtres, crée les lignes de suivi
-     * et dispatche un job par destinataire avec un délai croissant. Verrouille
-     * la campagne en 'sending' pour empêcher un double envoi.
+     * Résout les destinataires à partir des filtres (première fois seulement)
+     * puis envoie à chaque destinataire PENDING en boucle, dans la requête
+     * courante. Verrouille la campagne en 'sending' pour empêcher un double
+     * envoi concurrent, mais un appel répété sur une campagne déjà 'sending'
+     * est volontairement autorisé : il reprend les envois restants au lieu
+     * d'échouer, pour couvrir le cas d'un timeout serveur en plein envoi.
      */
     public function send(MailCampaign $campaign, array $filters = []): MailCampaign
     {
-        return DB::transaction(function () use ($campaign, $filters) {
+        $campaign = DB::transaction(function () use ($campaign, $filters) {
             $campaign = MailCampaign::whereKey($campaign->id)->lockForUpdate()->firstOrFail();
 
-            if ($campaign->status !== MailCampaignStatus::DRAFT) {
-                throw new RuntimeException('Cette campagne a déjà été envoyée ou est en cours d\'envoi.');
+            if ($campaign->status === MailCampaignStatus::SENT) {
+                throw new RuntimeException('Cette campagne a déjà été envoyée.');
+            }
+
+            if ($campaign->status === MailCampaignStatus::SENDING) {
+                return $campaign;
             }
 
             $recipients = $this->partnerService->reachable($filters);
@@ -138,13 +145,25 @@ class MailCampaignService
                 'total_recipients' => count($rows),
             ]);
 
-            foreach ($rows as $index => $row) {
-                SendCampaignRecipientJob::dispatch($row['id'])
-                    ->delay($now->clone()->addSeconds($index * self::SEND_INTERVAL_SECONDS));
-            }
-
             return $campaign->fresh();
         });
+
+        // Hors transaction : l'envoi effectif peut être long (des minutes
+        // pour plusieurs milliers de destinataires), on ne garde pas de
+        // verrou DB pendant ce temps.
+        if (function_exists('set_time_limit')) {
+            set_time_limit(0);
+        }
+
+        $pendingIds = $campaign->recipients()
+            ->where('status', MailCampaignRecipientStatus::PENDING->value)
+            ->pluck('id');
+
+        foreach ($pendingIds as $recipientId) {
+            SendCampaignRecipientJob::dispatchSync($recipientId);
+        }
+
+        return $campaign->fresh();
     }
 
     public function recipients(MailCampaign $campaign, int $page, int $limit): LengthAwarePaginator
