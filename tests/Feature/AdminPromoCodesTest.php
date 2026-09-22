@@ -86,6 +86,29 @@ class AdminPromoCodesTest extends TestCase
         ])->assertStatus(400);
     }
 
+    public function test_a_code_without_expiry_or_usage_limit_is_rejected(): void
+    {
+        $admin = $this->admin();
+        $campaign = $this->campaign();
+
+        $this->actingAs($admin, 'api')->postJson('/admin/promo-codes', [
+            'campaignId' => $campaign->id,
+            'code' => 'UNBOUNDED',
+        ])->assertStatus(422);
+    }
+
+    public function test_an_expiry_date_alone_satisfies_the_requirement(): void
+    {
+        $admin = $this->admin();
+        $campaign = $this->campaign();
+
+        $this->actingAs($admin, 'api')->postJson('/admin/promo-codes', [
+            'campaignId' => $campaign->id,
+            'code' => 'EXPIRESOON',
+            'endsAt' => now()->addMonth()->toIso8601String(),
+        ])->assertCreated();
+    }
+
     public function test_non_admin_cannot_manage_codes(): void
     {
         $user = User::create([

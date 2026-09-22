@@ -176,6 +176,46 @@ class PromoCodeCheckoutTest extends TestCase
         $response->assertStatus(422);
     }
 
+    public function test_checkout_rejects_a_code_restricted_to_a_different_specific_plan(): void
+    {
+        $user = $this->user();
+        $eligiblePlan = $this->plan(10000);
+        $otherPlan = SubscriptionPlan::create([
+            'name' => 'Standard',
+            'price' => 1999,
+            'billing_period' => 'MONTHLY',
+            'user_type' => 'USER',
+            'is_active' => true,
+            'features' => [],
+        ]);
+
+        $campaign = PromoCampaign::create([
+            'name' => 'Premium uniquement',
+            'discount_type' => 'PERCENTAGE',
+            'discount_value' => 20,
+            'applicable_user_types' => ['USER'],
+            // Restreint au seul plan Premium - le plan Standard ne doit pas
+            // pouvoir utiliser ce code.
+            'applicable_plan_ids' => [$eligiblePlan->id],
+            'status' => 'ACTIVE',
+        ]);
+        PromoCode::create(['campaign_id' => $campaign->id, 'code' => 'PREMIUMONLY', 'max_uses' => 10]);
+
+        $this->actingAs($user, 'api')->postJson('/subscriptions/checkout', [
+            'userId' => $user->id,
+            'planId' => $otherPlan->id,
+            'gateway' => 'kkiapay',
+            'promoCode' => 'PREMIUMONLY',
+        ])->assertStatus(422);
+
+        $this->actingAs($user, 'api')->postJson('/subscriptions/checkout', [
+            'userId' => $user->id,
+            'planId' => $eligiblePlan->id,
+            'gateway' => 'kkiapay',
+            'promoCode' => 'PREMIUMONLY',
+        ])->assertOk()->assertJsonPath('amount', 8000);
+    }
+
     public function test_usage_reset_checkout_ignores_the_promo_code_field(): void
     {
         $user = $this->user();

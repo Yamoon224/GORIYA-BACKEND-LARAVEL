@@ -260,6 +260,15 @@ class PromoCodeService
      */
     public function createCode(array $data, ?string $createdBy): PromoCode
     {
+        // Un code sans date d'expiration NI quota resterait valide
+        // indéfiniment et pour un nombre illimité d'utilisateurs — on exige
+        // qu'au moins l'un des deux borne le code dès sa création. Vérifié
+        // uniquement à la création (pas à la mise à jour, pour ne pas
+        // bloquer un simple changement de statut sur un code existant).
+        if (empty($data['maxUses']) && empty($data['endsAt'])) {
+            abort(422, "Un code promo doit avoir une date d'expiration et/ou une limite d'utilisation.");
+        }
+
         return PromoCode::create([
             'campaign_id' => $data['campaignId'],
             'influencer_id' => $data['influencerId'] ?? null,
