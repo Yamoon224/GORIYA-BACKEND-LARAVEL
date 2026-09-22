@@ -7,10 +7,14 @@ use App\Http\Controllers\Api\AdminAuthController;
 use App\Http\Controllers\Api\AdminCompaniesController;
 use App\Http\Controllers\Api\AdminDashboardController;
 use App\Http\Controllers\Api\AdminJobsController;
+use App\Http\Controllers\Api\AdminInfluencerPayoutsController;
+use App\Http\Controllers\Api\AdminInfluencersController;
 use App\Http\Controllers\Api\AdminMailCampaignsController;
 use App\Http\Controllers\Api\AdminPlanningController;
 use App\Http\Controllers\Api\AdminPortfoliosController;
 use App\Http\Controllers\Api\AdminPotentialPartnersController;
+use App\Http\Controllers\Api\AdminPromoCampaignsController;
+use App\Http\Controllers\Api\AdminPromoCodesController;
 use App\Http\Controllers\Api\AdminStudentsController;
 use App\Http\Controllers\Api\AdminSystemController;
 use App\Http\Controllers\Api\AnalyticsController;
@@ -65,6 +69,7 @@ use App\Http\Controllers\Api\PitchController;
 use App\Http\Controllers\Api\PortfoliosController;
 use App\Http\Controllers\Api\PostsController;
 use App\Http\Controllers\Api\PresentationsController;
+use App\Http\Controllers\Api\PromoCodesController;
 use App\Http\Controllers\Api\PublicProfileController;
 use App\Http\Controllers\Api\ScoringResultsController;
 use App\Http\Controllers\Api\SubscriptionsController;
@@ -525,6 +530,10 @@ Route::delete('/subscriptions/me/{userId}', [SubscriptionsController::class, 'ca
 Route::get('/subscriptions/me/{userId}/transactions', [SubscriptionsController::class, 'transactions'])->middleware('auth:api');
 Route::post('/subscriptions/checkout', [SubscriptionsController::class, 'checkout'])->middleware('auth:api');
 Route::get('/subscriptions/checkout/verify/{transactionId}', [SubscriptionsController::class, 'verifyCheckout'])->middleware('auth:api');
+
+// Aperçu d'un code promo avant checkout (le checkout lui-même revalide et
+// recalcule toujours côté serveur, voir SubscriptionService::checkout()).
+Route::post('/promo-codes/validate', [PromoCodesController::class, 'validateCode'])->middleware('auth:api');
 // Notification serveur-à-serveur Paiement Pro — authentifiée par jeton d'URL +
 // recoupement de la Transaction (voir PaiementProWebhookController), pas par JWT.
 Route::post('/webhooks/paiementpro', [PaiementProWebhookController::class, 'handle']);
@@ -756,6 +765,37 @@ Route::middleware(['auth:api', 'role:ADMIN'])->group(function () {
     Route::post('/admin/mail-campaigns/{id}/test-send', [AdminMailCampaignsController::class, 'testSend']);
     Route::post('/admin/mail-campaigns/{id}/send', [AdminMailCampaignsController::class, 'send']);
     Route::get('/admin/mail-campaigns/{id}/recipients', [AdminMailCampaignsController::class, 'recipients']);
+
+    // --- Admin: Promotions — campagnes de codes promo, codes, influenceurs
+    // et leurs versements de commission. Segments statiques avant les
+    // wildcards {id}, même règle que le reste du fichier.
+    Route::get('/admin/promo-campaigns/paginate', [AdminPromoCampaignsController::class, 'paginate']);
+    Route::get('/admin/promo-campaigns/stats', [AdminPromoCampaignsController::class, 'stats']);
+    Route::post('/admin/promo-campaigns', [AdminPromoCampaignsController::class, 'store']);
+    Route::get('/admin/promo-campaigns/{id}', [AdminPromoCampaignsController::class, 'show']);
+    Route::patch('/admin/promo-campaigns/{id}', [AdminPromoCampaignsController::class, 'update']);
+    Route::delete('/admin/promo-campaigns/{id}', [AdminPromoCampaignsController::class, 'destroy']);
+
+    Route::get('/admin/promo-codes/paginate', [AdminPromoCodesController::class, 'paginate']);
+    Route::post('/admin/promo-codes/generate', [AdminPromoCodesController::class, 'generate']);
+    Route::post('/admin/promo-codes', [AdminPromoCodesController::class, 'store']);
+    Route::get('/admin/promo-codes/{id}', [AdminPromoCodesController::class, 'show']);
+    Route::patch('/admin/promo-codes/{id}', [AdminPromoCodesController::class, 'update']);
+    Route::delete('/admin/promo-codes/{id}', [AdminPromoCodesController::class, 'destroy']);
+    Route::get('/admin/promo-codes/{id}/redemptions', [AdminPromoCodesController::class, 'redemptions']);
+
+    Route::get('/admin/influencers/paginate', [AdminInfluencersController::class, 'paginate']);
+    Route::post('/admin/influencers', [AdminInfluencersController::class, 'store']);
+    Route::get('/admin/influencers/{id}', [AdminInfluencersController::class, 'show']);
+    Route::patch('/admin/influencers/{id}', [AdminInfluencersController::class, 'update']);
+    Route::delete('/admin/influencers/{id}', [AdminInfluencersController::class, 'destroy']);
+    Route::get('/admin/influencers/{id}/balance', [AdminInfluencersController::class, 'balance']);
+    Route::get('/admin/influencers/{id}/redemptions', [AdminInfluencersController::class, 'redemptions']);
+
+    Route::get('/admin/influencer-payouts/paginate', [AdminInfluencerPayoutsController::class, 'paginate']);
+    Route::post('/admin/influencer-payouts', [AdminInfluencerPayoutsController::class, 'store']);
+    Route::get('/admin/influencer-payouts/{id}', [AdminInfluencerPayoutsController::class, 'show']);
+    Route::patch('/admin/influencer-payouts/{id}', [AdminInfluencerPayoutsController::class, 'update']);
 });
 
 // --- Partenaires potentiels : lien de désabonnement des campagnes (public,

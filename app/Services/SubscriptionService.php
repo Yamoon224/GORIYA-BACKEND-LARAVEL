@@ -34,6 +34,7 @@ class SubscriptionService
         private readonly UserSubscriptionRepositoryInterface $userSubscriptionRepository,
         private readonly PaymentGatewayManager $paymentGatewayManager,
         private readonly UserFeatureUsageService $userFeatureUsageService,
+        private readonly PromoCodeService $promoCodeService,
     ) {}
 
     public function plans(?string $userType): AnonymousResourceCollection
@@ -180,6 +181,20 @@ class SubscriptionService
         $gatewayName = $data['gateway'] ?? $this->paymentGatewayManager->defaultGatewayName();
         $currency = $data['currency'] ?? 'XOF';
         $basePrice = (float) $plan->price * $periodMonths;
+
+        // Code promo optionnel : revalidé et recalculé côté serveur, jamais
+        // de confiance dans un montant déjà réduit venu du client — voir
+        // PromoCodeService::validate()/computeDiscount().
+        $promoCode = null;
+        $discountAmount = 0.0;
+        if (! empty($data['promoCode'])) {
+            $validation = $this->promoCodeService->validate($data['promoCode'], $data['userId'], $plan);
+            $promoCode = $validation['code'];
+            $computed = $this->promoCodeService->computeDiscount($promoCode, $basePrice);
+            $discountAmount = $computed['discountAmount'];
+            $basePrice = $computed['finalAmount'];
+        }
+
         // XOF n'a pas de sous-unité décimale — le montant doit être un entier.
         $amount = $currency === 'XOF' ? (int) round($basePrice) : $basePrice;
         $clientReference = "{$data['userId']}_{$data['planId']}_".(int) round(microtime(true) * 1000);
@@ -197,22 +212,33 @@ class SubscriptionService
                 ...$this->customerDetails($data['userId'], $data['planId'], $data['customerPhone'] ?? null),
             ]);
 
-            $this->recordTransaction($data['userId'], $data['planId'], $gatewayName, $session['sessionId'], $amount, $currency, $periodMonths);
+            $transaction = $this->recordTransaction($data['userId'], $data['planId'], $gatewayName, $session['sessionId'], $amount, $currency, $periodMonths, 'SUBSCRIPTION', null, $promoCode?->id, $discountAmount ?: null);
+            if ($promoCode) {
+                $this->promoCodeService->createPendingRedemption($promoCode, $data['userId'], $transaction, $amount + $discountAmount, $discountAmount, (float) $amount, $currency);
+            }
 
             return [
                 'gateway' => $gatewayName,
                 'checkoutUrl' => $session['checkoutUrl'],
                 'sessionId' => $session['sessionId'],
+                'amount' => $amount,
+                'originalAmount' => $amount + $discountAmount,
+                'discountAmount' => $discountAmount,
             ];
         }
 
-        $this->recordTransaction($data['userId'], $data['planId'], $gatewayName, $clientReference, $amount, $currency, $periodMonths);
+        $transaction = $this->recordTransaction($data['userId'], $data['planId'], $gatewayName, $clientReference, $amount, $currency, $periodMonths, 'SUBSCRIPTION', null, $promoCode?->id, $discountAmount ?: null);
+        if ($promoCode) {
+            $this->promoCodeService->createPendingRedemption($promoCode, $data['userId'], $transaction, $amount + $discountAmount, $discountAmount, (float) $amount, $currency);
+        }
 
         return [
             'gateway' => $gatewayName,
             'amount' => $amount,
             'currency' => $currency,
             'clientReference' => $clientReference,
+            'originalAmount' => $amount + $discountAmount,
+            'discountAmount' => $discountAmount,
         ];
     }
 
@@ -284,6 +310,9 @@ class SubscriptionService
         $this->markTransactionResult($transactionId, $transaction);
 
         if (($transaction['status'] ?? null) !== 'SUCCESS') {
+            if ($transactionRecord && $transactionRecord->promo_code_id) {
+                $this->promoCodeService->cancelRedemption($transactionRecord);
+            }
             $status = $transaction['status'] ?? 'inconnu';
             abort(400, "Paiement non confirmé (statut: {$status})");
         }
@@ -308,6 +337,10 @@ class SubscriptionService
         $existing = $this->userSubscriptionRepository->findActiveForUserAndPlan($userId, $planId);
 
         if ($existing) {
+            if ($transactionRecord && $transactionRecord->promo_code_id) {
+                $this->promoCodeService->confirmRedemption($transactionRecord, $existing->id);
+            }
+
             return new UserSubscriptionResource($existing);
         }
 
@@ -318,6 +351,10 @@ class SubscriptionService
         $periodMonths = (int) ($transactionRecord?->period_months ?? 1);
 
         $sub = $this->performSubscribe($userId, $planId, $periodMonths);
+
+        if ($transactionRecord && $transactionRecord->promo_code_id) {
+            $this->promoCodeService->confirmRedemption($transactionRecord, $sub->id);
+        }
 
         return new UserSubscriptionResource($sub->load('plan'));
     }
@@ -450,9 +487,9 @@ class SubscriptionService
         ];
     }
 
-    private function recordTransaction(string $userId, string $planId, string $gateway, string $gatewayTransactionId, int|float $amount, string $currency, int $periodMonths = 1, string $purpose = 'SUBSCRIPTION', ?string $featureKey = null): void
+    private function recordTransaction(string $userId, string $planId, string $gateway, string $gatewayTransactionId, int|float $amount, string $currency, int $periodMonths = 1, string $purpose = 'SUBSCRIPTION', ?string $featureKey = null, ?string $promoCodeId = null, ?float $discountAmount = null): Transaction
     {
-        Transaction::create([
+        return Transaction::create([
             'user_id' => $userId,
             'plan_id' => $planId,
             'gateway' => $gateway,
@@ -463,6 +500,8 @@ class SubscriptionService
             'purpose' => $purpose,
             'feature_key' => $featureKey,
             'status' => TransactionStatus::PENDING,
+            'promo_code_id' => $promoCodeId,
+            'discount_amount' => $discountAmount,
         ]);
     }
 

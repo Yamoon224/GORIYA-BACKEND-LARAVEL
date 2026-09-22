@@ -17,6 +17,8 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'amount', type: 'number', format: 'float'),
         new OA\Property(property: 'currency', type: 'string', example: 'XOF'),
         new OA\Property(property: 'status', type: 'string', enum: ['PENDING', 'SUCCESS', 'FAILED', 'REFUNDED']),
+        new OA\Property(property: 'promoCodeId', type: 'string', format: 'uuid', nullable: true),
+        new OA\Property(property: 'discountAmount', type: 'number', format: 'float', nullable: true),
         new OA\Property(property: 'createdAt', type: 'string', format: 'date-time'),
     ]
 )]
@@ -35,6 +37,8 @@ class TransactionResource extends JsonResource
             'amount' => (float) $this->amount,
             'currency' => $this->currency,
             'status' => $this->status->value,
+            'promoCodeId' => $this->promo_code_id,
+            'discountAmount' => $this->discount_amount !== null ? (float) $this->discount_amount : null,
             'createdAt' => $this->created_at,
         ];
     }

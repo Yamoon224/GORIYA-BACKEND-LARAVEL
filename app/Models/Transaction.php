@@ -37,6 +37,8 @@ class Transaction extends Model
         'feature_key',
         'status',
         'raw_payload',
+        'promo_code_id',
+        'discount_amount',
     ];
 
     /**
@@ -52,6 +54,7 @@ class Transaction extends Model
             'amount' => 'decimal:2',
             'period_months' => 'integer',
             'raw_payload' => 'array',
+            'discount_amount' => 'decimal:2',
         ];
     }
 
@@ -63,5 +66,10 @@ class Transaction extends Model
     public function plan(): BelongsTo
     {
         return $this->belongsTo(SubscriptionPlan::class, 'plan_id');
+    }
+
+    public function promoCode(): BelongsTo
+    {
+        return $this->belongsTo(PromoCode::class);
     }
 }

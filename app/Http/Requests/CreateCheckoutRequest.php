@@ -19,6 +19,7 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'periodMonths', type: 'integer', enum: [1, 3, 6, 12], description: "Durée choisie ; doit figurer dans availablePeriods du plan (sinon 1 par défaut). Le montant facturé = prix mensuel du plan × periodMonths."),
         new OA\Property(property: 'purpose', type: 'string', enum: ['SUBSCRIPTION', 'USAGE_RESET'], description: "SUBSCRIPTION (défaut) active le plan `planId` une fois payé. USAGE_RESET remet à 0 le quota de `featureKey` sur l'abonnement actif de l'utilisateur — le montant facturé est alors `resetPrice` du plan, pas son prix d'abonnement."),
         new OA\Property(property: 'featureKey', type: 'string', enum: ['cv_creation', 'document_generation', 'cv_analysis'], description: 'Requis quand purpose = USAGE_RESET.'),
+        new OA\Property(property: 'promoCode', type: 'string', description: "Code promo optionnel (ignoré si purpose = USAGE_RESET) — revalidé et recalculé côté serveur, voir PromoCodeService::validate()."),
     ]
 )]
 class CreateCheckoutRequest extends FormRequest
@@ -47,6 +48,7 @@ class CreateCheckoutRequest extends FormRequest
             'periodMonths' => ['nullable', 'integer', 'min:1'],
             'purpose' => ['nullable', 'string', 'in:SUBSCRIPTION,USAGE_RESET'],
             'featureKey' => ['required_if:purpose,USAGE_RESET', 'nullable', 'string', 'in:cv_creation,document_generation,cv_analysis'],
+            'promoCode' => ['nullable', 'string', 'max:40'],
         ];
     }
 }
