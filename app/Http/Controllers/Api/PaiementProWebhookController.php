@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\TransactionStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Transaction;
+use App\Services\SubscriptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use OpenApi\Attributes as OA;
@@ -34,6 +35,8 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: 'Subscriptions', description: "Plans d'abonnement, souscription et paiement")]
 class PaiementProWebhookController extends Controller
 {
+    public function __construct(private readonly SubscriptionService $subscriptionService) {}
+
     #[OA\Post(
         path: '/webhooks/paiementpro',
         tags: ['Subscriptions'],
@@ -93,6 +96,23 @@ class PaiementProWebhookController extends Controller
             'status' => $success ? TransactionStatus::SUCCESS : TransactionStatus::FAILED,
             'raw_payload' => $payload,
         ]);
+
+        // L'activation ne doit pas dépendre du retour du navigateur (onglet
+        // fermé, notification arrivée après les re-tentatives du frontend) :
+        // on applique l'effet du paiement ici. Une erreur est loggée mais ne
+        // casse pas le 200 — verifyCheckout() reste un filet de rattrapage.
+        if ($success) {
+            try {
+                $this->subscriptionService->fulfillTransaction($transaction);
+            } catch (\Throwable $e) {
+                Log::error('[paiementpro] activation échouée après paiement confirmé', [
+                    'reference' => $reference,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        } else {
+            Log::warning('[paiementpro] notification non reconnue comme un succès', ['reference' => $reference, 'code' => $code]);
+        }
 
         return response()->json(['received' => true]);
     }

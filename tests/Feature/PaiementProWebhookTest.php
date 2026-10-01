@@ -2,7 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Enums\BillingPeriod;
+use App\Enums\SubscriptionStatus;
+use App\Enums\SubscriptionUserType;
 use App\Enums\TransactionStatus;
+use App\Models\SubscriptionPlan;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -53,6 +57,44 @@ class PaiementProWebhookTest extends TestCase
         // Le payload brut est conservé : c'est lui qui permettra de caler la
         // vérification du hashcode une fois la formule obtenue.
         $this->assertSame('0', $transaction->raw_payload['responsecode']);
+    }
+
+    /**
+     * L'abonnement est activé par la notification elle-même, sans attendre
+     * que le navigateur revienne appeler /subscriptions/checkout/verify.
+     */
+    public function test_notification_de_succes_active_l_abonnement_sans_retour_navigateur(): void
+    {
+        $plan = SubscriptionPlan::create([
+            'name' => 'Premium',
+            'price' => 5000,
+            'billing_period' => BillingPeriod::MONTHLY,
+            'user_type' => SubscriptionUserType::USER,
+            'features' => [],
+            'is_active' => true,
+        ]);
+        $transaction = $this->transaction(['plan_id' => $plan->id]);
+
+        $this->post(self::URL, ['referenceNumber' => 'REF-123', 'responsecode' => '0', 'amount' => '5000'])->assertOk();
+
+        $this->assertDatabaseHas('user_subscriptions', [
+            'user_id' => $transaction->user_id,
+            'plan_id' => $plan->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+        ]);
+
+        // Rejeu de la notification : pas de doublon d'abonnement.
+        $this->post(self::URL, ['referenceNumber' => 'REF-123', 'responsecode' => '0', 'amount' => '5000'])->assertOk();
+        $this->assertDatabaseCount('user_subscriptions', 1);
+    }
+
+    public function test_notification_en_echec_n_active_aucun_abonnement(): void
+    {
+        $this->transaction();
+
+        $this->post(self::URL, ['referenceNumber' => 'REF-123', 'responsecode' => '1', 'amount' => '5000'])->assertOk();
+
+        $this->assertDatabaseCount('user_subscriptions', 0);
     }
 
     public function test_notification_en_echec_marque_la_transaction_failed(): void

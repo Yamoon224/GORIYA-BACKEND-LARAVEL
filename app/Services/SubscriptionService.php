@@ -310,7 +310,9 @@ class SubscriptionService
         $this->markTransactionResult($transactionId, $transaction);
 
         if (($transaction['status'] ?? null) !== 'SUCCESS') {
-            if ($transactionRecord && $transactionRecord->promo_code_id) {
+            // PENDING = notification pas encore arrivée (le frontend re-tente) :
+            // on ne libère le code promo que sur un échec tranché.
+            if ($transactionRecord && $transactionRecord->promo_code_id && ($transaction['status'] ?? null) !== 'PENDING') {
                 $this->promoCodeService->cancelRedemption($transactionRecord);
             }
             $status = $transaction['status'] ?? 'inconnu';
@@ -357,6 +359,34 @@ class SubscriptionService
         }
 
         return new UserSubscriptionResource($sub->load('plan'));
+    }
+
+    /**
+     * Applique l'effet d'une Transaction confirmée (abonnement ou
+     * réinitialisation de quota) à partir de ce qui a été tracé au checkout,
+     * sans dépendre du retour du navigateur sur /auth/payment-success. Appelé
+     * par la notification serveur-à-serveur (PaiementProWebhookController) :
+     * si l'utilisateur ferme l'onglet ou que la notification arrive après les
+     * re-tentatives du frontend, le forfait est quand même activé.
+     * Idempotent avec verifyCheckout() (même garde findActiveForUserAndPlan).
+     */
+    public function fulfillTransaction(Transaction $transaction): void
+    {
+        if ($transaction->purpose === 'USAGE_RESET') {
+            $user = User::find($transaction->user_id);
+            if ($user) {
+                $this->userFeatureUsageService->reset($user, $transaction->feature_key);
+            }
+
+            return;
+        }
+
+        $sub = $this->userSubscriptionRepository->findActiveForUserAndPlan($transaction->user_id, $transaction->plan_id)
+            ?? $this->performSubscribe($transaction->user_id, $transaction->plan_id, (int) ($transaction->period_months ?? 1));
+
+        if ($transaction->promo_code_id) {
+            $this->promoCodeService->confirmRedemption($transaction, $sub->id);
+        }
     }
 
     /**
