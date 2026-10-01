@@ -39,6 +39,7 @@ use App\Http\Controllers\Api\CourseProjectsController;
 use App\Http\Controllers\Api\CoursesController;
 use App\Http\Controllers\Api\CvAnalysisController;
 use App\Http\Controllers\Api\CvController;
+use App\Http\Controllers\Api\CvProfileController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DeviceTokensController;
 use App\Http\Controllers\Api\EmployeeContractsController;
@@ -195,6 +196,12 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/me/cv', [CvController::class, 'show']);
     Route::put('/me/cv', [CvController::class, 'update']);
     Route::delete('/me/cv', [CvController::class, 'destroy']);
+});
+
+// --- Profil extrait du CV, validé sur /resultat-analyse-cv (un par utilisateur) ---
+Route::middleware('auth:api')->group(function () {
+    Route::get('/me/cv-profile', [CvProfileController::class, 'show']);
+    Route::put('/me/cv-profile', [CvProfileController::class, 'update']);
 });
 
 // --- Espace employé : fiche employé (tous employeurs confondus) + congés et
