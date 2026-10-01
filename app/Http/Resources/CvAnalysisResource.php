@@ -33,7 +33,7 @@ class CvAnalysisResource extends JsonResource
             'id' => $this->id,
             'fileName' => $this->filename,
             'analysisScore' => $this->analysis_score,
-            'recommendations' => $this->recommendations,
+            'recommendations' => $this->recommendations ?? [],
             'uploadDate' => $this->upload_date,
             'status' => $this->status->value,
             'createdAt' => $this->created_at,

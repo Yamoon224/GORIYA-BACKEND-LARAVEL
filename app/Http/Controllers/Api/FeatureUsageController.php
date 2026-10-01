@@ -78,7 +78,7 @@ class FeatureUsageController extends Controller
         // `filename` / `score` (facultatifs) : envoyés par standard après une
         // analyse de CV réussie, pour alimenter les tableaux de bord admin.
         if ($usage['allowed'] && $featureKey === CvAnalysisLogService::FEATURE_KEY) {
-            $this->cvAnalysisLog->record($request->input('filename'), $request->input('score'));
+            $this->cvAnalysisLog->record($request->input('filename'), $request->input('score'), $request->input('recommendations'));
         }
 
         return response()->json($usage);

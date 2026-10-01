@@ -50,7 +50,7 @@ class AnonymousUsageController extends Controller
 
         // Même trace que FeatureUsageController::consume() pour les visiteurs.
         if (($usage['allowed'] ?? false) && $data['featureKey'] === CvAnalysisLogService::FEATURE_KEY) {
-            $this->cvAnalysisLog->record($request->input('filename'), $request->input('score'));
+            $this->cvAnalysisLog->record($request->input('filename'), $request->input('score'), $request->input('recommendations'));
         }
 
         return response()->json($usage);

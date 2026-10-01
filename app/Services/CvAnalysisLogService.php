@@ -20,13 +20,18 @@ class CvAnalysisLogService
      * À appeler quand une tentative `cv_analysis` vient d'être consommée :
      * le quota n'est débité qu'après une analyse réussie.
      */
-    public function record(mixed $filename, mixed $score): CvAnalysis
+    public function record(mixed $filename, mixed $score, mixed $recommendations = null): CvAnalysis
     {
         $name = is_string($filename) ? trim($filename) : '';
 
         return CvAnalysis::create([
             'filename' => $name !== '' ? mb_substr($name, 0, 255) : 'CV',
             'analysis_score' => is_numeric($score) ? max(0, min(100, (int) $score)) : 0,
+            // Jamais null : le backoffice lit `recommendations.length`.
+            'recommendations' => collect(is_array($recommendations) ? $recommendations : [])
+                ->filter(fn ($r) => is_string($r) && trim($r) !== '')
+                ->map(fn (string $r) => mb_substr(trim($r), 0, 500))
+                ->take(10)->values()->all(),
             'upload_date' => now(),
             'status' => CVStatus::COMPLETED,
         ]);
