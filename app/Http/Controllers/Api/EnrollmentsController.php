@@ -52,7 +52,7 @@ class EnrollmentsController extends Controller
     )]
     public function enroll(string $courseId, Request $request)
     {
-        $course = $this->courseService->find($courseId);
+        $course = $this->courseService->findVisible($courseId);
 
         if (! $course) {
             abort(404, 'Course not found');

@@ -209,7 +209,7 @@ class PlanFeatureGateTest extends TestCase
     {
         $this->assertSame([], SubscriptionPlan::where('name', 'Grouilleur')->firstOrFail()->included_features);
         $this->assertSame(
-            ['goriya_meet', 'goriya_connect', 'recherche_entreprise'],
+            ['goriya_meet', 'goriya_connect', 'recherche_entreprise', 'formations'],
             SubscriptionPlan::where('name', 'Standard')->firstOrFail()->included_features,
         );
         $this->assertSame(

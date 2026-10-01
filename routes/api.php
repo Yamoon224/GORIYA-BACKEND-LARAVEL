@@ -5,6 +5,9 @@ use App\Http\Controllers\Api\AdminAnalyticsController;
 use App\Http\Controllers\Api\AdminAuditLogsController;
 use App\Http\Controllers\Api\AdminAuthController;
 use App\Http\Controllers\Api\AdminCompaniesController;
+use App\Http\Controllers\Api\AdminCourseProjectsController;
+use App\Http\Controllers\Api\AdminCoursesController;
+use App\Http\Controllers\Api\AdminCourseTaxonomyController;
 use App\Http\Controllers\Api\AdminDashboardController;
 use App\Http\Controllers\Api\AdminJobsController;
 use App\Http\Controllers\Api\AdminInfluencerPayoutsController;
@@ -32,6 +35,7 @@ use App\Http\Controllers\Api\CommunitiesController;
 use App\Http\Controllers\Api\CompaniesController;
 use App\Http\Controllers\Api\CompanyResearchController;
 use App\Http\Controllers\Api\ConnectionsController;
+use App\Http\Controllers\Api\CourseProjectsController;
 use App\Http\Controllers\Api\CoursesController;
 use App\Http\Controllers\Api\CvAnalysisController;
 use App\Http\Controllers\Api\CvController;
@@ -52,6 +56,7 @@ use App\Http\Controllers\Api\JobOffersController;
 use App\Http\Controllers\Api\EmployeeDocumentsController;
 use App\Http\Controllers\Api\RecruitmentController;
 use App\Http\Controllers\Api\RecruitmentInterviewsController;
+use App\Http\Controllers\Api\LearningController;
 use App\Http\Controllers\Api\LunionMeetWebhookController;
 use App\Http\Controllers\Api\MatchingResultsController;
 use App\Http\Controllers\Api\MessagesController;
@@ -284,19 +289,67 @@ Route::middleware('auth:api')->group(function () {
 // signature HMAC, pas par JWT — voir LunionMeetWebhookController) ---
 Route::post('/webhooks/lunion-meet', [LunionMeetWebhookController::class, 'handle']);
 
-// --- Courses (Section Formation — catalogue public, gestion admin) ---
+// --- Courses (module Formation — catalogue public, gestion admin) ---
+// Le catalogue est public ; /courses/{id} lit le JWT s'il est présent pour
+// renvoyer l'état de l'apprenant et déverrouiller les vidéos (voir
+// CourseAccessService).
+Route::get('/course-categories', [CoursesController::class, 'categories']);
 Route::get('/courses', [CoursesController::class, 'index']);
 Route::get('/courses/paginate', [CoursesController::class, 'paginate']);
 Route::get('/courses/{id}', [CoursesController::class, 'show']);
 Route::post('/courses', [CoursesController::class, 'store'])->middleware(['auth:api', 'role:ADMIN']);
 Route::delete('/courses/{id}', [CoursesController::class, 'destroy'])->middleware(['auth:api', 'role:ADMIN']);
 
-// --- Enrollments (progression + certificats, scopé à l'utilisateur) ---
+// --- Enrollments + espace apprenant (progression, favoris, projets, pass) ---
 Route::middleware('auth:api')->group(function () {
     Route::get('/enrollments', [EnrollmentsController::class, 'index']);
     Route::post('/courses/{courseId}/enroll', [EnrollmentsController::class, 'enroll']);
     Route::patch('/enrollments/{id}/progress', [EnrollmentsController::class, 'updateProgress']);
     Route::get('/enrollments/{id}/certificate', [EnrollmentsController::class, 'downloadCertificate']);
+
+    Route::get('/me/courses', [LearningController::class, 'myCourses']);
+    Route::post('/lessons/{id}/progress', [LearningController::class, 'lessonProgress']);
+    Route::get('/me/course-bookmarks', [LearningController::class, 'bookmarks']);
+    Route::post('/courses/{courseId}/bookmark', [LearningController::class, 'addBookmark']);
+    Route::delete('/courses/{courseId}/bookmark', [LearningController::class, 'removeBookmark']);
+    Route::get('/me/course-access', [LearningController::class, 'access']);
+    Route::post('/me/course-pass', [LearningController::class, 'activatePass']);
+
+    Route::get('/me/course-projects', [CourseProjectsController::class, 'index']);
+    Route::post('/me/course-projects', [CourseProjectsController::class, 'store']);
+    Route::patch('/me/course-projects/{id}', [CourseProjectsController::class, 'update']);
+    Route::delete('/me/course-projects/{id}', [CourseProjectsController::class, 'destroy']);
+    Route::get('/me/course-projects/{id}/file', [CourseProjectsController::class, 'download']);
+});
+
+// --- Admin Formation (catalogue, leçons, référentiels, relecture projets) ---
+Route::middleware(['auth:api', 'role:ADMIN'])->group(function () {
+    Route::get('/admin/courses/paginate', [AdminCoursesController::class, 'paginate']);
+    Route::get('/admin/courses/stats', [AdminCoursesController::class, 'stats']);
+    Route::post('/admin/courses/upload-image', [AdminCoursesController::class, 'uploadImage']);
+    Route::post('/admin/courses', [AdminCoursesController::class, 'store']);
+    Route::get('/admin/courses/{id}', [AdminCoursesController::class, 'show']);
+    Route::patch('/admin/courses/{id}', [AdminCoursesController::class, 'update']);
+    Route::delete('/admin/courses/{id}', [AdminCoursesController::class, 'destroy']);
+
+    Route::get('/admin/courses/{id}/lessons', [AdminCoursesController::class, 'lessons']);
+    Route::post('/admin/courses/{id}/lessons', [AdminCoursesController::class, 'storeLesson']);
+    Route::post('/admin/courses/{id}/lessons/reorder', [AdminCoursesController::class, 'reorderLessons']);
+    Route::patch('/admin/course-lessons/{lessonId}', [AdminCoursesController::class, 'updateLesson']);
+    Route::delete('/admin/course-lessons/{lessonId}', [AdminCoursesController::class, 'destroyLesson']);
+
+    Route::get('/admin/course-categories', [AdminCourseTaxonomyController::class, 'categories']);
+    Route::post('/admin/course-categories', [AdminCourseTaxonomyController::class, 'storeCategory']);
+    Route::patch('/admin/course-categories/{id}', [AdminCourseTaxonomyController::class, 'updateCategory']);
+    Route::delete('/admin/course-categories/{id}', [AdminCourseTaxonomyController::class, 'destroyCategory']);
+    Route::get('/admin/instructors', [AdminCourseTaxonomyController::class, 'instructors']);
+    Route::post('/admin/instructors', [AdminCourseTaxonomyController::class, 'storeInstructor']);
+    Route::patch('/admin/instructors/{id}', [AdminCourseTaxonomyController::class, 'updateInstructor']);
+    Route::delete('/admin/instructors/{id}', [AdminCourseTaxonomyController::class, 'destroyInstructor']);
+
+    Route::get('/admin/course-projects/paginate', [AdminCourseProjectsController::class, 'paginate']);
+    Route::patch('/admin/course-projects/{id}/review', [AdminCourseProjectsController::class, 'review']);
+    Route::get('/admin/course-projects/{id}/file', [AdminCourseProjectsController::class, 'download']);
 });
 
 // --- Employee Surveys (évaluation anonyme des employés — réservé aux

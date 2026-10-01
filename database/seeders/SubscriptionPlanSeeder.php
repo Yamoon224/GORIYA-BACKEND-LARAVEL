@@ -27,6 +27,10 @@ use Illuminate\Database\Seeder;
  *    backend par le middleware `plan.feature` (voir routes/api.php et
  *    EnsurePlanIncludesFeature) — une clé absente est un vrai refus HTTP,
  *    pas seulement une page masquée côté frontend.
+ *  - `formations` (Standard, Premium) : accès complet aux vidéos du module
+ *    Formation. Pas de middleware ici — le catalogue reste public et ce sont
+ *    les URLs vidéo qui sont retenues ; voir CourseAccessService (qui gère
+ *    aussi le pass découverte de 7 jours ouvert à tous).
  *  - Entreprise (Business, Business+) : `available_periods` rend la
  *    périodicité choisissable (1/3/6/12 mois) au checkout — le prix
  *    ci-dessous reste le prix MENSUEL de base, multiplié par la durée
@@ -55,6 +59,7 @@ class SubscriptionPlanSeeder extends Seeder
                     'Historique de candidatures',
                     'Notifications d\'offres (in-app)',
                     'Goriya Chat',
+                    'Formations gratuites + pass découverte de 7 jours',
                     'Support par email',
                     'Valable 2 semaines',
                 ],
@@ -75,12 +80,13 @@ class SubscriptionPlanSeeder extends Seeder
                     'Générer des documents (5 tentatives, réinitialisables à 500 XOF)',
                     'Recherche avancée sur une entreprise',
                     'Analyse de CV (5 tentatives, réinitialisables à 500 XOF)',
+                    'Formations : accès illimité au catalogue',
                     "Notifications d'offres prioritaires : in-app + email",
                     'Support prioritaire',
                 ],
                 'notification_level' => 'ELEVE',
                 'feature_limits' => ['cv_creation' => 5, 'document_generation' => 5, 'cv_analysis' => 5],
-                'included_features' => ['goriya_meet', 'goriya_connect', 'recherche_entreprise'],
+                'included_features' => ['goriya_meet', 'goriya_connect', 'recherche_entreprise', 'formations'],
                 'reset_price' => 500,
                 'is_active' => true,
             ],
@@ -98,6 +104,7 @@ class SubscriptionPlanSeeder extends Seeder
                     'Créer un Portfolio',
                     'Recherche avancée sur une entreprise',
                     'Analyse de CV (20 tentatives, réinitialisables à 500 XOF)',
+                    'Formations : accès illimité au catalogue',
                     'Goriya Pitch',
                     'Goriya Docs',
                     "Notifications d'offres prioritaires : in-app + email",
@@ -107,7 +114,7 @@ class SubscriptionPlanSeeder extends Seeder
                 'feature_limits' => ['cv_creation' => 20, 'document_generation' => 20, 'cv_analysis' => 20],
                 'included_features' => [
                     'goriya_meet', 'goriya_connect', 'recherche_entreprise',
-                    'simulation_entretien', 'portfolio', 'goriya_pitch', 'goriya_docs',
+                    'simulation_entretien', 'portfolio', 'goriya_pitch', 'goriya_docs', 'formations',
                 ],
                 'reset_price' => 500,
                 'is_active' => true,
