@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\CvAnalysisLogService;
 use App\Services\UserFeatureUsageService;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
@@ -16,7 +17,10 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: 'Feature Usage', description: "Quota des fonctionnalités \"Limité\" du forfait actif")]
 class FeatureUsageController extends Controller
 {
-    public function __construct(private readonly UserFeatureUsageService $featureUsageService) {}
+    public function __construct(
+        private readonly UserFeatureUsageService $featureUsageService,
+        private readonly CvAnalysisLogService $cvAnalysisLog,
+    ) {}
 
     #[OA\Get(
         path: '/me/feature-usage/{featureKey}',
@@ -69,6 +73,14 @@ class FeatureUsageController extends Controller
     )]
     public function consume(string $featureKey, Request $request)
     {
-        return response()->json($this->featureUsageService->consume($request->user(), $featureKey));
+        $usage = $this->featureUsageService->consume($request->user(), $featureKey);
+
+        // `filename` / `score` (facultatifs) : envoyés par standard après une
+        // analyse de CV réussie, pour alimenter les tableaux de bord admin.
+        if ($usage['allowed'] && $featureKey === CvAnalysisLogService::FEATURE_KEY) {
+            $this->cvAnalysisLog->record($request->input('filename'), $request->input('score'));
+        }
+
+        return response()->json($usage);
     }
 }

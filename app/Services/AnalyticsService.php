@@ -29,6 +29,7 @@ class AnalyticsService
             'analyzedCVs' => CvAnalysis::where('status', CVStatus::COMPLETED)->count(),
             'successfulInterviews' => InterviewSession::where('status', InterviewStatus::COMPLETED)->count(),
             'matchingRate' => $rate,
+            'totalApplications' => Candidature::count(),
             // Chaîne littérale côté source, jamais calculée réellement.
             'averageAnalysisTime' => '2h 30min',
             // 'month6' ne correspond à aucune des branches 'week'/'year' —

@@ -11,9 +11,13 @@ use App\Http\Resources\CandidatureResource;
 use App\Http\Resources\JobOfferResource;
 use App\Models\Candidature;
 use App\Models\Company;
+use App\Models\Cv;
 use App\Models\CvAnalysis;
 use App\Models\InterviewSession;
 use App\Models\JobOffer;
+use App\Models\Pitch;
+use App\Models\Presentation;
+use App\Models\ResearchQuery;
 use App\Models\User;
 use Carbon\Carbon;
 use Throwable;
@@ -159,11 +163,51 @@ class DashboardService
             'profileViews' => 0,
             'savedJobs' => 0,
             'statsData' => $statsData,
+            'monthly' => $this->getMonthlyGrowth(),
+            'aiTools' => $this->getAiToolsUsage(),
             'chartData' => $this->getPerformanceData('month'),
             'lineChartData' => $this->getRecentOffersTrend(6),
             'recentCandidates' => CandidatureResource::collection($recentCandidates),
             'topOffers' => JobOfferResource::collection($topOffers),
             'recentOffers' => JobOfferResource::collection($recentOffers),
+        ];
+    }
+
+    /**
+     * Volumes créés depuis le 1er du mois en cours — alimente les mentions
+     * « ce mois-ci » des cartes et le bloc « Croissance mensuelle » du
+     * tableau de bord admin (auparavant des pourcentages codés en dur).
+     *
+     * @return array{newCandidates: int, newCompanies: int, cvAnalyzed: int, newJobOffers: int, applications: int}
+     */
+    public function getMonthlyGrowth(): array
+    {
+        $monthStart = now()->startOfMonth();
+
+        return [
+            'newCandidates' => User::where('role', UserRole::USER)->where('created_at', '>=', $monthStart)->count(),
+            'newCompanies' => Company::where('created_at', '>=', $monthStart)->count(),
+            'cvAnalyzed' => CvAnalysis::where('status', CVStatus::COMPLETED)->where('upload_date', '>=', $monthStart)->count(),
+            'newJobOffers' => JobOffer::where('publish_date', '>=', $monthStart)->count(),
+            'applications' => Candidature::where('applied_date', '>=', $monthStart)->count(),
+        ];
+    }
+
+    /**
+     * Nombre d'utilisations enregistrées par outil IA, tous utilisateurs
+     * confondus — remplace les pourcentages de « performance » fictifs.
+     *
+     * @return array<int, array{key: string, name: string, value: int}>
+     */
+    public function getAiToolsUsage(): array
+    {
+        return [
+            ['key' => 'cvAnalysis', 'name' => 'Analyse de CV', 'value' => CvAnalysis::where('status', CVStatus::COMPLETED)->count()],
+            ['key' => 'cvCreation', 'name' => 'Création de CV', 'value' => Cv::count()],
+            ['key' => 'interview', 'name' => "Simulation d'entretien", 'value' => InterviewSession::count()],
+            ['key' => 'pitch', 'name' => 'Pitch Goriya', 'value' => Pitch::count()],
+            ['key' => 'presentation', 'name' => 'Présentations IA', 'value' => Presentation::count()],
+            ['key' => 'research', 'name' => 'Recherche entreprise', 'value' => ResearchQuery::count()],
         ];
     }
 

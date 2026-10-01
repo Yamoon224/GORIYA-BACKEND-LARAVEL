@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ConsumeAnonymousUsageRequest;
 use App\Services\AnonymousUsageService;
+use App\Services\CvAnalysisLogService;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
@@ -15,7 +16,10 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: 'Anonymous Usage', description: "Quota d'usage gratuit avant inscription, identifié par deviceId")]
 class AnonymousUsageController extends Controller
 {
-    public function __construct(private readonly AnonymousUsageService $anonymousUsageService) {}
+    public function __construct(
+        private readonly AnonymousUsageService $anonymousUsageService,
+        private readonly CvAnalysisLogService $cvAnalysisLog,
+    ) {}
 
     #[OA\Post(
         path: '/anonymous-usage/consume',
@@ -42,7 +46,14 @@ class AnonymousUsageController extends Controller
     {
         $data = $request->validated();
 
-        return response()->json($this->anonymousUsageService->consume($data['deviceId'], $data['featureKey']));
+        $usage = $this->anonymousUsageService->consume($data['deviceId'], $data['featureKey']);
+
+        // Même trace que FeatureUsageController::consume() pour les visiteurs.
+        if (($usage['allowed'] ?? false) && $data['featureKey'] === CvAnalysisLogService::FEATURE_KEY) {
+            $this->cvAnalysisLog->record($request->input('filename'), $request->input('score'));
+        }
+
+        return response()->json($usage);
     }
 
     #[OA\Get(
