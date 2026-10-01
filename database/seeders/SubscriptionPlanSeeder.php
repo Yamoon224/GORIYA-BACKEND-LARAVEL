@@ -92,7 +92,8 @@ class SubscriptionPlanSeeder extends Seeder
             ],
             [
                 'name' => 'Premium',
-                'price' => 4999,
+                // TEMP (tests de paiement) : 500 au lieu de 4999 — à remettre.
+                'price' => 500,
                 'billing_period' => BillingPeriod::MONTHLY,
                 'user_type' => SubscriptionUserType::USER,
                 'features' => [
@@ -170,7 +171,8 @@ class SubscriptionPlanSeeder extends Seeder
                 // mensuelle claire) : 45 500 XOF/mois, multiplié par la durée
                 // choisie au checkout comme Business.
                 'name' => 'Business+',
-                'price' => 45500,
+                // TEMP (tests de paiement) : 500 au lieu de 45500 — à remettre.
+                'price' => 500,
                 'billing_period' => BillingPeriod::MONTHLY,
                 'available_periods' => [1, 3, 6, 12],
                 'user_type' => SubscriptionUserType::ENTERPRISE,
