@@ -259,6 +259,23 @@ class PaiementProWebhookTest extends TestCase
         $this->assertSame(TransactionStatus::SUCCESS, $transaction->refresh()->status);
     }
 
+    /**
+     * Corps JSON posté sans Content-Type: application/json — Laravel ne le
+     * parse pas tout seul, le contrôleur le décode lui-même.
+     */
+    public function test_la_notification_json_sans_content_type_est_lue(): void
+    {
+        $transaction = $this->transaction();
+
+        $this->call('POST', self::URL, [], [], [], ['CONTENT_TYPE' => 'text/plain'], json_encode([
+            'referenceNumber' => 'REF-123',
+            'responsecode' => 0,
+            'amount' => 5000,
+        ]))->assertOk();
+
+        $this->assertSame(TransactionStatus::SUCCESS, $transaction->refresh()->status);
+    }
+
     public function test_l_endpoint_est_public(): void
     {
         $this->post(self::URL, ['referenceNumber' => 'REF-123'])->assertOk();

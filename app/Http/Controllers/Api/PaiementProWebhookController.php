@@ -48,7 +48,31 @@ class PaiementProWebhookController extends Controller
     public function handle(Request $request)
     {
         $payload = $request->all();
+        // Corps JSON envoyé sans en-tête Content-Type: application/json :
+        // Laravel ne le parse pas et all() ne voit que la query string.
+        $decoded = json_decode((string) $request->getContent(), true);
+        if (is_array($decoded)) {
+            $payload = [...$decoded, ...$payload];
+        }
+        // Le jeton GORIYA (lu plus bas dans la query string) ne doit finir ni
+        // dans les logs ni dans raw_payload.
+        unset($payload['token']);
         Log::info('[paiementpro] notification', $payload);
+        if (! app()->environment('testing')) {
+            // Trace brute tant que le format réel n'est pas confirmé par
+            // Paiement Pro — c'est elle qu'il faut relire si un paiement
+            // encaissé n'active rien.
+            $query = $request->query();
+            if (isset($query['token'])) {
+                $query['token'] = '[masqué]';
+            }
+            Log::info('[paiementpro] notification brute', [
+                'method' => $request->method(),
+                'contentType' => $request->header('Content-Type'),
+                'query' => $query,
+                'body' => mb_substr((string) $request->getContent(), 0, 2000),
+            ]);
+        }
 
         $expectedToken = config('services.paiementpro.notification_token');
         if ($expectedToken && ! hash_equals((string) $expectedToken, (string) $request->query('token', ''))) {
