@@ -15,7 +15,7 @@ trait Auditable
     public static function bootAuditable(): void
     {
         static::created(function ($model) {
-            app(AuditLogService::class)->log('created', $model, [], $model->auditableAttributes());
+            static::writeAudit('created', $model, [], $model->auditableAttributes());
         });
 
         static::updated(function ($model) {
@@ -27,14 +27,28 @@ trait Auditable
 
             $old = collect($model->getOriginal())->only(array_keys($changes))->toArray();
 
-            app(AuditLogService::class)->log('updated', $model, $old, $changes);
+            static::writeAudit('updated', $model, $old, $changes);
         });
 
         static::deleted(function ($model) {
             // Ne pas conserver le contenu du modèle supprimé (DCP) dans old_values :
             // seule la preuve que la suppression a eu lieu (type, id, auteur, date) est journalisée.
-            app(AuditLogService::class)->log('deleted', $model, [], []);
+            static::writeAudit('deleted', $model, [], []);
         });
+    }
+
+    /**
+     * Le journal d'audit ne doit jamais faire échouer l'opération métier qu'il
+     * trace : un insert audit_logs en erreur a déjà interrompu le webhook
+     * Paiement Pro après le passage en SUCCESS, donc avant l'activation.
+     */
+    protected static function writeAudit(string $action, $model, array $old, array $new): void
+    {
+        try {
+            app(AuditLogService::class)->log($action, $model, $old, $new);
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     protected function auditExcludedAttributes(): array

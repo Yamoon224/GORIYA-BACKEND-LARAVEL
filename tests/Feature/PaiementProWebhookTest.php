@@ -60,6 +60,28 @@ class PaiementProWebhookTest extends TestCase
     }
 
     /**
+     * Paiement Pro envoie tout son payload en query string : l'URL dépasse les
+     * 255 caractères de audit_logs.url, ce qui faisait échouer (MySQL strict)
+     * l'audit de la Transaction, donc le webhook avant l'activation.
+     */
+    public function test_url_de_notification_longue_est_tronquee_dans_l_audit(): void
+    {
+        $transaction = $this->transaction();
+
+        $this->post(self::URL.'?'.http_build_query([
+            'referenceNumber' => 'REF-123',
+            'responsecode' => '0',
+            'amount' => '5000',
+            'hashcode' => str_repeat('a', 300),
+        ]))->assertOk();
+
+        $this->assertSame(TransactionStatus::SUCCESS, $transaction->refresh()->status);
+        $url = \App\Models\AuditLog::query()->where('auditable_id', $transaction->id)->where('action', 'updated')->value('url');
+        $this->assertNotNull($url);
+        $this->assertLessThanOrEqual(255, mb_strlen($url));
+    }
+
+    /**
      * L'abonnement est activé par la notification elle-même, sans attendre
      * que le navigateur revienne appeler /subscriptions/checkout/verify.
      */

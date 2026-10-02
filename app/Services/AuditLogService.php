@@ -30,7 +30,9 @@ class AuditLogService
             'auditable_id' => $auditable?->getKey(),
             'old_values' => $oldValues ?: null,
             'new_values' => $newValues ?: null,
-            'url' => $request?->fullUrl(),
+            // Colonne VARCHAR(255) : une URL plus longue (webhook Paiement Pro
+            // avec tout son payload en query string) faisait échouer l'insert.
+            'url' => $request ? mb_substr($request->fullUrl(), 0, 255) : null,
             'method' => $request?->method(),
             'ip_address' => $request?->ip(),
             'user_agent' => $request?->userAgent(),

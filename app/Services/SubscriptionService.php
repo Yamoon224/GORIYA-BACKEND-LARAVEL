@@ -546,6 +546,13 @@ class SubscriptionService
             default => TransactionStatus::FAILED,
         };
 
+        // Rien à écrire tant que c'est PENDING — et surtout ne pas réécrire
+        // PENDING par-dessus un SUCCESS/FAILED que la notification
+        // serveur-à-serveur vient de poser entre notre lecture et cette écriture.
+        if ($status === TransactionStatus::PENDING) {
+            return;
+        }
+
         // Instance update (pas Builder::update() en masse) pour que le cast
         // 'array' de raw_payload soit bien encodé en JSON avant écriture.
         Transaction::query()
