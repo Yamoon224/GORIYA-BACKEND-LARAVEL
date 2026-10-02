@@ -470,6 +470,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/candidatures/paginate', [CandidaturesController::class, 'paginate']);
     Route::get('/candidatures/{id}', [CandidaturesController::class, 'show']);
     Route::post('/candidatures', [CandidaturesController::class, 'store']);
+    Route::post('/candidatures/{id}/compatibility', [CandidaturesController::class, 'compatibility']);
     Route::patch('/candidatures/{id}', [CandidaturesController::class, 'update']);
     Route::delete('/candidatures/{id}', [CandidaturesController::class, 'destroy']);
 });

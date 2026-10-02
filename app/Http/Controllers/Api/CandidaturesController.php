@@ -10,6 +10,7 @@ use App\Http\Requests\UpdateCandidatureRequest;
 use App\Http\Resources\CandidatureResource;
 use App\Models\Candidature;
 use App\Models\User;
+use App\Services\CandidatureCompatibilityService;
 use App\Services\CandidatureService;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
@@ -216,6 +217,48 @@ class CandidaturesController extends Controller
         }
 
         return new CandidatureResource($candidature);
+    }
+
+    /*
+    |----------------------------------------------------------------------
+    | COMPATIBILITÉ IA — calcule le score d'une candidature qui n'en a pas
+    | encore (0), ou le recalcule avec `force`. Réservé à l'entreprise
+    | propriétaire de l'offre : c'est elle qui lit ce score.
+    |----------------------------------------------------------------------
+    */
+    #[OA\Post(
+        path: '/candidatures/{id}/compatibility',
+        tags: ['Candidatures'],
+        summary: "Calcule le score de compatibilité IA d'une candidature",
+        security: [['bearerAuth' => []]],
+        parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [
+            new OA\Response(response: 200, description: 'Score (null si l\'IA est indisponible)', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'score', type: 'integer', nullable: true),
+            ])),
+            new OA\Response(response: 403, description: "Réservé à l'entreprise propriétaire de l'offre"),
+            new OA\Response(response: 404, description: 'Candidature introuvable'),
+        ]
+    )]
+    public function compatibility(string $id, Request $request, CandidatureCompatibilityService $compatibility)
+    {
+        $candidature = Candidature::with('jobOffer')->find($id);
+
+        if (! $candidature) {
+            abort(404, 'Candidature not found');
+        }
+
+        $user = $request->user();
+        $this->authorizeOwnerOrAdmin(
+            $user,
+            $user?->company_id !== null && $user->company_id === $candidature->jobOffer?->company_id,
+        );
+
+        if ($candidature->score > 0 && ! $request->boolean('force')) {
+            return response()->json(['score' => (int) $candidature->score]);
+        }
+
+        return response()->json(['score' => $compatibility->compute($candidature)]);
     }
 
     /*

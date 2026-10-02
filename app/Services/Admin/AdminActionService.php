@@ -13,6 +13,7 @@ use App\Http\Resources\CandidatureResource;
 use App\Http\Resources\InterviewSessionResource;
 use App\Http\Resources\MatchingResultResource;
 use App\Http\Resources\ScoringResultResource;
+use App\Models\Candidature;
 use App\Models\JobOffer;
 use App\Models\JobOfferQuestion;
 use App\Models\UserResume;
@@ -23,9 +24,11 @@ use App\Repositories\Contracts\JobOfferRepositoryInterface;
 use App\Repositories\Contracts\MatchingResultRepositoryInterface;
 use App\Repositories\Contracts\ScoringResultRepositoryInterface;
 use App\Repositories\Contracts\UserRepositoryInterface;
+use App\Services\CandidatureCompatibilityService;
 use App\Services\NotificationService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
@@ -102,6 +105,21 @@ class AdminActionService
 
         $fresh = $candidature->fresh(['user', 'jobOffer.company', 'answers', 'resume']);
         $this->notificationService->notifyNewApplication($fresh);
+
+        // Compatibilité IA : calculée après l'envoi de la réponse, pour ne pas
+        // faire attendre le candidat sur un appel IA. En cas d'échec le score
+        // reste à 0 et la page Candidatures le recalcule à la demande.
+        $candidatureId = $fresh->id;
+        dispatch(function () use ($candidatureId) {
+            try {
+                $candidature = Candidature::find($candidatureId);
+                if ($candidature) {
+                    app(CandidatureCompatibilityService::class)->compute($candidature);
+                }
+            } catch (Throwable $e) {
+                Log::warning('Compatibilité IA non calculée au dépôt : '.$e->getMessage());
+            }
+        })->afterResponse();
 
         return new CandidatureResource($fresh);
     }

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Contracts\AiAnalysisServiceInterface;
 use App\Models\Candidature;
 use App\Models\Company;
 use App\Models\Cv;
@@ -111,6 +112,84 @@ class CandidateProfileOnCandidatureTest extends TestCase
             ['React', 'Node.js', 'PostgreSQL'],
             $reponse->json('data.0.candidateSkills')
         );
+    }
+
+    /**
+     * Compatibilité IA : le score est calculé à partir du profil réel du
+     * candidat et enregistré sur la candidature. Sans IA disponible, rien
+     * n'est inventé — la candidature reste sans score.
+     */
+    public function test_la_compatibilite_ia_est_calculee_a_partir_du_profil_et_enregistree(): void
+    {
+        [$recruteur, $offre] = $this->entreprise();
+        $candidat = $this->candidat();
+        $candidature = $this->postuler($candidat, $offre);
+        $candidature->update(['score' => 0, 'cover_letter' => 'Cinq ans de React.']);
+
+        $ia = $this->mock(AiAnalysisServiceInterface::class);
+        $ia->shouldReceive('scoreCompatibility')
+            ->once()
+            ->withArgs(fn (array $profil, array $poste) => $profil['title'] === 'Développeuse Full-Stack'
+                && $profil['coverLetter'] === 'Cinq ans de React.'
+                && $poste['title'] === 'Développeur Full-Stack Senior')
+            ->andReturn(84);
+
+        $this->actingAs($recruteur, 'api')
+            ->postJson("/candidatures/{$candidature->id}/compatibility")
+            ->assertOk()
+            ->assertJsonPath('score', 84);
+
+        $this->assertSame(84, (int) $candidature->refresh()->score);
+
+        // Déjà calculé : pas de second appel IA (le mock n'en accepte qu'un).
+        $this->actingAs($recruteur, 'api')
+            ->postJson("/candidatures/{$candidature->id}/compatibility")
+            ->assertOk()
+            ->assertJsonPath('score', 84);
+    }
+
+    /** Le score est calculé dès le dépôt, après l'envoi de la réponse. */
+    public function test_postuler_declenche_le_calcul_de_la_compatibilite(): void
+    {
+        [, $offre] = $this->entreprise();
+        $candidat = $this->candidat();
+
+        $this->mock(AiAnalysisServiceInterface::class)
+            ->shouldReceive('scoreCompatibility')->once()->andReturn(67);
+
+        $this->actingAs($candidat, 'api')
+            ->postJson("/job-offers/{$offre->id}/apply", [])
+            ->assertSuccessful();
+
+        $this->assertSame(67, (int) Candidature::where('user_id', $candidat->id)->value('score'));
+    }
+
+    public function test_la_compatibilite_ia_indisponible_ne_fabrique_pas_de_score(): void
+    {
+        [$recruteur, $offre] = $this->entreprise();
+        $candidature = $this->postuler($this->candidat(), $offre);
+        $candidature->update(['score' => 0]);
+
+        $this->mock(AiAnalysisServiceInterface::class)
+            ->shouldReceive('scoreCompatibility')->once()->andReturn(null);
+
+        $this->actingAs($recruteur, 'api')
+            ->postJson("/candidatures/{$candidature->id}/compatibility")
+            ->assertOk()
+            ->assertJsonPath('score', null);
+
+        $this->assertSame(0, (int) $candidature->refresh()->score);
+    }
+
+    public function test_la_compatibilite_ia_est_reservee_a_l_entreprise_de_l_offre(): void
+    {
+        [, $offre] = $this->entreprise();
+        $candidat = $this->candidat();
+        $candidature = $this->postuler($candidat, $offre);
+
+        $this->actingAs($candidat, 'api')
+            ->postJson("/candidatures/{$candidature->id}/compatibility")
+            ->assertForbidden();
     }
 
     public function test_un_candidat_sans_portfolio_ni_cv_ne_casse_pas_la_carte(): void

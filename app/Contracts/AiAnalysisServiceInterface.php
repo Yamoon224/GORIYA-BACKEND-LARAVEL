@@ -39,6 +39,18 @@ interface AiAnalysisServiceInterface
     public function matchCandidateToJob(array $candidate, array $job): array;
 
     /**
+     * Score de compatibilité entre le profil RÉEL d'un candidat (titre,
+     * compétences, CV, réponses, lettre) et une offre — c'est la valeur
+     * affichée sur chaque carte de la page Candidatures. Contrairement aux
+     * autres méthodes, pas de valeur de repli : `null` quand l'IA est
+     * indisponible, pour ne jamais afficher un score inventé.
+     *
+     * @param  array{title?: ?string, skills?: array<int, string>, profile?: ?string, coverLetter?: ?string, answers?: array<int, array{question: string, answer: string}>, resume?: ?array{binary: string, mimeType: string, name: string}}  $candidate
+     * @param  array{title: string, description?: ?string, requirements?: array<int, string>, experience?: ?string, location?: ?string}  $job
+     */
+    public function scoreCompatibility(array $candidate, array $job): ?int;
+
+    /**
      * Génère un test de compétences techniques/comportementales à
      * administrer par le recruteur — voir CandidateAssessment::skills_test.
      *
