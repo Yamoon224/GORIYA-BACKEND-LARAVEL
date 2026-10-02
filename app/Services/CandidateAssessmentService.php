@@ -10,16 +10,16 @@ use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Orchestration de l'évaluation IA approfondie d'un candidat — combine des
- * appels existants (scoreCandidate, matchCandidateToJob) et deux nouveaux
- * (generateSkillsTest, analyzeSoftSkills) sur AiAnalysisServiceInterface,
- * sans introduire de nouvelle plomberie Claude (voir AnthropicService).
+ * Orchestration de l'évaluation IA approfondie d'un candidat — un appel
+ * AiAnalysisServiceInterface::assessCandidate() sur le dossier réel assemblé
+ * par CandidatureCompatibilityService (voir AnthropicService).
  */
 class CandidateAssessmentService
 {
     public function __construct(
         private readonly AiAnalysisServiceInterface $aiAnalysisService,
         private readonly WebhookService $webhookService,
+        private readonly CandidatureCompatibilityService $compatibilityService,
     ) {}
 
     public function find(string $candidatureId): ?CandidateAssessment
@@ -41,27 +41,29 @@ class CandidateAssessmentService
         );
 
         try {
-            $scoring = $this->aiAnalysisService->scoreCandidate(
-                $candidature->candidate_name,
-                $candidature->candidate_email,
-                $jobOffer?->title ?? '',
-            );
+            // Un seul appel IA, sur le dossier réel du candidat (CV, profil,
+            // compétences, lettre, réponses) — le même que celui du score de
+            // compatibilité de la carte. Auparavant l'IA ne recevait que le
+            // nom, l'e-mail et l'intitulé du poste : des scores sans fondement.
+            $job = $this->compatibilityService->jobData($candidature);
+            $result = $job
+                ? $this->aiAnalysisService->assessCandidate(
+                    $this->compatibilityService->candidateData($candidature),
+                    $job,
+                    $exchangeNotes ?? '',
+                )
+                : null;
 
-            $matching = $this->aiAnalysisService->matchCandidateToJob(
-                ['name' => $candidature->candidate_name, 'email' => $candidature->candidate_email],
-                [
-                    'title' => $jobOffer?->title ?? '',
-                    'company' => $jobOffer?->company?->name ?? '',
-                    'description' => $jobOffer?->description,
-                ],
-            );
+            // IA indisponible : échec assumé plutôt que des scores inventés.
+            if ($result === null) {
+                $assessment->update(['status' => CandidateAssessmentStatus::FAILED]);
 
-            $skillsTest = $this->aiAnalysisService->generateSkillsTest($jobOffer?->title ?? '');
-            $softSkills = $this->aiAnalysisService->analyzeSoftSkills($candidature->candidate_name, $exchangeNotes ?? '');
+                return $assessment->fresh();
+            }
 
-            $technicalScore = $scoring['overallScore'];
-            $culturalFitScore = $matching['matchingScore'];
-            $softSkillsScore = $softSkills['score'];
+            $technicalScore = $result['technicalScore'];
+            $culturalFitScore = $result['culturalFitScore'];
+            $softSkillsScore = $result['softSkillsScore'];
             $overallScore = (int) round(($technicalScore + $culturalFitScore + $softSkillsScore) / 3);
 
             $assessment->update([
@@ -69,8 +71,8 @@ class CandidateAssessmentService
                 'cultural_fit_score' => $culturalFitScore,
                 'soft_skills_score' => $softSkillsScore,
                 'overall_score' => $overallScore,
-                'skills_test' => $skillsTest['questions'],
-                'soft_skills_feedback' => $softSkills['feedback'],
+                'skills_test' => $result['questions'],
+                'soft_skills_feedback' => $result['feedback'],
                 'status' => CandidateAssessmentStatus::COMPLETED,
             ]);
 

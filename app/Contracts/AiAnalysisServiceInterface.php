@@ -51,6 +51,18 @@ interface AiAnalysisServiceInterface
     public function scoreCompatibility(array $candidate, array $job): ?int;
 
     /**
+     * Évaluation approfondie d'une candidature (modale « Évaluation IA ») sur
+     * le même dossier réel que scoreCompatibility(), enrichi des notes
+     * d'échange du recruteur. `null` quand l'IA est indisponible ou répond
+     * de façon inexploitable — jamais de scores de repli.
+     *
+     * @param  array<string, mixed>  $candidate  même forme que scoreCompatibility()
+     * @param  array<string, mixed>  $job  idem, plus `company` optionnel
+     * @return array{technicalScore: int, softSkillsScore: int, culturalFitScore: int, feedback: string, questions: array<int, array{question: string, type: string}>}|null
+     */
+    public function assessCandidate(array $candidate, array $job, string $exchangeNotes = ''): ?array;
+
+    /**
      * Génère un test de compétences techniques/comportementales à
      * administrer par le recruteur — voir CandidateAssessment::skills_test.
      *

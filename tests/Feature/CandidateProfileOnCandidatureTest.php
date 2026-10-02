@@ -181,6 +181,57 @@ class CandidateProfileOnCandidatureTest extends TestCase
         $this->assertSame(0, (int) $candidature->refresh()->score);
     }
 
+    /**
+     * « Évaluation IA » : jugée sur le même dossier réel que le score de la
+     * carte, enrichi des notes du recruteur.
+     */
+    public function test_l_evaluation_ia_s_appuie_sur_le_dossier_reel_du_candidat(): void
+    {
+        [$recruteur, $offre] = $this->entreprise();
+        $candidature = $this->postuler($this->candidat(), $offre);
+        $candidature->update(['cover_letter' => 'Cinq ans de React.']);
+
+        $this->mock(AiAnalysisServiceInterface::class)
+            ->shouldReceive('assessCandidate')
+            ->once()
+            ->withArgs(fn (array $profil, array $poste, string $notes) => $profil['title'] === 'Développeuse Full-Stack'
+                && $profil['coverLetter'] === 'Cinq ans de React.'
+                && $poste['title'] === 'Développeur Full-Stack Senior'
+                && $poste['company'] === 'Goriya Test SARL'
+                && $notes === 'Très à l\'aise à l\'oral.')
+            ->andReturn([
+                'technicalScore' => 80,
+                'softSkillsScore' => 70,
+                'culturalFitScore' => 60,
+                'feedback' => 'Profil solide.',
+                'questions' => [['question' => 'Parlez-nous de React.', 'type' => 'TECHNIQUE']],
+            ]);
+
+        $this->actingAs($recruteur, 'api')
+            ->postJson("/candidatures/{$candidature->id}/assessment", ['exchangeNotes' => 'Très à l\'aise à l\'oral.'])
+            ->assertSuccessful()
+            ->assertJsonPath('status', 'COMPLETED')
+            ->assertJsonPath('technicalScore', 80)
+            ->assertJsonPath('overallScore', 70)
+            ->assertJsonPath('softSkillsFeedback', 'Profil solide.')
+            ->assertJsonPath('skillsTest.0.question', 'Parlez-nous de React.');
+    }
+
+    public function test_l_evaluation_ia_indisponible_echoue_sans_inventer_de_scores(): void
+    {
+        [$recruteur, $offre] = $this->entreprise();
+        $candidature = $this->postuler($this->candidat(), $offre);
+
+        $this->mock(AiAnalysisServiceInterface::class)
+            ->shouldReceive('assessCandidate')->once()->andReturn(null);
+
+        $this->actingAs($recruteur, 'api')
+            ->postJson("/candidatures/{$candidature->id}/assessment")
+            ->assertSuccessful()
+            ->assertJsonPath('status', 'FAILED')
+            ->assertJsonPath('overallScore', null);
+    }
+
     public function test_la_compatibilite_ia_est_reservee_a_l_entreprise_de_l_offre(): void
     {
         [, $offre] = $this->entreprise();

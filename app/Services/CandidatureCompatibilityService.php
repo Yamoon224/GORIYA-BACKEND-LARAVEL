@@ -29,23 +29,13 @@ class CandidatureCompatibilityService
      */
     public function compute(Candidature $candidature): ?int
     {
-        $candidature->loadMissing(['user.portfolios', 'user.cv', 'jobOffer', 'answers', 'resume']);
-        $jobOffer = $candidature->jobOffer;
+        $job = $this->jobData($candidature);
 
-        if (! $jobOffer) {
+        if (! $job) {
             return null;
         }
 
-        $score = $this->aiAnalysisService->scoreCompatibility(
-            $this->candidateData($candidature),
-            [
-                'title' => (string) $jobOffer->title,
-                'description' => $jobOffer->description,
-                'requirements' => array_values(array_filter((array) $jobOffer->requirements, 'is_string')),
-                'experience' => $jobOffer->experience?->value,
-                'location' => $jobOffer->location,
-            ],
-        );
+        $score = $this->aiAnalysisService->scoreCompatibility($this->candidateData($candidature), $job);
 
         if ($score !== null) {
             $candidature->update(['score' => $score]);
@@ -55,10 +45,40 @@ class CandidatureCompatibilityService
     }
 
     /**
+     * Offre visée, telle que soumise à l'IA — partagé avec
+     * CandidateAssessmentService pour que l'évaluation approfondie juge le
+     * même dossier que le score de la carte.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function jobData(Candidature $candidature): ?array
+    {
+        $candidature->loadMissing('jobOffer.company');
+        $jobOffer = $candidature->jobOffer;
+
+        if (! $jobOffer) {
+            return null;
+        }
+
+        return [
+            'title' => (string) $jobOffer->title,
+            'company' => $jobOffer->company?->name,
+            'description' => $jobOffer->description,
+            'requirements' => array_values(array_filter((array) $jobOffer->requirements, 'is_string')),
+            'experience' => $jobOffer->experience?->value,
+            'location' => $jobOffer->location,
+        ];
+    }
+
+    /**
+     * Dossier réel du candidat : titre, compétences, profil, CV joint, lettre
+     * et réponses aux questions de l'offre.
+     *
      * @return array<string, mixed>
      */
-    private function candidateData(Candidature $candidature): array
+    public function candidateData(Candidature $candidature): array
     {
+        $candidature->loadMissing(['user.portfolios', 'user.cv', 'answers', 'resume']);
         $user = $candidature->user;
 
         $cvSkills = collect(data_get($user?->cv?->data, 'competences', []))
