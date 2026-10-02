@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\PresentationType;
 use App\Models\Presentation;
+use App\Support\MediaUrl;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PhpOffice\PhpPresentation\IOFactory;
@@ -44,7 +45,9 @@ class PptxExportService
         Storage::disk('public')->makeDirectory('presentations');
         IOFactory::createWriter($document, 'PowerPoint2007')->save($absolutePath);
 
-        return "/storage/{$relativePath}";
+        // URL absolue : le front vit sur un autre domaine, un chemin relatif
+        // (« /storage/… ») y était résolu à tort et tombait en 404.
+        return MediaUrl::resolve("/storage/{$relativePath}");
     }
 
     private function addTitleSlide(PhpPresentation $document, string $title): void

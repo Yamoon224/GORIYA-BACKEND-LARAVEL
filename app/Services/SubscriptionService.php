@@ -16,7 +16,11 @@ use App\Models\UserSubscription;
 use App\Repositories\Contracts\SubscriptionPlanRepositoryInterface;
 use App\Repositories\Contracts\UserSubscriptionRepositoryInterface;
 use App\Support\ApiResponse;
+use Carbon\CarbonInterface;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Mirroir de backend/src/subscriptions/subscriptions.service.ts. Extrait de
@@ -334,6 +338,21 @@ class SubscriptionService
             ];
         }
 
+        // Transaction tracée au checkout (cas normal) : l'utilisateur, le plan
+        // et la durée viennent d'ELLE, pas du query string de l'URL de retour
+        // (que le prestataire de paiement peut altérer). fulfillTransaction()
+        // est idempotent avec la notification serveur-à-serveur.
+        if ($transactionRecord && $transactionRecord->user_id && $transactionRecord->plan_id) {
+            $this->fulfillTransaction($transactionRecord);
+
+            $sub = $this->userSubscriptionRepository->findActiveForUserAndPlan($transactionRecord->user_id, $transactionRecord->plan_id);
+            if (! $sub) {
+                abort(409, "Paiement confirmé mais l'abonnement n'est plus actif pour ce forfait.");
+            }
+
+            return new UserSubscriptionResource($sub);
+        }
+
         // Idempotence : si déjà activé pour ce couple userId/planId, on
         // retourne l'abonnement existant plutôt que d'en créer un doublon.
         $existing = $this->userSubscriptionRepository->findActiveForUserAndPlan($userId, $planId);
@@ -368,7 +387,12 @@ class SubscriptionService
      * par la notification serveur-à-serveur (PaiementProWebhookController) :
      * si l'utilisateur ferme l'onglet ou que la notification arrive après les
      * re-tentatives du frontend, le forfait est quand même activé.
-     * Idempotent avec verifyCheckout() (même garde findActiveForUserAndPlan).
+     *
+     * Idempotent et sûr en concurrence : la ligne Transaction est verrouillée,
+     * et un abonnement n'est créé que si AUCUN n'a déjà été ouvert pour cette
+     * transaction. Peut donc être appelé par la notification (Paiement Pro en
+     * envoie deux dans la même seconde), par verifyCheckout() et par
+     * checkoutStatus() sans jamais produire de doublon.
      */
     public function fulfillTransaction(Transaction $transaction): void
     {
@@ -381,12 +405,85 @@ class SubscriptionService
             return;
         }
 
-        $sub = $this->userSubscriptionRepository->findActiveForUserAndPlan($transaction->user_id, $transaction->plan_id)
-            ?? $this->performSubscribe($transaction->user_id, $transaction->plan_id, (int) ($transaction->period_months ?? 1));
+        DB::transaction(function () use ($transaction) {
+            $locked = Transaction::query()->whereKey($transaction->getKey())->lockForUpdate()->first() ?? $transaction;
 
-        if ($transaction->promo_code_id) {
-            $this->promoCodeService->confirmRedemption($transaction, $sub->id);
+            $sub = $this->subscriptionOpenedBy($locked);
+
+            if (! $sub) {
+                // Renouvellement du même forfait avant son échéance : la durée
+                // achetée s'ajoute au temps restant au lieu de l'écraser.
+                $current = $this->userSubscriptionRepository->findActiveForUserAndPlan($locked->user_id, $locked->plan_id);
+                $from = $current?->end_date && $current->end_date->isFuture() ? $current->end_date : null;
+
+                $sub = $this->performSubscribe($locked->user_id, $locked->plan_id, (int) ($locked->period_months ?? 1), $from);
+            }
+
+            if ($locked->promo_code_id) {
+                $this->promoCodeService->confirmRedemption($locked, $sub->id);
+            }
+        });
+    }
+
+    /**
+     * Abonnement déjà ouvert par cette transaction, s'il y en a un : même
+     * utilisateur, même plan, démarré depuis la création de la transaction.
+     */
+    private function subscriptionOpenedBy(Transaction $transaction): ?UserSubscription
+    {
+        return UserSubscription::query()
+            ->where('user_id', $transaction->user_id)
+            ->where('plan_id', $transaction->plan_id)
+            ->where('start_date', '>=', $transaction->created_at)
+            ->orderByDesc('start_date')
+            ->first();
+    }
+
+    /**
+     * État d'un paiement, consultable SANS authentification à partir de sa
+     * seule référence (page de retour /auth/payment-success). Après un
+     * paiement mobile (Wave, Orange Money...), le retour s'ouvre souvent dans
+     * un autre navigateur que celui où l'utilisateur était connecté : exiger
+     * un JWT ici faisait afficher « Activation échouée » alors que le paiement
+     * était encaissé et l'abonnement activé.
+     *
+     * Sert aussi de filet : un paiement confirmé dont l'abonnement n'aurait
+     * pas été ouvert est activé ici.
+     *
+     * @return array{status: string, purpose: ?string, planName: ?string}
+     */
+    public function checkoutStatus(string $reference): array
+    {
+        $transaction = Transaction::query()->with('plan')->where('gateway_transaction_id', $reference)->first();
+
+        if (! $transaction) {
+            return ['status' => 'UNKNOWN', 'purpose' => null, 'planName' => null];
         }
+
+        if ($transaction->status === TransactionStatus::SUCCESS && $transaction->purpose !== 'USAGE_RESET') {
+            try {
+                $this->fulfillTransaction($transaction);
+            } catch (Throwable $e) {
+                Log::error('[paiement] activation échouée lors de la consultation du statut', [
+                    'reference' => $reference,
+                    'error' => $e->getMessage(),
+                ]);
+
+                // Encaissé mais pas activé : la page de retour continue de
+                // patienter plutôt que d'annoncer un abonnement actif.
+                return ['status' => 'PENDING', 'purpose' => $transaction->purpose, 'planName' => $transaction->plan?->name];
+            }
+        }
+
+        return [
+            'status' => match ($transaction->status) {
+                TransactionStatus::SUCCESS => 'SUCCESS',
+                TransactionStatus::FAILED, TransactionStatus::REFUNDED => 'FAILED',
+                default => 'PENDING',
+            },
+            'purpose' => $transaction->purpose,
+            'planName' => $transaction->plan?->name,
+        ];
     }
 
     /**
@@ -468,7 +565,7 @@ class SubscriptionService
     | et verifyCheckout() pour éviter de dupliquer la logique.
     |----------------------------------------------------------------------
     */
-    private function performSubscribe(string $userId, string $planId, int $periodMonths = 1): UserSubscription
+    private function performSubscribe(string $userId, string $planId, int $periodMonths = 1, ?CarbonInterface $extendFrom = null): UserSubscription
     {
         $plan = $this->subscriptionPlanRepository->find($planId);
         if (! $plan) {
@@ -482,7 +579,7 @@ class SubscriptionService
         // billing_period, qui ne distingue plus que MONTHLY/ANNUAL pour
         // l'affichage catalogue.
         $startDate = now();
-        $endDate = $startDate->copy()->addMonths(max(1, $periodMonths));
+        $endDate = ($extendFrom ?? $startDate)->copy()->addMonths(max(1, $periodMonths));
 
         return $this->userSubscriptionRepository->create([
             'user_id' => $userId,

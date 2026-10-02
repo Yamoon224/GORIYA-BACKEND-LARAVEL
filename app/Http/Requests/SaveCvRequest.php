@@ -21,6 +21,7 @@ use OpenApi\Attributes as OA;
                 new OA\Property(property: 'telephone', type: 'string', description: 'Numéro local, sans indicatif'),
                 new OA\Property(property: 'adresse', type: 'string'),
                 new OA\Property(property: 'profil', type: 'string'),
+                new OA\Property(property: 'modele', type: 'string', example: 'moderne'),
                 new OA\Property(
                     property: 'experiences',
                     type: 'array',
@@ -94,6 +95,8 @@ class SaveCvRequest extends FormRequest
             'data.telephone' => ['sometimes', 'nullable', 'string', 'max:50'],
             'data.adresse' => ['sometimes', 'nullable', 'string', 'max:255'],
             'data.profil' => ['sometimes', 'nullable', 'string', 'max:5000'],
+            // Identifiant du modèle de mise en page ; la liste vit côté front (lib/cv-pdf.ts).
+            'data.modele' => ['sometimes', 'nullable', 'string', 'max:40'],
 
             'data.experiences' => ['sometimes', 'nullable', 'array', 'max:30'],
             'data.experiences.*' => ['array'],

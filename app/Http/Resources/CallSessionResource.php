@@ -38,6 +38,9 @@ class CallSessionResource extends JsonResource
             'title' => $this->title,
             'roomSlug' => $this->room_slug,
             'scheduledAt' => $this->scheduled_at,
+            'description' => $this->description,
+            // Les adresses conviées ne regardent que l'organisateur.
+            'invitees' => $request->user()?->id === $this->host_id ? ($this->invitees ?? []) : [],
             'status' => $this->status,
             'recordingUrl' => $this->recording_url,
             'endedAt' => $this->ended_at,

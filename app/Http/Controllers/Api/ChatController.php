@@ -41,6 +41,36 @@ class ChatController extends Controller
 
     /*
     |----------------------------------------------------------------------
+    | RECHERCHE (titre des fils et contenu des messages)
+    |----------------------------------------------------------------------
+    */
+    #[OA\Get(
+        path: '/chat/search',
+        tags: ['Chat'],
+        summary: "Recherche dans les conversations de l'utilisateur authentifié",
+        security: [['bearerAuth' => []]],
+        parameters: [new OA\Parameter(name: 'q', in: 'query', required: true, schema: new OA\Schema(type: 'string'))],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Fils correspondants, avec un extrait du message trouvé',
+                content: new OA\JsonContent(type: 'array', items: new OA\Items(properties: [
+                    new OA\Property(property: 'id', type: 'string', format: 'uuid'),
+                    new OA\Property(property: 'title', type: 'string', nullable: true),
+                    new OA\Property(property: 'excerpt', type: 'string', nullable: true),
+                    new OA\Property(property: 'updatedAt', type: 'string', format: 'date-time'),
+                ]))
+            ),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+        ]
+    )]
+    public function search(Request $request)
+    {
+        return response()->json($this->chatService->searchThreads($request->user(), (string) $request->query('q', '')));
+    }
+
+    /*
+    |----------------------------------------------------------------------
     | NOUVEAU FIL (premier message)
     |----------------------------------------------------------------------
     */
@@ -63,7 +93,7 @@ class ChatController extends Controller
     {
         $user = $request->user();
         $thread = $this->chatService->createThread($user);
-        $thread = $this->chatService->sendMessage($thread, $user, $request->validated()['message']);
+        $thread = $this->chatService->sendMessage($thread, $user, (string) $request->input('message', ''), $request->file('files', []));
 
         return new ChatThreadResource($thread);
     }
@@ -126,7 +156,7 @@ class ChatController extends Controller
             abort(404, 'ChatThread not found');
         }
 
-        $thread = $this->chatService->sendMessage($thread, $request->user(), $request->validated()['message']);
+        $thread = $this->chatService->sendMessage($thread, $request->user(), (string) $request->input('message', ''), $request->file('files', []));
 
         return new ChatThreadResource($thread);
     }

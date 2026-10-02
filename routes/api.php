@@ -562,6 +562,7 @@ Route::middleware('auth:api')->group(function () {
 // authentifié comme Research/Pitches/Presentations) ---
 Route::middleware('auth:api')->group(function () {
     Route::get('/chat/threads', [ChatController::class, 'index']);
+    Route::get('/chat/search', [ChatController::class, 'search']);
     Route::post('/chat/threads', [ChatController::class, 'store']);
     Route::get('/chat/threads/{id}', [ChatController::class, 'show']);
     Route::post('/chat/threads/{id}/messages', [ChatController::class, 'sendMessage']);
@@ -591,6 +592,9 @@ Route::delete('/subscriptions/me/{userId}', [SubscriptionsController::class, 'ca
 Route::get('/subscriptions/me/{userId}/transactions', [SubscriptionsController::class, 'transactions'])->middleware('auth:api');
 Route::post('/subscriptions/checkout', [SubscriptionsController::class, 'checkout'])->middleware('auth:api');
 Route::get('/subscriptions/checkout/verify/{transactionId}', [SubscriptionsController::class, 'verifyCheckout'])->middleware('auth:api');
+// Public : la page de retour de paiement s'ouvre souvent dans un navigateur où
+// l'utilisateur n'est pas connecté (retour depuis l'application Wave/Orange Money).
+Route::get('/subscriptions/checkout/status/{reference}', [SubscriptionsController::class, 'checkoutStatus'])->middleware('throttle:120,1');
 
 // Aperçu d'un code promo avant checkout (le checkout lui-même revalide et
 // recalcule toujours côté serveur, voir SubscriptionService::checkout()).

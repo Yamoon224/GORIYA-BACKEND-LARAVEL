@@ -30,6 +30,8 @@ class CallSession extends Model
         'room_slug',
         'room_ref',
         'scheduled_at',
+        'invitees',
+        'description',
         'status',
         'recording_url',
         'ended_at',
@@ -43,6 +45,7 @@ class CallSession extends Model
         return [
             'status' => CallSessionStatus::class,
             'scheduled_at' => 'datetime',
+            'invitees' => 'array',
             'ended_at' => 'datetime',
         ];
     }

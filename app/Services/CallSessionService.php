@@ -4,12 +4,14 @@ namespace App\Services;
 
 use App\Contracts\VideoCallProviderInterface;
 use App\Enums\CallSessionStatus;
+use App\Mail\CallInvitationMail;
 use App\Models\CallSession;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -46,9 +48,18 @@ class CallSessionService
 
     /**
      * @param  list<string>  $guestIds  Utilisateurs invités (candidat convoqué…)
+     * @param  list<string>  $invitees  Adresses email à inviter (membres ou non)
      */
-    public function schedule(User $host, string $title, ?CarbonInterface $scheduledAt, array $guestIds = []): CallSession
+    public function schedule(User $host, string $title, ?CarbonInterface $scheduledAt, array $guestIds = [], array $invitees = [], ?string $description = null): CallSession
     {
+        $invitees = collect($invitees)
+            ->map(fn ($email) => mb_strtolower(trim((string) $email)))
+            ->filter(fn (string $email) => $email !== '' && $email !== mb_strtolower($host->email))
+            ->unique()
+            ->values()
+            ->all();
+        $description = trim((string) $description) ?: null;
+
         $title = Str::limit($title, 250, '');
         $room = $this->videoCallProvider->createRoom($title, $scheduledAt?->toIso8601String());
 
@@ -59,11 +70,29 @@ class CallSessionService
             'room_ref' => $room['id'] ?? null,
             'scheduled_at' => $scheduledAt,
             'status' => CallSessionStatus::SCHEDULED,
+            // Clés posées seulement si renseignées : un appel sans invité
+            // fonctionne ainsi même avant la migration `invitees`.
+            ...($invitees ? ['invitees' => $invitees] : []),
+            ...($description ? ['description' => $description] : []),
         ]);
+
+        // Un invité déjà membre retrouve aussi l'appel dans sa liste GORIYA Meet.
+        $members = $invitees ? User::whereIn('email', $invitees)->get()->keyBy(fn (User $u) => mb_strtolower($u->email)) : collect();
+        $guestIds = [...$guestIds, ...$members->pluck('id')->all()];
 
         $guests = array_values(array_unique(array_filter($guestIds, fn ($id) => $id && $id !== $host->id)));
         if ($guests !== []) {
             $session->guests()->attach($guests);
+        }
+
+        // Envoi immédiat, adresse par adresse : une adresse en échec ne doit
+        // ni bloquer les autres ni faire échouer la création de l'appel.
+        foreach ($invitees as $email) {
+            try {
+                Mail::to($email)->send(new CallInvitationMail($session, $host->name, $members->get($email)?->name));
+            } catch (Throwable $e) {
+                Log::warning("GORIYA Meet : invitation à {$email} non envoyée — {$e->getMessage()}");
+            }
         }
 
         return $session;

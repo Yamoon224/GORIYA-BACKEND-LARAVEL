@@ -9,6 +9,7 @@ use App\Enums\PitchStatus;
 use App\Jobs\PollAvatarRenderJob;
 use App\Jobs\ProcessPitchVideoJob;
 use App\Models\Candidature;
+use App\Models\CvProfile;
 use App\Models\JobOffer;
 use App\Models\Pitch;
 use App\Models\User;
@@ -48,7 +49,22 @@ class PitchService
             ? JobOffer::with('company')->find($data['jobOfferId'])
             : null;
 
-        $profile = ['name' => $user->name, 'email' => $user->email];
+        // Le profil extrait du CV (s'il existe) donne au pitch de la matière
+        // réelle : sans lui, l'IA ne connaît que le nom et brode.
+        $cv = CvProfile::firstWhere('user_id', $user->id)?->data ?? [];
+        $education = collect($cv['educations'] ?? [])->first();
+        $profile = [
+            'name' => $user->name,
+            'email' => $user->email,
+            'title' => $user->title ?: ($cv['title'] ?? null),
+            'location' => $user->location,
+            'bio' => $user->bio,
+            'skills' => $cv['skills'] ?? [],
+            'experiences' => $cv['experiences'] ?? [],
+            'education' => $education
+                ? implode(' - ', array_filter([$education['title'] ?? '', $education['school'] ?? '']))
+                : null,
+        ];
         $job = $jobOffer ? [
             'title' => $jobOffer->title,
             'company' => $jobOffer->company?->name,

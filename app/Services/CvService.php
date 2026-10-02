@@ -25,6 +25,7 @@ class CvService
         'telephone',
         'adresse',
         'profil',
+        'modele',
     ];
 
     /**

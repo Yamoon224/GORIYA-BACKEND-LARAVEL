@@ -273,6 +273,28 @@ class SubscriptionsController extends Controller
         );
     }
 
+    #[OA\Get(
+        path: '/subscriptions/checkout/status/{reference}',
+        tags: ['Subscriptions'],
+        summary: "État d'un paiement à partir de sa référence (public, page de retour de paiement)",
+        parameters: [new OA\Parameter(name: 'reference', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'État du paiement',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'status', type: 'string', enum: ['PENDING', 'SUCCESS', 'FAILED', 'UNKNOWN']),
+                    new OA\Property(property: 'purpose', type: 'string', nullable: true),
+                    new OA\Property(property: 'planName', type: 'string', nullable: true),
+                ])
+            ),
+        ]
+    )]
+    public function checkoutStatus(string $reference)
+    {
+        return response()->json($this->subscriptionService->checkoutStatus($reference));
+    }
+
     /*
     |----------------------------------------------------------------------
     | ADMIN

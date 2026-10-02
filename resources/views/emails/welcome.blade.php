@@ -52,7 +52,7 @@
                             </table>
 
                             <p style="margin:0 0 16px;font-size:15px;line-height:1.55;color:#1b2331;">
-                                Bonne nouvelle, {{ $name }} !
+                                {{ $greeting ?? "Bonne nouvelle, {$name} !" }}
                             </p>
 
                             @foreach ($paragraphs as $paragraph)

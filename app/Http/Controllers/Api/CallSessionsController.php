@@ -59,6 +59,8 @@ class CallSessionsController extends Controller
             $data['title'],
             isset($data['scheduledAt']) ? Carbon::parse($data['scheduledAt']) : null,
             $data['guestIds'] ?? [],
+            $data['invitees'] ?? [],
+            $data['description'] ?? null,
         );
 
         return new CallSessionResource($session);

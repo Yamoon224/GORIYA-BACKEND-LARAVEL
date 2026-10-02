@@ -4,6 +4,9 @@ namespace App\Services\Concerns;
 
 use Anthropic\Client;
 use Anthropic\Messages\TextBlock;
+use Anthropic\Messages\WebSearchResultBlock;
+use Anthropic\Messages\WebSearchTool20250305;
+use Anthropic\Messages\WebSearchToolResultBlock;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -80,6 +83,42 @@ trait InteractsWithClaude
         }
 
         return '';
+    }
+
+    /**
+     * Appel texte avec recherche web côté Anthropic (outil serveur
+     * `web_search`) : Claude lance lui-même ses requêtes puis rédige sa
+     * réponse. Le texte arrive découpé en plusieurs blocs (un par passage
+     * cité) : on les recolle. Les pages consultées sont renvoyées à part
+     * pour être affichées comme sources.
+     *
+     * @return array{text: string, sources: list<array{title: string, url: string}>}
+     */
+    protected function requestClaudeWebResearch(string $prompt, int $maxTokens, int $maxSearches): array
+    {
+        $response = $this->claudeClient->messages->create(
+            maxTokens: $maxTokens,
+            messages: [['role' => 'user', 'content' => $prompt]],
+            model: $this->claudeModel,
+            tools: [WebSearchTool20250305::with(maxUses: $maxSearches)],
+        );
+
+        $text = '';
+        $sources = [];
+
+        foreach ($response->content as $block) {
+            if ($block instanceof TextBlock) {
+                $text .= $block->text;
+            } elseif ($block instanceof WebSearchToolResultBlock && is_array($block->content)) {
+                foreach ($block->content as $result) {
+                    if ($result instanceof WebSearchResultBlock && ! isset($sources[$result->url])) {
+                        $sources[$result->url] = ['title' => $result->title, 'url' => $result->url];
+                    }
+                }
+            }
+        }
+
+        return ['text' => $text, 'sources' => array_values($sources)];
     }
 
     protected function truncateForClaude(string $text, int $length): string

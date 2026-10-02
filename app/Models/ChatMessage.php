@@ -32,6 +32,7 @@ class ChatMessage extends Model
         'thread_id',
         'role',
         'content',
+        'attachments',
     ];
 
     /**
@@ -43,6 +44,7 @@ class ChatMessage extends Model
     {
         return [
             'role' => ChatMessageRole::class,
+            'attachments' => 'array',
         ];
     }
 

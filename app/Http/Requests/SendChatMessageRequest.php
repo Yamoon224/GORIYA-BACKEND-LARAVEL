@@ -25,7 +25,10 @@ class SendChatMessageRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'message' => ['required', 'string', 'max:4000'],
+            // Un message peut n'être qu'un envoi de fichier, sans texte.
+            'message' => ['nullable', 'required_without:files', 'string', 'max:4000'],
+            'files' => ['sometimes', 'array', 'max:3'],
+            'files.*' => ['file', 'max:5120', 'mimes:pdf,png,jpg,jpeg,webp,txt,docx'],
         ];
     }
 }

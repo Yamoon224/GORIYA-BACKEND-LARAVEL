@@ -97,8 +97,27 @@ class PaiementProWebhookController extends Controller
             return response()->json(['received' => true]);
         }
 
-        // Une transaction déjà tranchée n'est pas rejouée (idempotence).
-        if ($transaction->status !== TransactionStatus::PENDING) {
+        $code = $payload['responsecode'] ?? $payload['responseCode'] ?? $payload['status'] ?? null;
+        $success = in_array((string) $code, ['0', 'SUCCESS', 'success'], true);
+        $current = $transaction->status;
+
+        // Déjà confirmée (Paiement Pro notifie deux fois dans la même seconde) :
+        // on ne réécrit rien, mais on s'assure que l'effet du paiement est bien
+        // appliqué — c'est ce rejeu qui rattrape une activation interrompue.
+        if ($current === TransactionStatus::SUCCESS) {
+            // (Sauf réinitialisation de quota : non idempotente, jamais rejouée.)
+            if ($success && $transaction->purpose !== 'USAGE_RESET') {
+                $this->fulfill($transaction, $reference);
+            }
+
+            return response()->json(['received' => true]);
+        }
+
+        // Un échec déjà enregistré peut être suivi d'un succès : sur la même
+        // session, le client retente après un premier essai refusé (solde,
+        // délai dépassé). Le succès l'emporte ; l'inverse n'est jamais rejoué.
+        $replayable = $current === TransactionStatus::PENDING || ($current === TransactionStatus::FAILED && $success);
+        if (! $replayable) {
             return response()->json(['received' => true]);
         }
 
@@ -113,31 +132,57 @@ class PaiementProWebhookController extends Controller
             return response()->json(['received' => true]);
         }
 
-        $code = $payload['responsecode'] ?? $payload['responseCode'] ?? $payload['status'] ?? null;
-        $success = in_array((string) $code, ['0', 'SUCCESS', 'success'], true);
+        $newStatus = $success ? TransactionStatus::SUCCESS : TransactionStatus::FAILED;
 
-        $transaction->update([
-            'status' => $success ? TransactionStatus::SUCCESS : TransactionStatus::FAILED,
-            'raw_payload' => $payload,
-        ]);
+        // Changement d'état atomique : des deux notifications simultanées, une
+        // seule « gagne » la transition et applique les effets non rejouables
+        // (réinitialisation de quota). Le statut est écrit en premier et à
+        // part, pour qu'aucune erreur ultérieure (payload, journal d'audit) ne
+        // puisse laisser un paiement confirmé en PENDING.
+        $claimed = Transaction::query()
+            ->whereKey($transaction->getKey())
+            ->where('status', $current->value)
+            ->update(['status' => $newStatus->value]) === 1;
+
+        $transaction->refresh();
+
+        if ($claimed) {
+            try {
+                $transaction->update(['raw_payload' => $payload]);
+            } catch (\Throwable $e) {
+                Log::error('[paiementpro] payload non enregistré', ['reference' => $reference, 'error' => $e->getMessage()]);
+            }
+        }
 
         // L'activation ne doit pas dépendre du retour du navigateur (onglet
         // fermé, notification arrivée après les re-tentatives du frontend) :
-        // on applique l'effet du paiement ici. Une erreur est loggée mais ne
-        // casse pas le 200 — verifyCheckout() reste un filet de rattrapage.
-        if ($success) {
-            try {
-                $this->subscriptionService->fulfillTransaction($transaction);
-            } catch (\Throwable $e) {
-                Log::error('[paiementpro] activation échouée après paiement confirmé', [
-                    'reference' => $reference,
-                    'error' => $e->getMessage(),
-                ]);
+        // on applique l'effet du paiement ici.
+        if ($transaction->status === TransactionStatus::SUCCESS) {
+            // Réinitialisation de quota : non idempotente, réservée au gagnant.
+            if ($claimed || $transaction->purpose !== 'USAGE_RESET') {
+                $this->fulfill($transaction, $reference);
             }
-        } else {
+        } elseif ($claimed) {
             Log::warning('[paiementpro] notification non reconnue comme un succès', ['reference' => $reference, 'code' => $code]);
         }
 
         return response()->json(['received' => true]);
+    }
+
+    /**
+     * Une erreur est loggée mais ne casse pas le 200 : la notification
+     * jumelle, verifyCheckout() et checkoutStatus() restent des filets de
+     * rattrapage (fulfillTransaction() est idempotent).
+     */
+    private function fulfill(Transaction $transaction, string $reference): void
+    {
+        try {
+            $this->subscriptionService->fulfillTransaction($transaction);
+        } catch (\Throwable $e) {
+            Log::error('[paiementpro] activation échouée après paiement confirmé', [
+                'reference' => $reference,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

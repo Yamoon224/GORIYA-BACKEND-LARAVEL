@@ -26,6 +26,10 @@ class ChatMessageResource extends JsonResource
             'id' => $this->id,
             'role' => $this->role,
             'content' => $this->content,
+            // Nom et type seulement : les fichiers restent privés, non téléchargeables.
+            'attachments' => collect($this->attachments ?? [])
+                ->map(fn (array $a) => ['name' => $a['name'] ?? '', 'mime' => $a['mime'] ?? ''])
+                ->values(),
             'createdAt' => $this->created_at,
         ];
     }
