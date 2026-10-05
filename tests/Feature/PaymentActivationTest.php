@@ -152,6 +152,60 @@ class PaymentActivationTest extends TestCase
         $this->getJson('/subscriptions/checkout/status/INCONNUE')->assertOk()->assertJsonPath('status', 'UNKNOWN');
     }
 
+    /**
+     * L'URL de retour revient parfois abîmée par le prestataire : la
+     * référence doit rester rapprochable de sa transaction.
+     */
+    public function test_une_reference_alteree_par_l_url_de_retour_est_retrouvee(): void
+    {
+        $ancienne = '0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b_0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c_1759400000000';
+        $this->transaction(['gateway_transaction_id' => $ancienne]);
+        $nouvelle = 'GRY01K6ABCDEFGHJKMNPQRSTVWXYZ';
+        $this->transaction(['gateway_transaction_id' => $nouvelle, 'status' => TransactionStatus::FAILED]);
+
+        // Paramètres accolés à la suite de la référence.
+        $this->getJson('/subscriptions/checkout/status/'.rawurlencode($ancienne.'?responsecode=0&amount=1999'))
+            ->assertJsonPath('status', 'PENDING');
+        $this->getJson('/subscriptions/checkout/status/'.rawurlencode($nouvelle.'?responsecode=-1'))
+            ->assertJsonPath('status', 'FAILED');
+
+        // URL tronquée : seul le début de la référence est arrivé.
+        $this->getJson('/subscriptions/checkout/status/'.substr($ancienne, 0, 60))->assertJsonPath('status', 'PENDING');
+        $this->getJson('/subscriptions/checkout/status/'.substr($nouvelle, 0, 22))->assertJsonPath('status', 'FAILED');
+
+        // Trop court pour désigner un paiement sans le deviner.
+        $this->getJson('/subscriptions/checkout/status/'.substr($nouvelle, 0, 10))->assertJsonPath('status', 'UNKNOWN');
+    }
+
+    public function test_un_debut_de_reference_ambigu_n_est_pas_rapproche(): void
+    {
+        $this->transaction(['gateway_transaction_id' => 'GRY01K6ABCDEFGHJKMNPQRSTVAAAA']);
+        $this->transaction(['gateway_transaction_id' => 'GRY01K6ABCDEFGHJKMNPQRSTVBBBB']);
+
+        $this->getJson('/subscriptions/checkout/status/GRY01K6ABCDEFGHJKMNPQRSTV')->assertJsonPath('status', 'UNKNOWN');
+    }
+
+    public function test_le_checkout_emet_une_reference_courte(): void
+    {
+        config(['services.paiementpro.merchant_id' => 'PP-TEST']);
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response(['success' => true, 'url' => 'https://pay.test/s'])]);
+        $user = User::factory()->create();
+
+        $reference = $this->actingAs($user, 'api')
+            ->postJson('/subscriptions/checkout', [
+                'userId' => $user->id,
+                'planId' => $this->plan()->id,
+                'gateway' => 'paiementpro',
+                'customerPhone' => '0700000000',
+                'successUrl' => 'https://goriya.test/auth/payment-success?gateway=paiementpro',
+            ])
+            ->assertSuccessful()
+            ->json('sessionId');
+
+        $this->assertMatchesRegularExpression('/^GRY[0-9A-Z]{26}$/', $reference);
+        $this->assertDatabaseHas('transactions', ['gateway_transaction_id' => $reference]);
+    }
+
     public function test_un_renouvellement_prolonge_l_abonnement_en_cours(): void
     {
         $transaction = $this->transaction();

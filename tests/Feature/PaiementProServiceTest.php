@@ -153,10 +153,10 @@ class PaiementProServiceTest extends TestCase
 
         $this->createSession();
 
-        // Le successUrl contient déjà des paramètres : la référence doit être
-        // ajoutée avec & et non avec un second ?.
+        // La référence passe en tête de la query string (un seul ?) : ce que
+        // Paiement Pro ajoute ou coupe en fin d'URL ne doit pas l'atteindre.
         $this->assertSame(
-            'https://goriya.test/auth/payment-success?userId=u1&planId=p1&ref=REF-123',
+            'https://goriya.test/auth/payment-success?ref=REF-123&userId=u1&planId=p1',
             $this->sentBody()['returnURL']
         );
     }

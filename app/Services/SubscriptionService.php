@@ -20,6 +20,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -33,6 +34,12 @@ use Throwable;
  */
 class SubscriptionService
 {
+    /** Marque nos références de paiement (voir newPaymentReference()). */
+    private const REFERENCE_PREFIX = 'GRY';
+
+    /** En deçà, une référence tronquée est trop courte pour être rapprochée. */
+    private const MIN_REFERENCE_PREFIX_LENGTH = 20;
+
     public function __construct(
         private readonly SubscriptionPlanRepositoryInterface $subscriptionPlanRepository,
         private readonly UserSubscriptionRepositoryInterface $userSubscriptionRepository,
@@ -201,7 +208,7 @@ class SubscriptionService
 
         // XOF n'a pas de sous-unité décimale — le montant doit être un entier.
         $amount = $currency === 'XOF' ? (int) round($basePrice) : $basePrice;
-        $clientReference = "{$data['userId']}_{$data['planId']}_".(int) round(microtime(true) * 1000);
+        $clientReference = $this->newPaymentReference();
 
         if ($this->paymentGatewayManager->supportsHostedCheckout($gatewayName)) {
             /** @var HostedCheckoutGatewayInterface $gateway */
@@ -269,7 +276,7 @@ class SubscriptionService
         $currency = $data['currency'] ?? 'XOF';
         $price = (float) $plan->reset_price;
         $amount = $currency === 'XOF' ? (int) round($price) : $price;
-        $clientReference = "{$data['userId']}_reset-{$featureKey}_".(int) round(microtime(true) * 1000);
+        $clientReference = $this->newPaymentReference();
 
         if ($this->paymentGatewayManager->supportsHostedCheckout($gatewayName)) {
             /** @var HostedCheckoutGatewayInterface $gateway */
@@ -454,9 +461,13 @@ class SubscriptionService
      */
     public function checkoutStatus(string $reference): array
     {
-        $transaction = Transaction::query()->with('plan')->where('gateway_transaction_id', $reference)->first();
+        $transaction = $this->findTransactionByReference($reference);
 
         if (! $transaction) {
+            // Trace de ce que la page de retour nous a réellement transmis :
+            // c'est elle qu'il faut relire si « paiement introuvable » revient.
+            Log::warning('[paiement] statut demandé pour une référence inconnue', ['reference' => mb_substr($reference, 0, 300)]);
+
             return ['status' => 'UNKNOWN', 'purpose' => null, 'planName' => null];
         }
 
@@ -484,6 +495,65 @@ class SubscriptionService
             'purpose' => $transaction->purpose,
             'planName' => $transaction->plan?->name,
         ];
+    }
+
+    /**
+     * Référence de paiement : courte, opaque et sans caractère à encoder.
+     * L'ancien format « userId_planId_timestamp » (87 caractères) allongeait
+     * l'URL de retour au-delà de ce que le prestataire restitue fidèlement.
+     */
+    private function newPaymentReference(): string
+    {
+        return self::REFERENCE_PREFIX.strtoupper((string) Str::ulid());
+    }
+
+    /**
+     * Retrouve une Transaction à partir de la référence lue dans l'URL de
+     * retour, que le prestataire de paiement peut avoir altérée : paramètres
+     * accolés à la suite, ou URL tronquée. Correspondance exacte d'abord, puis
+     * référence extraite du bruit, puis préfixe non ambigu.
+     */
+    private function findTransactionByReference(string $reference): ?Transaction
+    {
+        $reference = trim($reference);
+        $candidates = [$reference];
+
+        // Paramètres accolés par le prestataire : « REF?responsecode=0&... ».
+        $candidates[] = (string) preg_split('/[?&#\s]/', $reference, 2)[0];
+
+        // Référence noyée dans autre chose : on reconnaît nos deux formats.
+        $uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+        if (preg_match('/'.self::REFERENCE_PREFIX.'[0-9A-Z]{26}/', $reference, $m)
+            || preg_match("/{$uuid}_(?:{$uuid}|reset-[a-z_]+)_\d{13}/i", $reference, $m)) {
+            $candidates[] = $m[0];
+        }
+
+        $candidates = array_values(array_unique(array_filter($candidates, fn (string $c) => $c !== '')));
+
+        foreach ($candidates as $candidate) {
+            $transaction = Transaction::query()->with('plan')->where('gateway_transaction_id', $candidate)->first();
+            if ($transaction) {
+                return $transaction;
+            }
+        }
+
+        // URL de retour tronquée : la référence reçue n'est que le début de la
+        // nôtre. Acceptée seulement si elle est assez longue pour ne pas se
+        // deviner et qu'elle ne désigne qu'une seule transaction.
+        $prefix = end($candidates) ?: '';
+        if (strlen($prefix) < self::MIN_REFERENCE_PREFIX_LENGTH) {
+            return null;
+        }
+
+        $matches = Transaction::query()
+            ->with('plan')
+            // substr plutôt que LIKE : nos anciennes références contiennent des
+            // « _ », joker de LIKE dont l'échappement diffère entre MySQL et SQLite.
+            ->whereRaw('substr(gateway_transaction_id, 1, ?) = ?', [strlen($prefix), $prefix])
+            ->limit(2)
+            ->get();
+
+        return $matches->count() === 1 ? $matches->first() : null;
     }
 
     /**

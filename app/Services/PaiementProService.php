@@ -51,7 +51,11 @@ class PaiementProService implements HostedCheckoutGatewayInterface, PaymentGatew
 
         // On encode notre référence dans le returnURL pour ne pas dépendre des
         // paramètres que Paiement Pro y ajoute (non documentés de façon fiable).
-        $returnUrl = $params['successUrl'].(str_contains($params['successUrl'], '?') ? '&' : '?').'ref='.urlencode($reference);
+        // Elle est placée EN TÊTE de la query string : si Paiement Pro accole
+        // ses paramètres à la suite ou tronque une URL trop longue, c'est la
+        // fin de l'URL qui est abîmée, pas la référence.
+        [$base, $query] = array_pad(explode('?', $params['successUrl'], 2), 2, '');
+        $returnUrl = $base.'?ref='.urlencode($reference).($query !== '' ? '&'.$query : '');
 
         $body = [
             'merchantId' => $merchantId,
