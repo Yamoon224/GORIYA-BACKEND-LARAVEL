@@ -60,7 +60,7 @@ class MessagingService
         $conversations = Conversation::where(fn ($q) => $q
             ->where('participant_one_id', $user->id)
             ->orWhere('participant_two_id', $user->id))
-            ->with(['participantOne', 'participantTwo'])
+            ->with(['participantOne.company', 'participantTwo.company'])
             ->orderByDesc('last_message_at')
             ->get()
             // Une conversation supprimée ne l'est que pour celui qui l'a
@@ -92,6 +92,9 @@ class MessagingService
             'otherUserId' => $other?->id,
             'name' => $other?->name ?? '—',
             'role' => $other?->role?->value ?? '',
+            // Une entreprise se reconnait a son logo, pas a l'avatar du compte qui
+            // la represente (souvent vide) ; un candidat garde sa photo de profil.
+            'avatar' => MediaUrl::resolve($other?->company?->logo ?: $other?->avatar),
             'lastMessageAt' => $conversation->last_message_at,
             'unreadCount' => $unreadCount,
             'lastMessage' => $this->previewOf($lastMessage),
@@ -208,7 +211,7 @@ class MessagingService
             'starred_by' => $this->withId($conversation->starred_by ?? [], $user->id, $starred),
         ])->save();
 
-        return $this->conversationToArray($conversation->fresh(['participantOne', 'participantTwo']), $user);
+        return $this->conversationToArray($conversation->fresh(['participantOne.company', 'participantTwo.company']), $user);
     }
 
     /**
@@ -287,7 +290,7 @@ class MessagingService
             ]
         );
 
-        return $this->conversationToArray($conversation->fresh(['participantOne', 'participantTwo']), $requestingUser);
+        return $this->conversationToArray($conversation->fresh(['participantOne.company', 'participantTwo.company']), $requestingUser);
     }
 
     public function isParticipant(Conversation $conversation, ?User $user): bool

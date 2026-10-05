@@ -237,4 +237,23 @@ class ConversationActionsTest extends TestCase
             ->assertOk()
             ->assertJsonPath('0.link', "/messages?conversation={$conversation->id}");
     }
+
+    public function test_la_liste_expose_le_logo_de_l_entreprise_au_candidat(): void
+    {
+        [$recruteur, $candidat] = $this->conversation();
+        $recruteur->company->update(['logo' => '/companies/logo-test.png']);
+
+        // Le compte recruteur n'a pas d'avatar : c'est le logo de son
+        // entreprise que le candidat doit voir dans sa messagerie.
+        $this->actingAs($candidat, 'api')
+            ->getJson('/messages/conversations')
+            ->assertOk()
+            ->assertJsonPath('0.avatar', rtrim((string) config('app.url'), '/').'/storage/companies/logo-test.png');
+
+        // Sans logo ni photo, le champ reste nul et le front affiche les initiales.
+        $this->actingAs($recruteur, 'api')
+            ->getJson('/messages/conversations')
+            ->assertOk()
+            ->assertJsonPath('0.avatar', null);
+    }
 }
