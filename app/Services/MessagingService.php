@@ -92,6 +92,10 @@ class MessagingService
             'otherUserId' => $other?->id,
             'name' => $other?->name ?? '—',
             'role' => $other?->role?->value ?? '',
+            // Intitulé professionnel du candidat (ex. "Développeuse Web") — ce
+            // qui a du sens à afficher sous son nom, à la différence du rôle
+            // technique du compte ('role' ci-dessus, USER/ADMIN/ENTERPRISE).
+            'title' => $other?->title ?: null,
             // Une entreprise se reconnait a son logo, pas a l'avatar du compte qui
             // la represente (souvent vide) ; un candidat garde sa photo de profil.
             'avatar' => MediaUrl::resolve($other?->company?->logo ?: $other?->avatar),
@@ -282,13 +286,26 @@ class MessagingService
             abort(403, "Vous n'êtes pas autorisé à démarrer cette conversation");
         }
 
-        $conversation = Conversation::firstOrCreate(
-            ['candidature_id' => $candidature->id],
-            [
+        // Un même candidat qui postule plusieurs fois chez la même entreprise
+        // retrouve le même fil : la conversation est entre deux personnes, pas
+        // entre deux candidatures. `candidature_id` ne reste que la trace de
+        // celle qui a ouvert le fil (voir la migration de fusion des doublons
+        // historiques, 2026_10_06).
+        $conversation = Conversation::where(fn ($q) => $q
+            ->where('participant_one_id', $requestingUser->id)
+            ->where('participant_two_id', $otherUserId))
+            ->orWhere(fn ($q) => $q
+                ->where('participant_one_id', $otherUserId)
+                ->where('participant_two_id', $requestingUser->id))
+            ->first();
+
+        if (! $conversation) {
+            $conversation = Conversation::create([
+                'candidature_id' => $candidature->id,
                 'participant_one_id' => $requestingUser->id,
                 'participant_two_id' => $otherUserId,
-            ]
-        );
+            ]);
+        }
 
         return $this->conversationToArray($conversation->fresh(['participantOne.company', 'participantTwo.company']), $requestingUser);
     }

@@ -46,10 +46,11 @@ class CompanyService
      */
     public function create(array $data, array $files = []): array
     {
-        $socialLinks = $this->decodeSocialLinks($data['socialLinks'] ?? null);
+        $socialLinks = $this->decodeJsonArray($data['socialLinks'] ?? null);
+        $values = $this->decodeJsonArray($data['values'] ?? null);
 
         try {
-            return DB::transaction(function () use ($data, $files, $socialLinks) {
+            return DB::transaction(function () use ($data, $files, $socialLinks, $values) {
                 $companyPayload = [
                     'name' => $data['companyName'],
                     'sector' => $data['sector'],
@@ -58,6 +59,7 @@ class CompanyService
                     'company_size' => $data['companySize'] ?? null,
                     'website' => $data['website'] ?? null,
                     'social_links' => $socialLinks,
+                    'company_values' => $values,
                     'country' => $data['country'] ?? null,
                     'headquarters' => $data['headquarters'] ?? null,
                     'location' => $data['location'] ?? null,
@@ -125,7 +127,11 @@ class CompanyService
         }
 
         if (array_key_exists('socialLinks', $data)) {
-            $mapped['social_links'] = $this->decodeSocialLinks($data['socialLinks']);
+            $mapped['social_links'] = $this->decodeJsonArray($data['socialLinks']);
+        }
+
+        if (array_key_exists('values', $data)) {
+            $mapped['company_values'] = $this->decodeJsonArray($data['values']);
         }
 
         if (array_key_exists('companyName', $data)) {
@@ -197,7 +203,11 @@ class CompanyService
         $this->companyRepository->delete($company);
     }
 
-    private function decodeSocialLinks(mixed $value): array
+    /**
+     * `socialLinks` et `values` arrivent soit en tableau (JSON body), soit en
+     * chaîne JSON (multipart — FormData ne sait pas poster un tableau natif).
+     */
+    private function decodeJsonArray(mixed $value): array
     {
         if ($value === null || $value === '') {
             return [];
@@ -210,7 +220,7 @@ class CompanyService
         $decoded = json_decode((string) $value, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
-            abort(400, 'socialLinks mal formé');
+            abort(400, 'Champ mal formé : tableau JSON attendu.');
         }
 
         return $decoded ?? [];

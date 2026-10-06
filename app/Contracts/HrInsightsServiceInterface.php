@@ -11,8 +11,8 @@ namespace App\Contracts;
 interface HrInsightsServiceInterface
 {
     /**
-     * @param  array<int, string>  $textAnswers  Réponses libres agrégées, toutes questions confondues
+     * @param  array<int, array{question: string, answer: string}>  $answers  Réponses libres agrégées, chacune associée à l'intitulé de sa question
      * @return array{trends: array<int, string>, frictionPoints: array<int, string>, recommendations: array<int, string>}
      */
-    public function analyzeSurveyResponses(array $textAnswers): array;
+    public function analyzeSurveyResponses(array $answers): array;
 }

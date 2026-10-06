@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Employee;
+use App\Support\MediaUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use OpenApi\Attributes as OA;
@@ -14,6 +15,7 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'source', type: 'string', enum: ['CANDIDATURE', 'MANUAL']),
         new OA\Property(property: 'candidatureId', type: 'string', format: 'uuid', nullable: true),
         new OA\Property(property: 'userId', type: 'string', format: 'uuid', nullable: true),
+        new OA\Property(property: 'avatar', type: 'string', nullable: true, description: "Photo de profil du compte Goriya lié — absente pour une fiche saisie manuellement (sans compte)"),
         new OA\Property(property: 'hiredFrom', type: 'object', nullable: true, properties: [
             new OA\Property(property: 'candidatureId', type: 'string', format: 'uuid'),
             new OA\Property(property: 'jobOfferId', type: 'string', format: 'uuid'),
@@ -119,6 +121,7 @@ class EmployeeResource extends JsonResource
             'source' => $this->candidature_id ? 'CANDIDATURE' : 'MANUAL',
             'candidatureId' => $this->candidature_id,
             'userId' => $this->user_id,
+            'avatar' => $this->whenLoaded('user', fn () => $this->user ? MediaUrl::resolve($this->user->avatar) : null),
             'hiredFrom' => $this->whenLoaded('candidature', fn () => $this->candidature ? [
                 'candidatureId' => $this->candidature->id,
                 'jobOfferId' => $this->candidature->job_offer_id,

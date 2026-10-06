@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Contracts\DashboardInsightsServiceInterface;
+use App\Http\Concerns\ResolvesEnterpriseCompany;
 use App\Http\Controllers\Controller;
+use App\Services\CompanyRecommendationService;
 use App\Services\DashboardService;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
@@ -17,7 +20,13 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: 'Dashboard', description: "Statistiques agrégées pour le tableau de bord, scopées à l'utilisateur courant")]
 class DashboardController extends Controller
 {
-    public function __construct(private readonly DashboardService $dashboardService) {}
+    use ResolvesEnterpriseCompany;
+
+    public function __construct(
+        private readonly DashboardService $dashboardService,
+        private readonly CompanyRecommendationService $recommendationService,
+        private readonly DashboardInsightsServiceInterface $insightsService,
+    ) {}
 
     #[OA\Get(
         path: '/dashboard/stats',
@@ -257,5 +266,32 @@ class DashboardController extends Controller
     public function profileViews(Request $request)
     {
         return response()->json($this->dashboardService->getProfileViews((int) $request->query('days', 30)));
+    }
+
+    #[OA\Get(
+        path: '/dashboard/recommendations',
+        tags: ['Dashboard'],
+        summary: "Recommandations du jour (carte « Recommandations IA » du tableau de bord entreprise)",
+        description: "Chaque recommandation est calculée à partir des statistiques réelles de l'entreprise (croissance des candidatures, meilleur jour de publication, vivier de candidats potentiels) — jamais inventée. Réservé aux comptes entreprise.",
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Recommandations',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'items', type: 'array', items: new OA\Items(type: 'string')),
+                ])
+            ),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+            new OA\Response(response: 403, description: 'Réservé aux comptes entreprise'),
+        ]
+    )]
+    public function recommendations(Request $request)
+    {
+        $companyId = $this->enterpriseCompanyId($request);
+
+        $items = $this->insightsService->phraseRecommendations($this->recommendationService->metrics($companyId));
+
+        return response()->json(['items' => $items]);
     }
 }

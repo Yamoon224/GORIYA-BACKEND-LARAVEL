@@ -47,7 +47,7 @@ class CallInvitationMail extends Mailable
                 'name' => $this->recipientName ?? '',
                 'greeting' => $this->recipientName ? "Bonjour {$this->recipientName}," : 'Bonjour,',
                 'logoUrl' => $publicUrl.'/images/logo-blanc.png',
-                'headerImageUrl' => $publicUrl.'/images/email-welcome-header.jpg',
+                'headerImageUrl' => $publicUrl.'/images/email-welcome-header.png',
                 'title' => $this->session->title,
                 'badge' => 'Invitation à un appel vidéo',
                 'paragraphs' => array_values(array_filter([

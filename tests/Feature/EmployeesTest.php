@@ -104,7 +104,9 @@ class EmployeesTest extends TestCase
             ->assertJsonPath('status', 'ACTIVE')
             ->assertJsonPath('annualLeaveDays', 26)
             ->assertJsonPath('fullName', 'Aïcha Koné')
-            ->assertJsonPath('hireDate', '2025-03-01');
+            ->assertJsonPath('hireDate', '2025-03-01')
+            // Pas de compte Goriya lié : pas de photo, l'écran retombe sur des initiales.
+            ->assertJsonPath('avatar', null);
 
         $this->actingAs($user, 'api')
             ->postJson('/employees', $this->employeePayload(['email' => 'yao@example.ci', 'firstName' => 'Yao']))
@@ -201,6 +203,7 @@ class EmployeesTest extends TestCase
             'status' => 'ACTIVE',
             'phone' => '+225 07 39 47 82',
             'location' => 'Abidjan, Côte d\'Ivoire',
+            'avatar' => 'https://example.cdn/avatars/marie.jpg',
         ]);
         $offre = JobOffer::create([
             'title' => 'Développeuse Full-Stack',
@@ -254,6 +257,9 @@ class EmployeesTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('source', 'CANDIDATURE')
             ->assertJsonPath('userId', $candidature->user_id)
+            // Photo du compte Goriya lié — c'est elle qui doit s'afficher sur
+            // la fiche employé, pas des initiales, quand elle existe.
+            ->assertJsonPath('avatar', 'https://example.cdn/avatars/marie.jpg')
             ->assertJsonPath('hiredFrom.jobOfferTitle', 'Développeuse Full-Stack');
 
         $this->actingAs($rh, 'api')

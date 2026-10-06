@@ -6,6 +6,7 @@ use App\Contracts\AiAnalysisServiceInterface;
 use App\Contracts\AvatarGenerationServiceInterface;
 use App\Contracts\ChatAiServiceInterface;
 use App\Contracts\CompanyResearchServiceInterface;
+use App\Contracts\DashboardInsightsServiceInterface;
 use App\Contracts\HrInsightsServiceInterface;
 use App\Contracts\PaymentGatewayInterface;
 use App\Contracts\PitchAiServiceInterface;
@@ -13,6 +14,7 @@ use App\Contracts\PresentationAiServiceInterface;
 use App\Contracts\PushNotificationServiceInterface;
 use App\Contracts\VideoCallProviderInterface;
 use App\Services\AnthropicChatService;
+use App\Services\AnthropicDashboardInsightsService;
 use App\Services\AnthropicHrInsightsService;
 use App\Services\AnthropicPitchService;
 use App\Services\AnthropicPresentationService;
@@ -54,6 +56,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(AvatarGenerationServiceInterface::class, DIdAvatarService::class);
         $this->app->bind(PushNotificationServiceInterface::class, FcmPushNotificationService::class);
         $this->app->bind(HrInsightsServiceInterface::class, AnthropicHrInsightsService::class);
+        $this->app->bind(DashboardInsightsServiceInterface::class, AnthropicDashboardInsightsService::class);
         $this->app->bind(VideoCallProviderInterface::class, LunionMeetService::class);
     }
 

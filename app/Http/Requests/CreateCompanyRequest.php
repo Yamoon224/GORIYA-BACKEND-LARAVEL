@@ -18,6 +18,7 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'companySize', type: 'string', nullable: true),
         new OA\Property(property: 'website', type: 'string', nullable: true),
         new OA\Property(property: 'socialLinks', type: 'array', items: new OA\Items(type: 'string'), nullable: true),
+        new OA\Property(property: 'values', type: 'array', items: new OA\Items(type: 'string'), nullable: true),
         new OA\Property(property: 'country', type: 'string', nullable: true),
         new OA\Property(property: 'headquarters', type: 'string', nullable: true),
         new OA\Property(property: 'location', type: 'string', nullable: true),
@@ -52,6 +53,7 @@ class CreateCompanyRequest extends FormRequest
             // Peut arriver en JSON string (multipart) ou en tableau (JSON body) —
             // le décodage/la validation de forme se fait dans le contrôleur.
             'socialLinks' => ['nullable'],
+            'values' => ['nullable'],
             'country' => ['nullable', 'string'],
             'headquarters' => ['nullable', 'string'],
             'location' => ['nullable', 'string'],

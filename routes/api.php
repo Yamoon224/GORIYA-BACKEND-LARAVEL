@@ -643,6 +643,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/dashboard/recent-applications', [DashboardController::class, 'recentApplications']);
     Route::get('/dashboard/recommended-jobs', [DashboardController::class, 'recommendedJobs']);
     Route::get('/dashboard/profile-views', [DashboardController::class, 'profileViews']);
+    Route::get('/dashboard/recommendations', [DashboardController::class, 'recommendations']);
 
     Route::get('/career-dashboard', [CareerDashboardController::class, 'show']);
 });

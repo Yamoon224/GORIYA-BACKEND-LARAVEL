@@ -29,21 +29,21 @@ class AnthropicHrInsightsService implements HrInsightsServiceInterface
         $this->initClaudeClient();
     }
 
-    public function analyzeSurveyResponses(array $textAnswers): array
+    public function analyzeSurveyResponses(array $answers): array
     {
         $fallback = self::FALLBACK;
 
-        if (! $this->hasClaudeClient() || $textAnswers === []) {
+        if (! $this->hasClaudeClient() || $answers === []) {
             return $fallback;
         }
 
         try {
-            $answersBlock = collect($textAnswers)
-                ->map(fn (string $a, int $i) => ($i + 1).'. '.$this->truncateForClaude($a, 500))
+            $answersBlock = collect($answers)
+                ->map(fn (array $a, int $i) => ($i + 1).'. Question « '.$this->truncateForClaude($a['question'], 200).' » — Réponse : '.$this->truncateForClaude($a['answer'], 500))
                 ->implode("\n");
 
             $prompt = <<<PROMPT
-Vous êtes un consultant RH spécialisé en analyse du climat social. Voici des réponses libres, anonymes et agrégées, issues d'une enquête interne auprès des employés d'une entreprise :
+Vous êtes un consultant RH spécialisé en analyse du climat social. Voici des réponses libres, anonymes et agrégées, issues d'une enquête interne auprès des employés d'une entreprise, chacune accompagnée de la question à laquelle elle répond :
 
 {$this->truncateForClaude($answersBlock, 6000)}
 
@@ -54,7 +54,7 @@ Retournez UNIQUEMENT un objet JSON valide (sans markdown) :
   "recommendations": ["<recommandation actionnable pour les RH 1>", "<recommandation 2>"]
 }
 
-{$this->localizedInstruction()} Restez factuel et basé uniquement sur le contenu fourni, sans extrapoler sur des individus.
+{$this->localizedInstruction()} Restez factuel et basé uniquement sur le contenu fourni, sans extrapoler sur des individus. Quand une tendance, un point de friction ou une recommandation se rapporte clairement à une question précise, nommez cette question dans le texte plutôt que de rester générique.
 PROMPT;
 
             $text = $this->requestClaudeText($prompt, 1024);

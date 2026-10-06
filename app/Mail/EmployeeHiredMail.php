@@ -48,7 +48,7 @@ class EmployeeHiredMail extends Mailable
             with: [
                 'name' => $this->employee->first_name,
                 'logoUrl' => $frontendUrl.'/images/logo-blanc.png',
-                'headerImageUrl' => $frontendUrl.'/images/email-welcome-header.jpg',
+                'headerImageUrl' => $frontendUrl.'/images/email-welcome-header.png',
                 'title' => 'Bienvenue dans l\'équipe !',
                 'badge' => 'Embauche confirmée',
                 'paragraphs' => [

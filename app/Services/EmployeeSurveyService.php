@@ -145,32 +145,36 @@ class EmployeeSurveyService
     }
 
     /**
-     * Agrège les réponses : moyenne par question RATING, analyse IA des
-     * questions TEXT (tendances/friction/recommandations) — jamais de
-     * réponse individuelle ni de user_id dans le résultat.
+     * Agrège les réponses : moyenne par question RATING, réponses brutes
+     * groupées par question TEXT (jamais liées à un user_id, mais listées
+     * telles qu'écrites — avec une seule réponse reçue, cela revient de
+     * fait à montrer celle-ci), et analyse IA (tendances/friction/
+     * recommandations) qui reçoit chaque réponse accompagnée de l'intitulé
+     * de sa question, pour que la synthèse distingue les questions entre
+     * elles plutôt que de tout mélanger.
      *
-     * @return array{participationCount: int, ratings: array<string, float>, trends: array<int, string>, frictionPoints: array<int, string>, recommendations: array<int, string>}
+     * @return array{participationCount: int, ratings: array<string, float>, textAnswers: array<string, array<int, string>>, trends: array<int, string>, frictionPoints: array<int, string>, recommendations: array<int, string>}
      */
     public function stats(EmployeeSurvey $survey): array
     {
         $responses = SurveyResponse::where('survey_id', $survey->id)->get();
 
-        $questionTypes = collect($survey->questions)->keyBy('id')->map(fn ($q) => $q['type']);
+        $questions = collect($survey->questions)->keyBy('id');
 
         $ratingSums = [];
         $ratingCounts = [];
-        $textAnswers = [];
+        $textAnswersByQuestion = [];
 
         foreach ($responses as $response) {
             foreach ($response->answers as $answer) {
                 $questionId = $answer['questionId'] ?? null;
-                $type = $questionTypes[$questionId] ?? null;
+                $type = $questions[$questionId]['type'] ?? null;
 
                 if ($type === SurveyQuestionType::RATING->value) {
                     $ratingSums[$questionId] = ($ratingSums[$questionId] ?? 0) + (float) $answer['value'];
                     $ratingCounts[$questionId] = ($ratingCounts[$questionId] ?? 0) + 1;
                 } elseif ($type === SurveyQuestionType::TEXT->value && ! empty($answer['value'])) {
-                    $textAnswers[] = (string) $answer['value'];
+                    $textAnswersByQuestion[$questionId][] = (string) $answer['value'];
                 }
             }
         }
@@ -180,11 +184,20 @@ class EmployeeSurveyService
             $ratings[$questionId] = round($sum / $ratingCounts[$questionId], 2);
         }
 
-        $insights = $this->hrInsights->analyzeSurveyResponses($textAnswers);
+        $labeledAnswers = [];
+        foreach ($textAnswersByQuestion as $questionId => $answers) {
+            $questionLabel = $questions[$questionId]['question'] ?? '';
+            foreach ($answers as $answer) {
+                $labeledAnswers[] = ['question' => $questionLabel, 'answer' => $answer];
+            }
+        }
+
+        $insights = $this->hrInsights->analyzeSurveyResponses($labeledAnswers);
 
         return [
             'participationCount' => $responses->count(),
             'ratings' => $ratings,
+            'textAnswers' => $textAnswersByQuestion,
             'trends' => $insights['trends'],
             'frictionPoints' => $insights['frictionPoints'],
             'recommendations' => $insights['recommendations'],

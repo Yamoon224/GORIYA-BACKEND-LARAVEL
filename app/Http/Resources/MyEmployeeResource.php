@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\MediaUrl;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
@@ -26,6 +27,7 @@ class MyEmployeeResource extends EmployeeResource
         unset($data['salary'], $data['notes']);
 
         $data['companyName'] = $this->whenLoaded('company', fn () => $this->company?->name);
+        $data['companyLogo'] = $this->whenLoaded('company', fn () => MediaUrl::resolve($this->company?->logo));
 
         return $data;
     }

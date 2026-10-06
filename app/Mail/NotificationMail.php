@@ -49,7 +49,7 @@ class NotificationMail extends Mailable
             with: [
                 'name' => $this->user->name,
                 'logoUrl' => $publicUrl.'/images/logo-blanc.png',
-                'headerImageUrl' => $publicUrl.'/images/email-welcome-header.jpg',
+                'headerImageUrl' => $publicUrl.'/images/email-welcome-header.png',
                 'title' => $this->notificationTitle,
                 'badge' => 'Notification prioritaire',
                 'paragraphs' => [$this->body],

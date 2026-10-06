@@ -444,7 +444,7 @@ class EmployeeService
     private function withListingData(Builder $query): Builder
     {
         return $query
-            ->with(['manager', 'currentLeaves', 'candidature.jobOffer', 'activeContract'])
+            ->with(['manager', 'currentLeaves', 'candidature.jobOffer', 'activeContract', 'user'])
             ->withCount([
                 'leaves as pending_leaves_count' => fn (Builder $q) => $q->where('status', HrWorkflowStatus::PENDING->value),
                 'hrRequests as pending_requests_count' => fn (Builder $q) => $q->whereIn('status', [
