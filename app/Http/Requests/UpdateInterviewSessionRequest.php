@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\InterviewStatus;
+use App\Enums\UserRole;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
@@ -25,6 +26,18 @@ class UpdateInterviewSessionRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
+    }
+
+    /**
+     * L'email du candidat désigne le propriétaire de la session : seul un
+     * administrateur peut le changer, comme le nom qui l'accompagne.
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->user()?->role !== UserRole::ADMIN) {
+            $this->getInputSource()->remove('candidateName');
+            $this->getInputSource()->remove('candidateEmail');
+        }
     }
 
     /**
