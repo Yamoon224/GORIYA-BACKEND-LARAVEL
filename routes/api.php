@@ -485,23 +485,32 @@ Route::middleware('auth:api')->group(function () {
 });
 
 // --- Calendar Events / Interview Sessions / Matching Results / Scoring Results
-// (aucune route publique dans aucun de ces 4 contrôleurs NestJS)
+//
+// Tables du back-office, sans propriétaire par ligne : elles portent le nom,
+// l'email et les scores de tous les candidats. Hérité de NestJS, tout compte
+// connecté pouvait les lire en entier, les modifier et les supprimer — elles
+// sont donc réservées à l'administrateur (le back-office passe de toute façon
+// par /admin/...). Seule exception : la simulation d'entretien du candidat,
+// qui crée sa session puis ne touche qu'à la sienne (contrôle dans
+// InterviewSessionsController).
 Route::middleware('auth:api')->group(function () {
+    // Simulation d'entretien : réservée à Premium (voir SubscriptionPlanSeeder).
+    Route::post('/interview-sessions', [InterviewSessionsController::class, 'store'])
+        ->middleware('plan.feature:simulation_entretien');
+    Route::get('/interview-sessions', [InterviewSessionsController::class, 'index'])->middleware('role:ADMIN');
+    Route::get('/interview-sessions/paginate', [InterviewSessionsController::class, 'paginate'])->middleware('role:ADMIN');
+    Route::get('/interview-sessions/{id}', [InterviewSessionsController::class, 'show']);
+    Route::patch('/interview-sessions/{id}', [InterviewSessionsController::class, 'update']);
+    Route::delete('/interview-sessions/{id}', [InterviewSessionsController::class, 'destroy']);
+});
+
+Route::middleware(['auth:api', 'role:ADMIN'])->group(function () {
     Route::get('/calendar-events', [CalendarEventsController::class, 'index']);
     Route::get('/calendar-events/paginate', [CalendarEventsController::class, 'paginate']);
     Route::get('/calendar-events/{id}', [CalendarEventsController::class, 'show']);
     Route::post('/calendar-events', [CalendarEventsController::class, 'store']);
     Route::patch('/calendar-events/{id}', [CalendarEventsController::class, 'update']);
     Route::delete('/calendar-events/{id}', [CalendarEventsController::class, 'destroy']);
-
-    Route::get('/interview-sessions', [InterviewSessionsController::class, 'index']);
-    Route::get('/interview-sessions/paginate', [InterviewSessionsController::class, 'paginate']);
-    Route::get('/interview-sessions/{id}', [InterviewSessionsController::class, 'show']);
-    // Simulation d'entretien : réservée à Premium (voir SubscriptionPlanSeeder).
-    Route::post('/interview-sessions', [InterviewSessionsController::class, 'store'])
-        ->middleware('plan.feature:simulation_entretien');
-    Route::patch('/interview-sessions/{id}', [InterviewSessionsController::class, 'update']);
-    Route::delete('/interview-sessions/{id}', [InterviewSessionsController::class, 'destroy']);
 
     Route::get('/matching-results', [MatchingResultsController::class, 'index']);
     Route::get('/matching-results/paginate', [MatchingResultsController::class, 'paginate']);
@@ -569,8 +578,10 @@ Route::middleware('auth:api')->group(function () {
     Route::delete('/chat/threads/{id}', [ChatController::class, 'destroy']);
 });
 
-// --- CV Analysis (aucune route publique) ---
-Route::middleware('auth:api')->group(function () {
+// --- CV Analysis — journal des analyses, lu par le back-office : réservé à
+// l'administrateur comme les tables ci-dessus (les analyses sont enregistrées
+// côté serveur par CvAnalysisLogService, pas par ces routes) ---
+Route::middleware(['auth:api', 'role:ADMIN'])->group(function () {
     Route::get('/cv-analysis', [CvAnalysisController::class, 'index']);
     Route::get('/cv-analysis/paginate', [CvAnalysisController::class, 'paginate']);
     Route::get('/cv-analysis/{id}', [CvAnalysisController::class, 'show']);

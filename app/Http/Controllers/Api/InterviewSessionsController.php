@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Concerns\AuthorizesOwnership;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateInterviewSessionRequest;
 use App\Http\Requests\UpdateInterviewSessionRequest;
@@ -15,7 +16,32 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: 'Interview Sessions', description: 'Gestion des sessions d\'entretien')]
 class InterviewSessionsController extends Controller
 {
+    use AuthorizesOwnership;
+
     public function __construct(private readonly InterviewSessionService $interviewSessionService) {}
+
+    /**
+     * Une session n'a pas de propriétaire en base : elle appartient au compte
+     * dont l'email est celui du candidat enregistré. Sans ce contrôle, tout
+     * compte connecté lisait, modifiait ou supprimait la session de n'importe
+     * quel candidat à partir de son identifiant.
+     */
+    private function sessionOrFail(string $id, Request $request): InterviewSession
+    {
+        $session = InterviewSession::find($id);
+
+        if (! $session) {
+            abort(404, 'InterviewSession not found');
+        }
+
+        $user = $request->user();
+        $this->authorizeOwnerOrAdmin(
+            $user,
+            $user !== null && mb_strtolower((string) $session->candidate_email) === mb_strtolower((string) $user->email),
+        );
+
+        return $session;
+    }
 
     /*
     |----------------------------------------------------------------------
@@ -140,15 +166,9 @@ class InterviewSessionsController extends Controller
             new OA\Response(response: 404, description: 'Session introuvable'),
         ]
     )]
-    public function show(string $id)
+    public function show(string $id, Request $request)
     {
-        $session = InterviewSession::find($id);
-
-        if (! $session) {
-            abort(404, 'InterviewSession not found');
-        }
-
-        return new InterviewSessionResource($session);
+        return new InterviewSessionResource($this->sessionOrFail($id, $request));
     }
 
     /*
@@ -174,11 +194,7 @@ class InterviewSessionsController extends Controller
     )]
     public function update(string $id, UpdateInterviewSessionRequest $request)
     {
-        $session = InterviewSession::find($id);
-
-        if (! $session) {
-            abort(404, 'InterviewSession not found');
-        }
+        $session = $this->sessionOrFail($id, $request);
 
         $updated = $this->interviewSessionService->update($session, $request->validated());
 
@@ -202,13 +218,9 @@ class InterviewSessionsController extends Controller
             new OA\Response(response: 404, description: 'Session introuvable'),
         ]
     )]
-    public function destroy(string $id)
+    public function destroy(string $id, Request $request)
     {
-        $session = InterviewSession::find($id);
-
-        if (! $session) {
-            abort(404, 'InterviewSession not found');
-        }
+        $session = $this->sessionOrFail($id, $request);
 
         $this->interviewSessionService->remove($session);
 
