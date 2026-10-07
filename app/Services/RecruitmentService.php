@@ -36,9 +36,9 @@ class RecruitmentService
     use MapsFieldsToColumns;
 
     /** Cartes du pipeline : compétences, CV, note IA et entretiens sans requête par carte. */
-    private const LIST_RELATIONS = ['user.portfolios', 'user.cv', 'jobOffer', 'resume', 'answers', 'assessment', 'employee', 'interviews'];
+    private const LIST_RELATIONS = ['user.portfolios:id,user_id,skills', 'user.cv', 'jobOffer', 'resume', 'assessment', 'employee', 'interviews'];
 
-    private const DETAIL_RELATIONS = ['stageEvents.creator', 'recruitmentNotes.author', 'interviews.creator', 'interviews.outcomeAuthor', 'interviews.callSession'];
+    private const DETAIL_RELATIONS = ['jobOffer.company', 'answers', 'stageEvents.creator', 'recruitmentNotes.author', 'interviews.creator', 'interviews.outcomeAuthor', 'interviews.callSession'];
 
     private const INTERVIEW_RELATIONS = ['candidature.jobOffer', 'candidature.employee', 'creator', 'outcomeAuthor', 'callSession'];
 
@@ -99,10 +99,16 @@ class RecruitmentService
     /** Candidat avec son dossier complet : entretiens, notes et historique. */
     public function findCandidate(string $id, string $companyId): ?Candidature
     {
-        return $this->companyCandidatures($companyId)
+        $candidate = $this->companyCandidatures($companyId)
             ->with(array_merge(self::LIST_RELATIONS, self::DETAIL_RELATIONS))
             ->withCount('recruitmentNotes')
             ->find($id);
+
+        if ($candidate) {
+            $this->closePastCalls($candidate->interviews);
+        }
+
+        return $candidate;
     }
 
     public function findCandidature(string $id, string $companyId): ?Candidature
@@ -123,7 +129,8 @@ class RecruitmentService
         return JobOffer::query()
             ->where('company_id', $companyId)
             ->where('status', '!=', JobStatus::DRAFT->value)
-            ->with('candidatures.employee')
+            // Seules les colonnes qui déterminent l'étape : pas la lettre ni le reste du dossier.
+            ->with(['candidatures:id,job_offer_id,status,pipeline_stage', 'candidatures.employee:id,candidature_id'])
             ->orderByDesc('created_at')
             ->get()
             ->map(function (JobOffer $offer) use ($empty) {
@@ -229,7 +236,10 @@ class RecruitmentService
             $query->whereIn('status', $filters['status']);
         }
 
-        return $query->orderBy('scheduled_at')->get();
+        $interviews = $query->orderBy('scheduled_at')->get();
+        $this->closePastCalls($interviews);
+
+        return $interviews;
     }
 
     public function findInterview(string $id, string $companyId): ?RecruitmentInterview
@@ -391,6 +401,26 @@ class RecruitmentService
         }
     }
 
+    /**
+     * Salles GORIYA Meet dont l'entretien est passé : terminées à la lecture,
+     * pour que « Rejoindre » ne reste pas proposé après l'heure même si la
+     * tâche planifiée n'est pas encore passée.
+     *
+     * @param  iterable<RecruitmentInterview>  $interviews
+     */
+    private function closePastCalls(iterable $interviews): void
+    {
+        $sessions = [];
+        foreach ($interviews as $interview) {
+            if ($interview->relationLoaded('callSession') && $interview->callSession) {
+                // La durée de l'entretien fixe l'échéance de la salle : on la fournit sans requête.
+                $sessions[] = $interview->callSession->setRelation('interview', $interview->withoutRelations());
+            }
+        }
+
+        $this->calls->expireOverdue($sessions);
+    }
+
     private function closeCall(RecruitmentInterview $interview): void
     {
         $call = $interview->callSession;
@@ -449,7 +479,7 @@ class RecruitmentService
 
     private function companyCandidatures(string $companyId): Builder
     {
-        return Candidature::query()->whereHas('jobOffer', fn (Builder $q) => $q->where('company_id', $companyId));
+        return Candidature::forCompany($companyId);
     }
 
     private function reloadInterview(RecruitmentInterview $interview): RecruitmentInterview

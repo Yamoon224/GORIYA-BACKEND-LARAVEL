@@ -36,12 +36,14 @@ class ConnectRecommendationService
             return collect();
         }
 
-        $candidateIds = CommunityMembership::whereIn('community_id', $communityIds)
-            ->whereNotIn('user_id', $excludedIds)
-            ->pluck('user_id')
-            ->unique();
-
-        return User::whereIn('id', $candidateIds)->take($limit)->get();
+        // Une seule requête : la base s'arrête dès que `$limit` membres sont
+        // trouvés, au lieu de rapatrier l'identifiant de tous les membres de
+        // ses communautés pour n'en garder que dix.
+        return User::query()
+            ->whereIn('id', CommunityMembership::query()->select('user_id')->whereIn('community_id', $communityIds))
+            ->whereNotIn('id', $excludedIds)
+            ->take($limit)
+            ->get();
     }
 
     /**

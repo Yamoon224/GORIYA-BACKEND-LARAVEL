@@ -60,27 +60,44 @@ class MessagingService
         $conversations = Conversation::where(fn ($q) => $q
             ->where('participant_one_id', $user->id)
             ->orWhere('participant_two_id', $user->id))
-            ->with(['participantOne.company', 'participantTwo.company'])
+            ->with(['participantOne.company', 'participantTwo.company', 'latestMessage'])
             ->orderByDesc('last_message_at')
             ->get()
             // Une conversation supprimée ne l'est que pour celui qui l'a
             // supprimée : le filtre est ici, pas dans un delete réel.
             ->reject(fn (Conversation $c) => $c->isDeletedBy($user->id));
 
-        return $conversations->map(fn (Conversation $c) => $this->conversationToArray($c, $user))->values()->all();
+        // Non-lus de toutes les conversations en une requête, au lieu d'un
+        // COUNT par conversation affichée.
+        $unread = $conversations->isEmpty() ? collect() : Message::query()
+            ->whereIn('conversation_id', $conversations->modelKeys())
+            ->where('sender_id', '!=', $user->id)
+            ->whereNull('read_at')
+            ->selectRaw('conversation_id, COUNT(*) as total')
+            ->groupBy('conversation_id')
+            ->toBase()
+            ->pluck('total', 'conversation_id');
+
+        return $conversations
+            ->map(fn (Conversation $c) => $this->conversationToArray($c, $user, (int) ($unread[$c->id] ?? 0)))
+            ->values()
+            ->all();
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function conversationToArray(Conversation $conversation, User $user): array
+    /**
+     * @param  ?int  $unreadCount  Déjà compté par l'appelant (liste) ; `null` pour une conversation isolée.
+     */
+    private function conversationToArray(Conversation $conversation, User $user, ?int $unreadCount = null): array
     {
         $other = $conversation->participant_one_id === $user->id
             ? $conversation->participantTwo
             : $conversation->participantOne;
 
-        $lastMessage = $conversation->messages()->latest('created_at')->first();
-        $unreadCount = $conversation->messages()
+        $lastMessage = $conversation->latestMessage;
+        $unreadCount ??= $conversation->messages()
             ->where('sender_id', '!=', $user->id)
             ->whereNull('read_at')
             ->count();

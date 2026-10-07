@@ -57,14 +57,20 @@ Retournez UNIQUEMENT un objet JSON valide (sans markdown) :
 {$this->localizedInstruction()} Restez factuel et basé uniquement sur le contenu fourni, sans extrapoler sur des individus. Quand une tendance, un point de friction ou une recommandation se rapporte clairement à une question précise, nommez cette question dans le texte plutôt que de rester générique.
 PROMPT;
 
-            $text = $this->requestClaudeText($prompt, 1024);
-            $parsed = $this->parseClaudeJson($text, $fallback);
+            // La synthèse d'une évaluation est relue à chaque ouverture de ses
+            // statistiques : elle n'est recalculée que si les réponses ont changé.
+            return $this->rememberClaudeResult('survey-insights', $answers, 72, function () use ($prompt, $fallback) {
+                $parsed = $this->parseClaudeJson($this->requestClaudeText($prompt, 1024), []);
+                if ($parsed === []) {
+                    return null;
+                }
 
-            return [
-                'trends' => $this->ensureClaudeStringArray($parsed['trends'] ?? null, $fallback['trends']),
-                'frictionPoints' => $this->ensureClaudeStringArray($parsed['frictionPoints'] ?? null, $fallback['frictionPoints']),
-                'recommendations' => $this->ensureClaudeStringArray($parsed['recommendations'] ?? null, $fallback['recommendations']),
-            ];
+                return [
+                    'trends' => $this->ensureClaudeStringArray($parsed['trends'] ?? null, $fallback['trends']),
+                    'frictionPoints' => $this->ensureClaudeStringArray($parsed['frictionPoints'] ?? null, $fallback['frictionPoints']),
+                    'recommendations' => $this->ensureClaudeStringArray($parsed['recommendations'] ?? null, $fallback['recommendations']),
+                ];
+            }) ?? $fallback;
         } catch (Throwable $e) {
             Log::error('HR insights analysis failed: '.$e->getMessage());
 

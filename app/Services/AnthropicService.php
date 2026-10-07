@@ -84,6 +84,35 @@ class AnthropicService implements AiAnalysisServiceInterface
     */
     public function extractTextFromBuffer(string $binary, string $mimeType, string $fileName): string
     {
+        // Lire un PDF ou un Word coûte de quelques centaines de millisecondes
+        // à plusieurs secondes : le même fichier (score de compatibilité, puis
+        // évaluation approfondie, puis relances) n'est analysé qu'une fois. Le texte
+        // n'est gardé que 24 h : assez pour une session de tri, sans conserver
+        // durablement le contenu d'un CV en dehors du fichier lui-même.
+        $key = 'cv-text:'.hash('sha256', $binary);
+        try {
+            $cached = Cache::get($key);
+            if (is_string($cached)) {
+                return $cached;
+            }
+        } catch (Throwable) {
+            // Cache indisponible : on extrait comme avant.
+        }
+
+        $text = $this->extractText($binary, $mimeType, $fileName);
+        if (trim($text) !== '') {
+            try {
+                Cache::put($key, $text, now()->addDay());
+            } catch (Throwable) {
+                // Un texte trop volumineux pour le cache n'empêche pas l'analyse.
+            }
+        }
+
+        return $text;
+    }
+
+    private function extractText(string $binary, string $mimeType, string $fileName): string
+    {
         try {
             $name = strtolower($fileName);
             $isPdf = $mimeType === 'application/pdf' || str_ends_with($name, '.pdf');
@@ -353,13 +382,20 @@ Retournez UNIQUEMENT un objet JSON valide (sans markdown) :
 {$this->localizedInstruction()} Minimum 3 raisons.
 PROMPT;
 
-            $text = $this->requestClaudeText($prompt, 512);
-            $parsed = $this->parseClaudeJson($text, $fallback);
+            // Le widget « Ton profil correspond à cette offre » relance ce calcul
+            // à chaque visite d'une fiche offre : pour un même candidat et une
+            // même offre, le résultat déjà obtenu est resservi sans appel IA.
+            return $this->rememberClaudeResult('job-match', [$candidate, $job], 72, function () use ($prompt, $fallback) {
+                $parsed = $this->parseClaudeJson($this->requestClaudeText($prompt, 512), []);
+                if (! is_numeric($parsed['matchingScore'] ?? null)) {
+                    return null;
+                }
 
-            return [
-                'matchingScore' => max(0, min(100, (int) round((float) ($parsed['matchingScore'] ?? 70)))),
-                'matchReasons' => $this->ensureClaudeStringArray($parsed['matchReasons'] ?? null, $fallback['matchReasons']),
-            ];
+                return [
+                    'matchingScore' => max(0, min(100, (int) round((float) $parsed['matchingScore']))),
+                    'matchReasons' => $this->ensureClaudeStringArray($parsed['matchReasons'] ?? null, $fallback['matchReasons']),
+                ];
+            }) ?? $fallback;
         } catch (Throwable $e) {
             Log::error('Matching analysis failed: '.$e->getMessage());
 
@@ -672,12 +708,15 @@ Retournez UNIQUEMENT un objet JSON valide (sans markdown) :
 Classez tous les candidats fournis, sans en omettre. {$this->localizedInstruction()}
 PROMPT;
 
-            $text = $this->requestClaudeText($prompt, 1024);
-            $parsed = $this->parseClaudeJson($text, $fallback);
+            // Même liste de candidats et mêmes scores : même classement, sans nouvel appel.
+            $ranking = $this->rememberClaudeResult('candidate-ranking', $candidates, 72, function () use ($prompt, $candidates) {
+                $parsed = $this->parseClaudeJson($this->requestClaudeText($prompt, 1024), []);
+                $ranking = $this->sanitizeRanking($parsed['ranking'] ?? null, $candidates);
 
-            $ranking = $this->sanitizeRanking($parsed['ranking'] ?? null, $candidates);
+                return $ranking !== [] ? $ranking : null;
+            });
 
-            return ['ranking' => $ranking !== [] ? $ranking : $fallback['ranking']];
+            return ['ranking' => $ranking ?? $fallback['ranking']];
         } catch (Throwable $e) {
             Log::error('Candidate comparison failed: '.$e->getMessage());
 

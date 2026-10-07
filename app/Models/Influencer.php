@@ -62,6 +62,11 @@ class Influencer extends Model
      */
     public function unpaidBalance(): float
     {
+        // Déjà calculé par la liste (InfluencerService::paginate) : pas de requête par ligne.
+        if (array_key_exists('unpaid_balance', $this->attributes)) {
+            return (float) $this->attributes['unpaid_balance'];
+        }
+
         return (float) $this->redemptions()
             ->where('status', 'CONFIRMED')
             ->whereNull('payout_id')

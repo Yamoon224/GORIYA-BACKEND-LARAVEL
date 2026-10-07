@@ -191,9 +191,17 @@ class EmployeeLeaveService
      */
     public static function businessDays(CarbonInterface $start, CarbonInterface $end): int
     {
-        $days = 0;
-        for ($day = CarbonImmutable::instance($start); $day->lte($end); $day = $day->addDay()) {
-            if (! $day->isWeekend()) {
+        if ($start->gt($end)) {
+            return 0;
+        }
+
+        // Calcul direct plutôt qu'une boucle jour par jour : la paie l'appelle
+        // deux fois par employé. Semaines entières × 5, puis le reliquat.
+        $total = $start->diff($end)->days + 1;
+        $days = intdiv($total, 7) * 5;
+        $weekday = $start->dayOfWeekIso; // 1 = lundi … 7 = dimanche
+        for ($i = 0, $rest = $total % 7; $i < $rest; $i++) {
+            if ((($weekday - 1 + $i) % 7) < 5) {
                 $days++;
             }
         }

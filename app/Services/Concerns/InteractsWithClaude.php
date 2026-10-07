@@ -7,7 +7,10 @@ use Anthropic\Messages\TextBlock;
 use Anthropic\Messages\WebSearchResultBlock;
 use Anthropic\Messages\WebSearchTool20250305;
 use Anthropic\Messages\WebSearchToolResultBlock;
+use Closure;
+use GuzzleHttp\Client as HttpClient;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -17,37 +20,89 @@ use Throwable;
  * l'initialisation du client, l'appel texte et le parsing JSON défensif
  * pour que chaque nouveau service IA (Research, Pitch, Presentations,
  * Chat...) n'ait pas à les redupliquer.
+ *
+ * Le client n'est créé qu'au premier appel réel à Claude : ces services sont
+ * injectés dans des contrôleurs très sollicités (offres, employés, tableau de
+ * bord), où chaque requête payait jusque-là la construction du client et une
+ * ligne de journal sans jamais appeler l'IA.
  */
 trait InteractsWithClaude
 {
     private ?Client $claudeClient = null;
 
-    private string $claudeModel;
-
-    protected function initClaudeClient(): void
-    {
-        $apiKey = config('services.anthropic.key');
-        $this->claudeModel = config('services.anthropic.model');
-
-        if ($apiKey) {
-            $this->claudeClient = new Client(apiKey: $apiKey);
-            Log::info(static::class.' initialized with model '.$this->claudeModel);
-        } else {
-            Log::warning('ANTHROPIC_API_KEY not set — '.static::class.' will use intelligent fallback values');
-        }
-    }
+    /** Conservé pour les constructeurs existants : plus rien à préparer d'avance. */
+    protected function initClaudeClient(): void {}
 
     protected function hasClaudeClient(): bool
     {
-        return $this->claudeClient !== null;
+        return (bool) config('services.anthropic.key');
+    }
+
+    /**
+     * Client partagé par la requête, avec un délai maximal : sans lui, un appel
+     * qui ne répond pas bloquait le processus PHP jusqu'à sa propre limite
+     * d'exécution, et le SDK le retentait deux fois.
+     */
+    private function claude(): Client
+    {
+        return $this->claudeClient ??= new Client(
+            apiKey: (string) config('services.anthropic.key'),
+            requestOptions: [
+                'transporter' => new HttpClient([
+                    'timeout' => (float) config('services.anthropic.timeout', 60),
+                    'connect_timeout' => 10,
+                ]),
+                'maxRetries' => (int) config('services.anthropic.max_retries', 1),
+            ],
+        );
+    }
+
+    private function claudeModel(): string
+    {
+        return (string) config('services.anthropic.model');
+    }
+
+    /**
+     * Réutilise une réponse IA déjà obtenue pour exactement les mêmes données
+     * (même modèle, même langue). `$fresh` doit renvoyer `null` quand l'IA n'a
+     * pas répondu : un repli n'est jamais mis en cache.
+     *
+     * @template T
+     *
+     * @param  Closure(): ?T  $fresh
+     * @return ?T
+     */
+    protected function rememberClaudeResult(string $scope, mixed $input, int $hours, Closure $fresh): mixed
+    {
+        $key = 'ai:'.$scope.':'.hash('sha256', json_encode([$this->claudeModel(), App::getLocale(), $input], JSON_UNESCAPED_UNICODE));
+
+        try {
+            $cached = Cache::get($key);
+        } catch (Throwable) {
+            $cached = null;
+        }
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $result = $fresh();
+        if ($result !== null) {
+            try {
+                Cache::put($key, $result, now()->addHours($hours));
+            } catch (Throwable $e) {
+                Log::warning('Cache IA indisponible : '.$e->getMessage());
+            }
+        }
+
+        return $result;
     }
 
     protected function requestClaudeText(string $prompt, int $maxTokens): string
     {
-        $response = $this->claudeClient->messages->create(
+        $response = $this->claude()->messages->create(
             maxTokens: $maxTokens,
             messages: [['role' => 'user', 'content' => $prompt]],
-            model: $this->claudeModel,
+            model: $this->claudeModel(),
         );
 
         foreach ($response->content as $block) {
@@ -69,10 +124,10 @@ trait InteractsWithClaude
      */
     protected function requestClaudeChat(array $messages, int $maxTokens, ?string $system = null): string
     {
-        $response = $this->claudeClient->messages->create(
+        $response = $this->claude()->messages->create(
             maxTokens: $maxTokens,
             messages: $messages,
-            model: $this->claudeModel,
+            model: $this->claudeModel(),
             system: $system,
         );
 
@@ -96,10 +151,10 @@ trait InteractsWithClaude
      */
     protected function requestClaudeWebResearch(string $prompt, int $maxTokens, int $maxSearches): array
     {
-        $response = $this->claudeClient->messages->create(
+        $response = $this->claude()->messages->create(
             maxTokens: $maxTokens,
             messages: [['role' => 'user', 'content' => $prompt]],
-            model: $this->claudeModel,
+            model: $this->claudeModel(),
             tools: [WebSearchTool20250305::with(maxUses: $maxSearches)],
         );
 

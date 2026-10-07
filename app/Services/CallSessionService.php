@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Throwable;
 
+use function Illuminate\Support\defer;
+
 /**
  * GORIYA Call — orchestration des sessions de visioconférence (planification,
  * émission de jeton de connexion, clôture) au-dessus de VideoCallProviderInterface
@@ -22,6 +24,10 @@ use Throwable;
  * demande que de connaître son id — seul l'hôte peut la clôturer. Les invités
  * (`guests`) servent à retrouver la session dans sa liste : un candidat
  * convoqué à un entretien vidéo n'en est pas l'hôte.
+ *
+ * Une session dont l'heure est passée se termine d'elle-même : à la lecture
+ * (liste, détail, connexion) et par la commande planifiée `calls:close-expired`
+ * — voir CallSession::expiresAt().
  */
 class CallSessionService
 {
@@ -32,10 +38,10 @@ class CallSessionService
     /** Sessions dont l'utilisateur est l'hôte ou l'invité. */
     public function listFor(User $user): Collection
     {
+        $this->closeExpired($user);
+
         return CallSession::query()
-            ->where(fn (Builder $q) => $q
-                ->where('host_id', $user->id)
-                ->orWhereHas('guests', fn (Builder $guests) => $guests->where('users.id', $user->id)))
+            ->where(fn (Builder $q) => $this->visibleTo($q, $user))
             ->with('host')
             ->orderByDesc('created_at')
             ->get();
@@ -43,7 +49,50 @@ class CallSessionService
 
     public function find(string $id): ?CallSession
     {
-        return CallSession::find($id);
+        $session = CallSession::find($id);
+        if ($session?->isOverdue()) {
+            $this->expire($session);
+        }
+
+        return $session;
+    }
+
+    /**
+     * Termine les sessions dont l'heure est passée — celles de l'utilisateur,
+     * ou toutes (commande planifiée). Retourne le nombre de sessions closes.
+     */
+    public function closeExpired(?User $user = null): int
+    {
+        // Filtre large en SQL (aucune session n'expire avant la marge), règle
+        // exacte en PHP : elle dépend de la durée de l'entretien associé.
+        $limit = now()->subMinutes(CallSession::GRACE_MINUTES);
+
+        return $this->expireOverdue(
+            CallSession::query()
+                ->where('status', '!=', CallSessionStatus::ENDED->value)
+                ->where(fn (Builder $q) => $q
+                    ->where('scheduled_at', '<=', $limit)
+                    ->orWhere(fn (Builder $instant) => $instant->whereNull('scheduled_at')->where('created_at', '<=', $limit)))
+                ->when($user, fn (Builder $q) => $q->where(fn (Builder $mine) => $this->visibleTo($mine, $user)))
+                ->with('interview')
+                ->get()
+        );
+    }
+
+    /**
+     * @param  iterable<CallSession>  $sessions
+     */
+    public function expireOverdue(iterable $sessions): int
+    {
+        $closed = 0;
+        foreach ($sessions as $session) {
+            if ($session->isOverdue()) {
+                $this->expire($session);
+                $closed++;
+            }
+        }
+
+        return $closed;
     }
 
     /**
@@ -85,14 +134,21 @@ class CallSessionService
             $session->guests()->attach($guests);
         }
 
-        // Envoi immédiat, adresse par adresse : une adresse en échec ne doit
-        // ni bloquer les autres ni faire échouer la création de l'appel.
-        foreach ($invitees as $email) {
-            try {
-                Mail::to($email)->send(new CallInvitationMail($session, $host->name, $members->get($email)?->name));
-            } catch (Throwable $e) {
-                Log::warning("GORIYA Meet : invitation à {$email} non envoyée — {$e->getMessage()}");
-            }
+        // Envoi immédiat mais après la réponse HTTP : l'organisateur n'attend
+        // pas le serveur SMTP. Adresse par adresse — une adresse en échec ne
+        // bloque pas les autres.
+        if ($invitees !== []) {
+            $hostName = $host->name;
+            $names = $members->map(fn (User $member) => $member->name)->all();
+            defer(function () use ($session, $invitees, $hostName, $names) {
+                foreach ($invitees as $email) {
+                    try {
+                        Mail::to($email)->send(new CallInvitationMail($session, $hostName, $names[$email] ?? null));
+                    } catch (Throwable $e) {
+                        Log::warning("GORIYA Meet : invitation à {$email} non envoyée — {$e->getMessage()}");
+                    }
+                }
+            });
         }
 
         return $session;
@@ -103,6 +159,9 @@ class CallSessionService
      */
     public function issueJoinToken(CallSession $session, User $user): array
     {
+        if ($session->isOverdue()) {
+            $this->expire($session);
+        }
         if ($session->status === CallSessionStatus::ENDED) {
             abort(400, 'Cette session est déjà terminée');
         }
@@ -116,8 +175,11 @@ class CallSessionService
             grants: $isHost ? ['roomAdmin' => true] : [],
         );
 
+        // Chaque connexion repousse l'échéance de la session (updated_at).
         if ($session->status === CallSessionStatus::SCHEDULED) {
             $session->update(['status' => CallSessionStatus::ACTIVE]);
+        } else {
+            $session->touch();
         }
 
         return $token;
@@ -159,5 +221,32 @@ class CallSessionService
         }
 
         $session->update(['status' => CallSessionStatus::ENDED, 'ended_at' => now()]);
+    }
+    /**
+     * Session dont l'heure est passée : terminée à sa fin prévue. La salle est
+     * supprimée chez le fournisseur après la réponse — la lecture d'une liste
+     * n'attend pas un appel externe.
+     */
+    private function expire(CallSession $session): void
+    {
+        $endedAt = $session->expiresAt()->copy()->subMinutes(CallSession::GRACE_MINUTES);
+        $session->update(['status' => CallSessionStatus::ENDED, 'ended_at' => $endedAt->isFuture() ? now() : $endedAt]);
+
+        $slug = $session->room_slug;
+        defer(function () use ($slug) {
+            try {
+                $this->videoCallProvider->deleteRoom($slug);
+            } catch (Throwable $e) {
+                Log::warning("GORIYA Meet : fermeture de la salle {$slug} impossible — {$e->getMessage()}");
+            }
+        }, always: true);
+    }
+
+    /** Sessions dont l'utilisateur est l'hôte ou l'invité. */
+    private function visibleTo(Builder $query, User $user): Builder
+    {
+        return $query
+            ->where('host_id', $user->id)
+            ->orWhereHas('guests', fn (Builder $guests) => $guests->where('users.id', $user->id));
     }
 }

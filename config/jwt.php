@@ -219,6 +219,11 @@ return [
 
     'blacklist_enabled' => env('JWT_BLACKLIST_ENABLED', true),
 
+    // Store de cache de la liste noire. Vide : le cache fichier quand le cache
+    // par défaut est `database` (deux requêtes SQL de moins par requête
+    // authentifiée), sinon le store par défaut — voir AppServiceProvider.
+    'blacklist_store' => env('JWT_BLACKLIST_STORE'),
+
     /*
     | -------------------------------------------------------------------------
     | Blacklist Grace Period

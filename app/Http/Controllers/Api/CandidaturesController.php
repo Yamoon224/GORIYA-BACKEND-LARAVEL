@@ -21,7 +21,7 @@ class CandidaturesController extends Controller
 {
     use AuthorizesOwnership;
 
-    private const RELATIONS = ['user', 'user.portfolios', 'user.cv', 'jobOffer'];
+    private const RELATIONS = ['user', 'user.portfolios:id,user_id,skills', 'user.cv', 'jobOffer.company', 'answers', 'resume'];
 
     public function __construct(private readonly CandidatureService $candidatureService) {}
 
@@ -66,14 +66,7 @@ class CandidaturesController extends Controller
             return $query;
         }
 
-        $companyId = $this->viewerCompanyId($request);
-
-        return $query
-            ->where('user_id', $user?->id)
-            ->when(
-                $companyId,
-                fn ($q) => $q->orWhereHas('jobOffer', fn ($offre) => $offre->where('company_id', $companyId)),
-            );
+        return $query->visibleTo($user?->id, $this->viewerCompanyId($request));
     }
 
     /*

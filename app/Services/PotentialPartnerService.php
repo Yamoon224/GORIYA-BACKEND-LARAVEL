@@ -37,11 +37,21 @@ class PotentialPartnerService
      */
     public function reachable(array $filters = []): Collection
     {
+        return $this->reachableQuery($filters)->get();
+    }
+
+    /** Nombre de destinataires joignables, sans les charger (aperçu avant envoi). */
+    public function reachableCount(array $filters = []): int
+    {
+        return $this->reachableQuery($filters)->count();
+    }
+
+    private function reachableQuery(array $filters): Builder
+    {
         return $this->applyFilters(PotentialPartner::query(), $filters)
             ->where('email_valid', true)
             ->whereNull('unsubscribed_at')
-            ->where('status', '!=', PotentialPartnerStatus::DO_NOT_CONTACT->value)
-            ->get();
+            ->where('status', '!=', PotentialPartnerStatus::DO_NOT_CONTACT->value);
     }
 
     /**

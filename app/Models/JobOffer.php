@@ -74,22 +74,30 @@ class JobOffer extends Model
      */
     public function scopeOrderByPlanThenRecency(Builder $query): Builder
     {
-        $rangDuPlan = DB::table('user_subscriptions')
+        // Rang de chaque entreprise abonnée, calculé une fois puis joint aux
+        // offres. La sous-requête corrélée d'origine était réévaluée pour
+        // chaque offre du catalogue avant le tri.
+        $rangsDesPlans = DB::table('user_subscriptions')
             ->join('users', 'users.id', '=', 'user_subscriptions.user_id')
             ->leftJoin('subscription_plans', 'subscription_plans.id', '=', 'user_subscriptions.plan_id')
-            ->whereColumn('users.company_id', 'job_offers.company_id')
+            ->whereNotNull('users.company_id')
             ->where('user_subscriptions.status', SubscriptionStatus::ACTIVE->value)
             // Un abonnement sans échéance court indéfiniment (offre gratuite).
             ->where(function ($q) {
                 $q->whereNull('user_subscriptions.end_date')
                     ->orWhere('user_subscriptions.end_date', '>=', now());
             })
-            // Agrégat sans GROUP BY : toujours exactement une ligne, NULL quand
-            // l'entreprise n'a aucun abonnement actif.
-            ->selectRaw('COALESCE(MAX(subscription_plans.price), 0)');
+            ->groupBy('users.company_id')
+            ->selectRaw('users.company_id as plan_company_id, MAX(subscription_plans.price) as plan_rank');
+
+        if ($query->getQuery()->columns === null) {
+            $query->select('job_offers.*');
+        }
 
         return $query
-            ->orderByDesc($rangDuPlan)
+            ->leftJoinSub($rangsDesPlans, 'plan_ranks', 'plan_ranks.plan_company_id', '=', 'job_offers.company_id')
+            // Entreprise sans abonnement actif : rang 0, comme l'offre gratuite.
+            ->orderByRaw('COALESCE(plan_ranks.plan_rank, 0) DESC')
             ->orderByDesc('job_offers.created_at')
             // Départage les offres créées dans la même seconde, pour que la
             // pagination reste stable d'une page à l'autre.

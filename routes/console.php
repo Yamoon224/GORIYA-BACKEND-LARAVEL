@@ -30,3 +30,7 @@ Schedule::command('queue:work --stop-when-empty --max-time=55 --tries=3')
 // Clôture les évaluations (EmployeeSurvey) actives dont l'échéance est
 // dépassée — voir CloseExpiredSurveysCommand.
 Schedule::command('surveys:close-expired')->daily();
+
+// Termine les sessions GORIYA Meet dont l'heure est passée (restées
+// « Planifié » ou « En cours ») — voir CloseExpiredCallsCommand.
+Schedule::command('calls:close-expired')->everyFiveMinutes()->withoutOverlapping();

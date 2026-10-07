@@ -45,6 +45,7 @@ class EmployeeSurveyService
                 $query->whereNull('department')
                     ->orWhere('department', $employee->department);
             })
+            ->withCount('responses')
             ->orderByDesc('created_at')
             ->get();
     }

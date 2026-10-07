@@ -14,7 +14,8 @@ class CandidatureRepository extends BaseRepository implements CandidatureReposit
     // candidature listee.
     // `jobOffer.company` : la bibliothèque du candidat (standard) affiche
     // l'entreprise de chaque candidature.
-    private const RELATIONS = ['user', 'user.portfolios', 'user.cv', 'jobOffer.company', 'answers', 'resume'];
+    // Du portfolio, seule la colonne `skills` est lue.
+    private const RELATIONS = ['user', 'user.portfolios:id,user_id,skills', 'user.cv', 'jobOffer.company', 'answers', 'resume'];
 
     protected function model(): string
     {
@@ -84,14 +85,7 @@ class CandidatureRepository extends BaseRepository implements CandidatureReposit
             return;
         }
 
-        $query->where(function (Builder $q) use ($viewerUserId, $viewerCompanyId) {
-            if ($viewerUserId) {
-                $q->orWhere('user_id', $viewerUserId);
-            }
-            if ($viewerCompanyId) {
-                $q->orWhereHas('jobOffer', fn (Builder $offre) => $offre->where('company_id', $viewerCompanyId));
-            }
-        });
+        $query->visibleTo($viewerUserId, $viewerCompanyId);
     }
 
     public function countByStatus(string $status): int

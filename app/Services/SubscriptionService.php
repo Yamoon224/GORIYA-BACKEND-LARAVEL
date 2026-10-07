@@ -561,18 +561,23 @@ class SubscriptionService
      */
     public function adminStats(): array
     {
-        $all = $this->userSubscriptionRepository->findAllWithPlan();
-        $active = $all->filter(fn (UserSubscription $s) => $s->status === SubscriptionStatus::ACTIVE);
-        $expired = $all->filter(fn (UserSubscription $s) => $s->status === SubscriptionStatus::EXPIRED);
-        $cancelled = $all->filter(fn (UserSubscription $s) => $s->status === SubscriptionStatus::CANCELLED);
-        $revenue = $active->sum(fn (UserSubscription $s) => (float) ($s->plan->price ?? 0));
+        // Une requête agrégée au lieu de charger chaque abonnement et son forfait.
+        $byStatus = UserSubscription::query()
+            ->leftJoin('subscription_plans', 'subscription_plans.id', '=', 'user_subscriptions.plan_id')
+            ->selectRaw('user_subscriptions.status as status, COUNT(*) as total, COALESCE(SUM(subscription_plans.price), 0) as revenue')
+            ->groupBy('user_subscriptions.status')
+            ->toBase()
+            ->get()
+            ->keyBy('status');
+
+        $count = fn (SubscriptionStatus $status) => (int) ($byStatus[$status->value]->total ?? 0);
 
         return [
-            'total' => $all->count(),
-            'active' => $active->count(),
-            'expired' => $expired->count(),
-            'cancelled' => $cancelled->count(),
-            'revenue' => $revenue,
+            'total' => (int) $byStatus->sum('total'),
+            'active' => $count(SubscriptionStatus::ACTIVE),
+            'expired' => $count(SubscriptionStatus::EXPIRED),
+            'cancelled' => $count(SubscriptionStatus::CANCELLED),
+            'revenue' => (float) ($byStatus[SubscriptionStatus::ACTIVE->value]->revenue ?? 0),
         ];
     }
 

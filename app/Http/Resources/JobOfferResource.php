@@ -83,7 +83,9 @@ class JobOfferResource extends JsonResource
             ] : null,
             // Toujours un tableau (jamais null) : le wizard de candidature teste
             // simplement sa longueur pour savoir s'il affiche l'étape questions.
-            'questions' => JobOfferQuestionResource::collection($this->whenLoaded('questions', fn () => $this->questions, fn () => $this->questions()->get()))->resolve(),
+            // Lecture par la relation (et non une requête par offre) : sur une liste,
+            // les questions de toutes les offres arrivent en une seule requête.
+            'questions' => JobOfferQuestionResource::collection($this->questions)->resolve(),
             'createdAt' => $this->created_at,
             'updatedAt' => $this->updated_at,
         ];

@@ -90,13 +90,13 @@ class AdminMailCampaignsController extends Controller
      */
     public function previewRecipients(Request $request)
     {
-        $count = $this->partnerService->reachable([
+        $count = $this->partnerService->reachableCount([
             'search' => $request->query('search'),
             'sector' => $request->query('sector'),
             'city' => $request->query('city'),
             'companySize' => $request->query('companySize'),
             'status' => $request->query('status'),
-        ])->count();
+        ]);
 
         return ApiResponse::success(['count' => $count]);
     }

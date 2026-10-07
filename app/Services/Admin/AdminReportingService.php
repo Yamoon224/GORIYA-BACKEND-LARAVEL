@@ -15,9 +15,13 @@ use App\Enums\UserStatus;
 use App\Http\Resources\InterviewSessionResource;
 use App\Http\Resources\JobOfferResource;
 use App\Http\Resources\PortfolioResource;
+use App\Models\Candidature;
+use App\Models\Company;
 use App\Models\CvAnalysis;
 use App\Models\InterviewSession;
 use App\Models\JobOffer;
+use App\Models\MatchingResult;
+use App\Models\Portfolio;
 use App\Models\ScoringResult;
 use App\Models\User;
 use App\Repositories\Contracts\CalendarEventRepositoryInterface;
@@ -33,6 +37,7 @@ use App\Repositories\Contracts\UserRepositoryInterface;
 use App\Services\Concerns\BuildsCsv;
 use App\Services\Concerns\PaginatesArrays;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -40,6 +45,11 @@ use Illuminate\Support\Facades\Cache;
  * admin-platform.service.ts — une seule responsabilité : produire les
  * statistiques/projections en lecture seule consommées par le tableau de
  * bord admin. Extrait de l'ex-AdminPlatformService.
+ *
+ * Les totaux, moyennes et répartitions sont calculés par la base (COUNT, SUM,
+ * GROUP BY) : charger chaque table en entier pour compter en PHP coûtait
+ * plusieurs centaines de millisecondes par tuile dès quelques milliers de
+ * lignes.
  */
 class AdminReportingService
 {
@@ -115,14 +125,15 @@ class AdminReportingService
 
     public function getCompanySectors(): array
     {
-        $companies = $this->companyRepository->all();
-        $total = max(1, $companies->count());
+        $sectors = Company::query()
+            ->selectRaw('sector, COUNT(*) as total')
+            ->groupBy('sector')
+            ->orderByDesc('total')
+            ->orderBy('sector')
+            ->toBase()
+            ->get();
 
-        return $companies->groupBy('sector')->map(function ($group, $sector) use ($total) {
-            $count = $group->count();
-
-            return ['name' => $sector, 'count' => $count, 'percentage' => (int) round($count / $total * 100)];
-        })->values()->all();
+        return $this->shares($sectors->map(fn ($row) => ['name' => $row->sector, 'count' => (int) $row->total])->all());
     }
 
     public function getCompanyJobs(string $companyId): mixed
@@ -139,38 +150,52 @@ class AdminReportingService
     */
     public function getJobOfferStats(): array
     {
-        $offers = $this->jobOfferRepository->all();
+        $byStatus = JobOffer::query()
+            ->selectRaw('status, COUNT(*) as total, COALESCE(SUM(applicants), 0) as applicants')
+            ->groupBy('status')
+            ->toBase()
+            ->get()
+            ->keyBy('status');
 
         return [
-            'total' => $offers->count(),
-            'active' => $offers->where('status', JobStatus::ACTIVE)->count(),
-            'closed' => $offers->where('status', JobStatus::CLOSED)->count(),
-            'draft' => $offers->where('status', JobStatus::DRAFT)->count(),
-            'totalApplicants' => (int) $offers->sum('applicants'),
+            'total' => (int) $byStatus->sum('total'),
+            'active' => (int) ($byStatus[JobStatus::ACTIVE->value]->total ?? 0),
+            'closed' => (int) ($byStatus[JobStatus::CLOSED->value]->total ?? 0),
+            'draft' => (int) ($byStatus[JobStatus::DRAFT->value]->total ?? 0),
+            'totalApplicants' => (int) $byStatus->sum('applicants'),
         ];
     }
 
     public function getJobOfferSectors(): array
     {
-        $offers = $this->jobOfferRepository->findAllWithCompany();
-        $total = max(1, $offers->count());
+        $sectors = JobOffer::query()
+            ->leftJoin('companies', 'companies.id', '=', 'job_offers.company_id')
+            ->selectRaw('companies.sector as sector, COUNT(*) as total')
+            ->groupBy('companies.sector')
+            ->toBase()
+            ->get();
 
-        return $offers->groupBy(fn (JobOffer $offer) => $offer->company?->sector ?: 'Non classe')
-            ->map(function ($group, $sector) use ($total) {
-                $count = $group->count();
+        // Offres sans entreprise ou sans secteur : une seule ligne « Non classe ».
+        $counts = [];
+        foreach ($sectors as $row) {
+            $name = $row->sector ?: 'Non classe';
+            $counts[$name] = ($counts[$name] ?? 0) + (int) $row->total;
+        }
+        arsort($counts);
 
-                return ['name' => $sector, 'count' => $count, 'percentage' => (int) round($count / $total * 100)];
-            })->values()->all();
+        return $this->shares(array_map(fn ($name, $count) => ['name' => $name, 'count' => $count], array_keys($counts), $counts));
     }
 
     public function getCandidatureStats(): array
     {
+        $byStatus = $this->countBy(Candidature::query(), 'status');
+
         return [
-            'total' => $this->candidatureRepository->count(),
-            'enAttente' => $this->candidatureRepository->countByStatus(CandidatureStatus::EN_ATTENTE->value),
-            'enCours' => $this->candidatureRepository->countByStatus(CandidatureStatus::EN_COURS->value),
-            'approuvees' => $this->candidatureRepository->countByStatus(CandidatureStatus::APPROUVEE->value),
-            'rejetees' => $this->candidatureRepository->countByStatus(CandidatureStatus::REJETEE->value),
+            'total' => array_sum($byStatus),
+            'enAttente' => $byStatus[CandidatureStatus::EN_ATTENTE->value] ?? 0,
+            'enCours' => $byStatus[CandidatureStatus::EN_COURS->value] ?? 0,
+            'approuvees' => $byStatus[CandidatureStatus::APPROUVEE->value] ?? 0,
+            'rejetees' => $byStatus[CandidatureStatus::REJETEE->value] ?? 0,
         ];
     }
 
@@ -218,13 +243,16 @@ class AdminReportingService
     */
     public function getPortfolioStats(): array
     {
-        $portfolios = $this->portfolioRepository->all();
+        $totals = Portfolio::query()
+            ->selectRaw('COUNT(*) as total, COALESCE(SUM(views), 0) as views, COALESCE(SUM(downloads), 0) as downloads, COALESCE(SUM(likes), 0) as likes')
+            ->toBase()
+            ->first();
 
         return [
-            'totalPortfolios' => $portfolios->count(),
-            'totalViews' => (int) $portfolios->sum('views'),
-            'totalDownloads' => (int) $portfolios->sum('downloads'),
-            'totalLikes' => (int) $portfolios->sum('likes'),
+            'totalPortfolios' => (int) $totals->total,
+            'totalViews' => (int) $totals->views,
+            'totalDownloads' => (int) $totals->downloads,
+            'totalLikes' => (int) $totals->likes,
         ];
     }
 
@@ -237,9 +265,12 @@ class AdminReportingService
     {
         $counts = [];
 
-        foreach ($this->portfolioRepository->all() as $portfolio) {
-            foreach ($portfolio->skills ?? [] as $skill) {
-                $counts[$skill] = ($counts[$skill] ?? 0) + 1;
+        // Seule la colonne `skills` est lue, sans instancier un modèle par portfolio.
+        foreach (Portfolio::query()->whereNotNull('skills')->toBase()->pluck('skills') as $json) {
+            foreach ((array) json_decode((string) $json, true) as $skill) {
+                if (is_string($skill) || is_int($skill)) {
+                    $counts[$skill] = ($counts[$skill] ?? 0) + 1;
+                }
             }
         }
 
@@ -253,14 +284,14 @@ class AdminReportingService
     */
     public function getCvAnalysisStats(): array
     {
-        $cvs = $this->cvAnalysisRepository->all();
+        $byStatus = $this->countBy(CvAnalysis::query(), 'status');
 
         return [
-            'totalAnalyzed' => $cvs->count(),
-            'completed' => $cvs->where('status', CVStatus::COMPLETED)->count(),
-            'analyzing' => $cvs->where('status', CVStatus::ANALYZING)->count(),
-            'failed' => $cvs->where('status', CVStatus::FAILED)->count(),
-            'averageScore' => $this->average($cvs->pluck('analysis_score')->all()),
+            'totalAnalyzed' => array_sum($byStatus),
+            'completed' => $byStatus[CVStatus::COMPLETED->value] ?? 0,
+            'analyzing' => $byStatus[CVStatus::ANALYZING->value] ?? 0,
+            'failed' => $byStatus[CVStatus::FAILED->value] ?? 0,
+            'averageScore' => $this->averageOf(CvAnalysis::query(), 'analysis_score'),
         ];
     }
 
@@ -283,17 +314,17 @@ class AdminReportingService
     */
     public function getInterviewStats(): array
     {
-        $sessions = $this->interviewSessionRepository->all();
-        $today = now()->utc()->format('Y-m-d');
-        $completed = $sessions->where('status', InterviewStatus::COMPLETED);
+        $today = now()->utc();
+        $completed = InterviewSession::where('status', InterviewStatus::COMPLETED->value)->count();
+        $satisfied = $completed
+            ? InterviewSession::where('status', InterviewStatus::COMPLETED->value)->where('score', '>=', 70)->count()
+            : 0;
 
         return [
-            'todaySessions' => $sessions->filter(fn (InterviewSession $s) => $s->start_time->clone()->utc()->format('Y-m-d') === $today)->count(),
-            'averageScore' => $this->average($sessions->pluck('score')->all()),
-            'averageDuration' => $this->average($sessions->pluck('duration')->all()).' min',
-            'satisfaction' => $completed->count()
-                ? (int) round($completed->filter(fn (InterviewSession $s) => ($s->score ?? 0) >= 70)->count() / $completed->count() * 100)
-                : 0,
+            'todaySessions' => InterviewSession::whereBetween('start_time', [$today->copy()->startOfDay(), $today->copy()->endOfDay()])->count(),
+            'averageScore' => $this->averageOf(InterviewSession::query(), 'score'),
+            'averageDuration' => $this->averageOf(InterviewSession::query(), 'duration').' min',
+            'satisfaction' => $completed ? (int) round($satisfied / $completed * 100) : 0,
         ];
     }
 
@@ -312,10 +343,24 @@ class AdminReportingService
      */
     public function getInterviewHistory(int $page, int $limit): array
     {
-        $sessions = $this->interviewSessionRepository->findCompletedOrderedByStartTime();
-        $resolved = $sessions->map(fn (InterviewSession $s) => (new InterviewSessionResource($s))->resolve())->all();
+        // Pagination en base : seule la page demandée est lue (même forme
+        // {data, meta} que paginateArray).
+        $safeLimit = max(1, $limit);
+        $safePage = max(1, $page);
+        $query = InterviewSession::where('status', InterviewStatus::COMPLETED->value);
+        $total = (clone $query)->count();
 
-        return $this->paginateArray($resolved, $page, $limit);
+        return [
+            'data' => $query->orderByDesc('start_time')->orderBy('id')
+                ->skip(($safePage - 1) * $safeLimit)->take($safeLimit)->get()
+                ->map(fn (InterviewSession $s) => (new InterviewSessionResource($s))->resolve())->all(),
+            'meta' => [
+                'total' => $total,
+                'page' => $safePage,
+                'limit' => $safeLimit,
+                'totalPages' => (int) (ceil($total / $safeLimit) ?: 1),
+            ],
+        ];
     }
 
     /*
@@ -325,20 +370,21 @@ class AdminReportingService
     */
     public function getMatchingStats(): array
     {
-        $matches = $this->matchingResultRepository->all();
-        $finalized = $matches->where('status', MatchingStatus::FINALISE)->count();
+        $byStatus = $this->countBy(MatchingResult::query(), 'status');
+        $total = array_sum($byStatus);
+        $finalized = $byStatus[MatchingStatus::FINALISE->value] ?? 0;
 
         return [
-            'totalMatches' => $matches->count(),
-            'averageScore' => $this->average($matches->pluck('matching_score')->all()),
-            'successRate' => $matches->count() ? (int) round($finalized / $matches->count() * 100) : 0,
-            'pendingMatches' => $matches->where('status', '!=', MatchingStatus::FINALISE)->count(),
+            'totalMatches' => $total,
+            'averageScore' => $this->averageOf(MatchingResult::query(), 'matching_score'),
+            'successRate' => $total ? (int) round($finalized / $total * 100) : 0,
+            'pendingMatches' => $total - $finalized,
         ];
     }
 
     public function getMatchingAlgorithms(): array
     {
-        $precision = $this->average($this->matchingResultRepository->all()->pluck('matching_score')->all());
+        $precision = $this->averageOf(MatchingResult::query(), 'matching_score');
         $recall = max(0, $precision - 5);
         $f1Score = (int) round((2 * $precision * $recall) / max(1, $precision + $recall));
 
@@ -372,14 +418,13 @@ class AdminReportingService
     */
     public function getScoringStats(): array
     {
-        $scores = $this->scoringResultRepository->all();
+        $byStatus = $this->countBy(ScoringResult::query(), 'status');
+        $total = array_sum($byStatus);
 
         return [
-            'generatedScores' => $scores->count(),
-            'averageScore' => $this->average($scores->pluck('overall_score')->all()),
-            'accuracy' => $scores->count()
-                ? (int) round($scores->where('status', ScoringStatus::COMPLETED)->count() / $scores->count() * 100)
-                : 0,
+            'generatedScores' => $total,
+            'averageScore' => $this->averageOf(ScoringResult::query(), 'overall_score'),
+            'accuracy' => $total ? (int) round(($byStatus[ScoringStatus::COMPLETED->value] ?? 0) / $total * 100) : 0,
             'averageTime' => '3 min',
         ];
     }
@@ -411,9 +456,11 @@ class AdminReportingService
 
     public function getScoringPerformance(): array
     {
-        $scores = $this->scoringResultRepository->findAllOrderedByAnalysisDate();
+        // Deux colonnes, sans modèle : le mois se lit sur les 7 premiers
+        // caractères de la date (AAAA-MM), identique sur MySQL et SQLite.
+        $scores = ScoringResult::query()->orderBy('analysis_date')->toBase()->get(['analysis_date', 'overall_score']);
 
-        $trendData = $scores->groupBy(fn (ScoringResult $s) => $s->analysis_date->format('Y-m'))
+        $trendData = $scores->groupBy(fn ($s) => substr((string) $s->analysis_date, 0, 7))
             ->map(function ($items, $month) {
                 $avg = $this->average($items->pluck('overall_score')->all());
 
@@ -432,6 +479,40 @@ class AdminReportingService
     | HELPERS
     |--------------------------------------------------------------------------
     */
+    /**
+     * Nombre de lignes par valeur d'une colonne, en une requête.
+     *
+     * @return array<string, int>
+     */
+    private function countBy(Builder $query, string $column): array
+    {
+        return $query->selectRaw("{$column} as bucket, COUNT(*) as total")
+            ->groupBy($column)
+            ->toBase()
+            ->pluck('total', 'bucket')
+            ->map(fn ($total) => (int) $total)
+            ->all();
+    }
+
+    /** Moyenne arrondie d'une colonne, une valeur absente comptant pour 0 (comme average()). */
+    private function averageOf(Builder $query, string $column): int
+    {
+        $row = $query->selectRaw("COUNT(*) as total, COALESCE(SUM({$column}), 0) as amount")->toBase()->first();
+
+        return $row && $row->total ? (int) round($row->amount / $row->total) : 0;
+    }
+
+    /**
+     * @param  list<array{name: ?string, count: int}>  $rows
+     * @return list<array{name: ?string, count: int, percentage: int}>
+     */
+    private function shares(array $rows): array
+    {
+        $total = max(1, array_sum(array_column($rows, 'count')));
+
+        return array_map(fn (array $row) => $row + ['percentage' => (int) round($row['count'] / $total * 100)], array_values($rows));
+    }
+
     private function average(array $values): int
     {
         if (empty($values)) {

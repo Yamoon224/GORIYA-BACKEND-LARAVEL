@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Candidature;
 use App\Support\MediaUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -72,7 +73,7 @@ class CandidatureResource extends JsonResource
             'candidateName' => $this->candidate_name,
             'candidateEmail' => $this->candidate_email,
             'candidateTitle' => $this->user?->title,
-            'candidateSkills' => $this->competencesDuCandidat(),
+            'candidateSkills' => self::skillsOf($this->resource),
             'status' => $this->status->value,
             'score' => $this->score,
             'appliedDate' => $this->applied_date,
@@ -116,11 +117,14 @@ class CandidatureResource extends JsonResource
      * On lit les deux et on dedoublonne, plutot que d'afficher une carte vide
      * a une entreprise dont le candidat n'a rempli que l'un des deux.
      *
+     * Statique : le pipeline de recrutement affiche les mêmes compétences sur
+     * ses cartes sans construire toute la ressource candidature.
+     *
      * @return list<string>
      */
-    private function competencesDuCandidat(): array
+    public static function skillsOf(Candidature $candidature): array
     {
-        $user = $this->user;
+        $user = $candidature->user;
 
         if (! $user) {
             return [];

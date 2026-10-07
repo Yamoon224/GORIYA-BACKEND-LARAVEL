@@ -21,6 +21,7 @@ class InfluencerService
     {
         return Influencer::query()
             ->withCount('promoCodes')
+            ->withSum(['redemptions as unpaid_balance' => fn ($q) => $q->where('status', 'CONFIRMED')->whereNull('payout_id')], 'commission_amount')
             ->orderByDesc('created_at')
             ->paginate($limit, ['*'], 'page', $page);
     }

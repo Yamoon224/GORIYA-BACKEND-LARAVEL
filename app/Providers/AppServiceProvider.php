@@ -24,12 +24,16 @@ use App\Services\DIdAvatarService;
 use App\Services\FcmPushNotificationService;
 use App\Services\LunionMeetService;
 use App\Services\PaymentGatewayManager;
+use Carbon\CarbonInterface;
+use Carbon\FactoryImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Tymon\JWTAuth\Providers\Storage\Illuminate as JwtCacheStorage;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -58,6 +62,18 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(HrInsightsServiceInterface::class, AnthropicHrInsightsService::class);
         $this->app->bind(DashboardInsightsServiceInterface::class, AnthropicDashboardInsightsService::class);
         $this->app->bind(VideoCallProviderInterface::class, LunionMeetService::class);
+
+        // Liste noire JWT (déconnexion, rotation de jeton) : consultée à chaque
+        // requête authentifiée. Sur le cache `database`, cela coûtait deux
+        // requêtes SQL avant même de charger l'utilisateur ; elle vit donc dans
+        // le cache fichier, sauf store imposé par JWT_BLACKLIST_STORE. Les
+        // autres usages du cache (réglages conservés « pour toujours ») restent
+        // sur le store par défaut.
+        $this->app->singleton('tymon.jwt.provider.storage', function ($app) {
+            $store = config('jwt.blacklist_store') ?: (config('cache.default') === 'database' ? 'file' : null);
+
+            return new JwtCacheStorage($app['cache']->store($store));
+        });
     }
 
     /**
@@ -71,6 +87,21 @@ class AppServiceProvider extends ServiceProvider
         // ça, Laravel enveloppe automatiquement toute Resource/collection
         // top-level dans "data", ce qui casse la parité pour index/show.
         JsonResource::withoutWrapping();
+
+        // Filet anti-N+1 : une relation lue sur un modèle issu d'une collection
+        // est chargée en une requête pour toute la collection, au lieu d'une
+        // requête par ligne. Les `with()` explicites restent la règle sur les
+        // listes ; ceci rattrape les relations lues par une Resource ou un
+        // service sans avoir été préchargées.
+        Model::automaticallyEagerLoadRelationships();
+
+        // Dates des réponses JSON : même chaîne ISO 8601 UTC que le format par
+        // défaut de Carbon (2026-10-07T12:00:00.000000Z), produite par
+        // DateTime::format() au lieu de isoFormat() — une vingtaine de fois
+        // plus rapide, ce qui pèse sur toute liste (4 dates par ligne).
+        FactoryImmutable::getDefaultInstance()->serializeUsing(static fn (CarbonInterface $date): string => $date->getOffset() === 0
+            ? $date->format('Y-m-d\TH:i:s.u\Z')
+            : $date->avoidMutation()->utc()->format('Y-m-d\TH:i:s.u\Z'));
 
         // `ilike` est spécifique à PostgreSQL — invalide en SQL sur MySQL/SQLite
         // ("Syntax error ... near 'ilike'"). Ces deux macros donnent une

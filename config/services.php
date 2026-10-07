@@ -66,6 +66,10 @@ return [
     'anthropic' => [
         'key' => env('ANTHROPIC_API_KEY'),
         'model' => env('CLAUDE_MODEL', 'claude-haiku-4-5-20251001'),
+        // Délai maximal d'un appel (secondes) et nombre de nouvelles tentatives :
+        // au-delà, le service renvoie son repli plutôt que de bloquer la requête.
+        'timeout' => (float) env('CLAUDE_TIMEOUT', 60),
+        'max_retries' => (int) env('CLAUDE_MAX_RETRIES', 1),
     ],
 
     'kkiapay' => [

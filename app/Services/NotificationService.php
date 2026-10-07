@@ -7,6 +7,7 @@ use App\Enums\CandidatureStatus;
 use App\Enums\HrWorkflowStatus;
 use App\Enums\NotificationType;
 use App\Enums\UserRole;
+use App\Mail\InterviewInvitationMail;
 use App\Mail\NotificationMail;
 use App\Models\Candidature;
 use App\Models\Conversation;
@@ -20,7 +21,11 @@ use App\Models\User;
 use App\Repositories\Contracts\UserSubscriptionRepositoryInterface;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Throwable;
+
+use function Illuminate\Support\defer;
 
 /**
  * Notifications réelles par utilisateur — remplace le stub Cache global de
@@ -270,10 +275,15 @@ class NotificationService
      * Entretien planifié — ou déplacé — par le service RH qui recrute. L'heure
      * est donnée à l'heure d'Abidjan, celle des entreprises de la plateforme :
      * le serveur ne connaît pas le fuseau du candidat.
+     *
+     * Le candidat reçoit toujours la convocation par email, quel que soit son
+     * forfait (voir InterviewInvitationMail) — en plus de la notification
+     * in-app et du push.
      */
     public function notifyInterviewScheduled(RecruitmentInterview $interview, bool $rescheduled = false): void
     {
-        $candidature = $interview->candidature()->with(['jobOffer.company', 'user'])->first();
+        $interview->loadMissing(['candidature.jobOffer.company', 'candidature.user']);
+        $candidature = $interview->candidature;
         if (! $candidature) {
             return;
         }
@@ -291,12 +301,14 @@ class NotificationService
         }
 
         // Visio : le lien mène à GORIYA Meet, où la salle attend le candidat.
-        $this->notifyCandidate($candidature, $title, $body, $video ? '/appels' : '/mes-offres');
+        $this->notifyCandidate($candidature, $title, $body, $video ? '/appels' : '/mes-offres', email: false);
+        $this->emailInterview($interview, $rescheduled ? InterviewInvitationMail::RESCHEDULED : InterviewInvitationMail::SCHEDULED);
     }
 
     public function notifyInterviewCancelled(RecruitmentInterview $interview): void
     {
-        $candidature = $interview->candidature()->with(['jobOffer', 'user'])->first();
+        $interview->loadMissing(['candidature.jobOffer.company', 'candidature.user']);
+        $candidature = $interview->candidature;
         if (! $candidature) {
             return;
         }
@@ -305,7 +317,9 @@ class NotificationService
             $candidature,
             'Entretien annulé',
             "Ton entretien du {$this->interviewDate($interview)} pour \"{$candidature->jobOffer?->title}\" est annulé.",
+            email: false,
         );
+        $this->emailInterview($interview, InterviewInvitationMail::CANCELLED);
     }
 
     private function interviewDate(RecruitmentInterview $interview): string
@@ -313,7 +327,30 @@ class NotificationService
         return $interview->scheduled_at->setTimezone('Africa/Abidjan')->locale('fr')->isoFormat('dddd D MMMM YYYY [à] HH[h]mm');
     }
 
-    private function notifyCandidate(Candidature $candidature, string $title, string $body, string $link = '/mes-offres'): void
+    /**
+     * Email de convocation, envoyé tout de suite mais après la réponse HTTP :
+     * le recruteur n'attend pas le serveur SMTP, et le candidat n'attend pas
+     * le passage de la file d'attente. Un échec d'envoi est journalisé sans
+     * faire échouer la planification — la notification in-app fait foi.
+     */
+    private function emailInterview(RecruitmentInterview $interview, string $kind): void
+    {
+        $candidature = $interview->candidature;
+        $email = $candidature?->user?->email ?: $candidature?->candidate_email;
+        if (! $email) {
+            return;
+        }
+
+        defer(function () use ($interview, $kind, $email) {
+            try {
+                Mail::to($email)->send(new InterviewInvitationMail($interview, $kind));
+            } catch (Throwable $e) {
+                Log::warning("Entretien {$interview->id} : convocation à {$email} non envoyée — {$e->getMessage()}");
+            }
+        });
+    }
+
+    private function notifyCandidate(Candidature $candidature, string $title, string $body, string $link = '/mes-offres', bool $email = true): void
     {
         Notification::create([
             'user_id' => $candidature->user_id,
@@ -324,7 +361,7 @@ class NotificationService
         ]);
 
         if ($candidature->user) {
-            $this->pushToUser($candidature->user, $title, $body, $link);
+            $this->pushToUser($candidature->user, $title, $body, $link, $email);
         }
     }
 
@@ -333,14 +370,17 @@ class NotificationService
      * fait déjà foi. Voir PushNotificationServiceInterface. Double aussi par
      * email si le forfait actif du destinataire l'exige (voir maybeEmail()).
      */
-    private function pushToUser(User $user, string $title, string $body, string $link = '/'): void
+    private function pushToUser(User $user, string $title, string $body, string $link = '/', bool $email = true): void
     {
         $tokens = DeviceToken::where('user_id', $user->id)->pluck('token')->all();
         if ($tokens !== []) {
             $this->pushService->sendToTokens($tokens, $title, $body);
         }
 
-        $this->maybeEmail($user, $title, $body, $link);
+        // `$email` à false : l'appelant envoie déjà son propre email (convocation).
+        if ($email) {
+            $this->maybeEmail($user, $title, $body, $link);
+        }
     }
 
     /**

@@ -7,6 +7,7 @@ use App\Concerns\HasUuid;
 use App\Enums\CandidatureStatus;
 use App\Enums\RecruitmentStage;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -58,6 +59,44 @@ class Candidature extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Candidatures reçues sur les offres d'une entreprise. Sous-requête IN
+     * plutôt que whereHas : la base part des offres de l'entreprise (quelques
+     * dizaines) au lieu de vérifier l'offre de chaque candidature.
+     */
+    public function scopeForCompany(Builder $query, ?string $companyId): Builder
+    {
+        return $query->whereIn(
+            $query->qualifyColumn('job_offer_id'),
+            JobOffer::query()->select('id')->where('company_id', $companyId),
+        );
+    }
+
+    /**
+     * Candidatures qu'un compte a le droit de voir : les siennes, et celles
+     * reçues sur les offres de son entreprise.
+     *
+     * Un compte entreprise n'a presque jamais de candidature à son nom : on
+     * le vérifie (une lecture d'index) pour éviter un « OR » sur deux colonnes,
+     * qui interdit à la base d'utiliser un index et la force à parcourir
+     * toute la table à chaque page.
+     */
+    public function scopeVisibleTo(Builder $query, ?string $userId, ?string $companyId): Builder
+    {
+        $own = $userId !== null && ($companyId === null || self::query()->where('user_id', $userId)->exists());
+
+        if ($companyId === null) {
+            return $own ? $query->where($query->qualifyColumn('user_id'), $userId) : $query->whereRaw('1 = 0');
+        }
+        if (! $own) {
+            return $query->forCompany($companyId);
+        }
+
+        return $query->where(fn (Builder $q) => $q
+            ->where($q->qualifyColumn('user_id'), $userId)
+            ->orWhereIn($q->qualifyColumn('job_offer_id'), JobOffer::query()->select('id')->where('company_id', $companyId)));
     }
 
     public function jobOffer(): BelongsTo

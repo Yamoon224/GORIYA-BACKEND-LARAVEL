@@ -11,7 +11,9 @@ use Illuminate\Database\Eloquent\Collection;
 
 class JobOfferRepository extends BaseRepository implements JobOfferRepositoryInterface
 {
-    private const RELATIONS = ['company', 'candidatures', 'questions'];
+    // Pas de « candidatures » ici : la ressource lit le compteur « applicants », et
+    // précharger chaque candidature de chaque offre listée coûtait plus que la liste.
+    private const RELATIONS = ['company', 'questions'];
 
     protected function model(): string
     {

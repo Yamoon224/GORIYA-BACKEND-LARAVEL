@@ -10,6 +10,7 @@ use App\Models\CvAnalysis;
 use App\Models\InterviewSession;
 use App\Models\MatchingResult;
 use App\Models\User;
+use App\Services\Concerns\CountsByPeriod;
 
 /**
  * Mirroir de backend/src/analytics/analytics.service.ts. Utilisé par
@@ -18,6 +19,8 @@ use App\Models\User;
  */
 class AnalyticsService
 {
+    use CountsByPeriod;
+
     /**
      * @return array<string, mixed>
      */
@@ -60,19 +63,22 @@ class AnalyticsService
 
         if ($period === 'week') {
             $dayNames = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+            $counts = $this->countPerDay(CvAnalysis::query(), 'upload_date', $now->copy()->subDays(6)->startOfDay(), $now->copy()->endOfDay());
             for ($i = 6; $i >= 0; $i--) {
                 $dayStart = $now->copy()->subDays($i)->startOfDay();
-                $dayEnd = $dayStart->copy()->endOfDay();
-                $count = CvAnalysis::whereBetween('upload_date', [$dayStart, $dayEnd])->count();
-                $data[] = ['month' => $dayNames[$dayStart->dayOfWeek], 'value' => $count];
+                $data[] = ['month' => $dayNames[$dayStart->dayOfWeek], 'value' => $counts[$dayStart->format('Y-m-d')] ?? 0];
             }
         } elseif ($period === 'month') {
+            // Quatre semaines glissantes depuis le 1er du mois : les jours sont
+            // comptés en une requête, puis regroupés par tranche de sept.
             $weekLabels = ['S1', 'S2', 'S3', 'S4'];
             $monthStart = $now->copy()->startOfMonth();
+            $counts = $this->countPerDay(CvAnalysis::query(), 'upload_date', $monthStart, $monthStart->copy()->addDays(27)->endOfDay());
             for ($i = 0; $i < 4; $i++) {
-                $weekStart = $monthStart->copy()->addDays($i * 7);
-                $weekEnd = $monthStart->copy()->addDays($i * 7 + 6)->endOfDay();
-                $count = CvAnalysis::whereBetween('upload_date', [$weekStart, $weekEnd])->count();
+                $count = 0;
+                for ($day = 0; $day < 7; $day++) {
+                    $count += $counts[$monthStart->copy()->addDays($i * 7 + $day)->format('Y-m-d')] ?? 0;
+                }
                 $data[] = ['month' => $weekLabels[$i], 'value' => $count];
             }
         } else {
@@ -83,11 +89,11 @@ class AnalyticsService
             // dans la source, copiées telles quelles sans unification.
             $monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
 
+            $first = $now->copy()->startOfMonth()->subMonths($monthCount - 1);
+            $counts = $this->countPerMonth(CvAnalysis::query(), 'upload_date', $first, $now->copy()->endOfMonth());
             for ($i = $monthCount - 1; $i >= 0; $i--) {
                 $monthStart = $now->copy()->startOfMonth()->subMonths($i);
-                $monthEnd = $monthStart->copy()->endOfMonth();
-                $count = CvAnalysis::whereBetween('upload_date', [$monthStart, $monthEnd])->count();
-                $data[] = ['month' => $monthNames[$monthStart->month - 1], 'value' => $count];
+                $data[] = ['month' => $monthNames[$monthStart->month - 1], 'value' => $counts[$monthStart->format('Y-m')] ?? 0];
             }
         }
 
@@ -116,14 +122,19 @@ class AnalyticsService
         $monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
         $data = [];
 
+        $first = $now->copy()->startOfMonth()->subMonths($months - 1);
+        $last = $now->copy()->endOfMonth();
+        $cvs = $this->countPerMonth(CvAnalysis::query(), 'upload_date', $first, $last);
+        $interviews = $this->countPerMonth(InterviewSession::query(), 'created_at', $first, $last);
+
         for ($i = $months - 1; $i >= 0; $i--) {
             $monthStart = $now->copy()->startOfMonth()->subMonths($i);
-            $monthEnd = $monthStart->copy()->endOfMonth();
+            $key = $monthStart->format('Y-m');
 
             $data[] = [
                 'month' => $monthNames[$monthStart->month - 1],
-                'cv' => CvAnalysis::whereBetween('upload_date', [$monthStart, $monthEnd])->count(),
-                'entretiens' => InterviewSession::whereBetween('created_at', [$monthStart, $monthEnd])->count(),
+                'cv' => $cvs[$key] ?? 0,
+                'entretiens' => $interviews[$key] ?? 0,
             ];
         }
 
@@ -135,10 +146,12 @@ class AnalyticsService
      */
     public function getUserTypeDistribution(): array
     {
+        $byRole = User::query()->selectRaw('role, COUNT(*) as total')->groupBy('role')->toBase()->pluck('total', 'role');
+
         return [
-            ['name' => 'Candidats', 'value' => User::where('role', UserRole::USER)->count(), 'color' => '#6366f1'],
-            ['name' => 'Entreprises', 'value' => User::where('role', UserRole::ENTERPRISE)->count(), 'color' => '#22c55e'],
-            ['name' => 'Admins', 'value' => User::where('role', UserRole::ADMIN)->count(), 'color' => '#f59e0b'],
+            ['name' => 'Candidats', 'value' => (int) ($byRole[UserRole::USER->value] ?? 0), 'color' => '#6366f1'],
+            ['name' => 'Entreprises', 'value' => (int) ($byRole[UserRole::ENTERPRISE->value] ?? 0), 'color' => '#22c55e'],
+            ['name' => 'Admins', 'value' => (int) ($byRole[UserRole::ADMIN->value] ?? 0), 'color' => '#f59e0b'],
         ];
     }
 

@@ -101,7 +101,7 @@ class CompaniesController extends Controller
     )]
     public function index()
     {
-        $companies = Company::with('users')->get();
+        $companies = Company::all();
 
         return CompanyResource::collection($companies);
     }

@@ -8,6 +8,7 @@ use App\Models\Candidature;
 use App\Models\RecruitmentInterview;
 use App\Models\RecruitmentNote;
 use App\Models\RecruitmentStageEvent;
+use App\Support\MediaUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use OpenApi\Attributes as OA;
@@ -61,8 +62,10 @@ class RecruitmentCandidateResource extends JsonResource
     {
         /** @var Candidature $candidature */
         $candidature = $this->resource;
-        // Coordonnées, compétences, CV et réponses : mêmes règles que la page Candidatures.
-        $application = (new CandidatureResource($candidature))->resolve($request);
+        // Dossier complet (lettre, CV, réponses) : mêmes règles que la page
+        // Candidatures. Une carte du pipeline n'en lit rien — on ne le
+        // construit que pour le détail, pas pour chaque candidat listé.
+        $application = $this->detail ? (new CandidatureResource($candidature))->resolve($request) : null;
         $stage = $candidature->currentStage();
         $interviews = $candidature->relationLoaded('interviews') ? $candidature->interviews : collect();
 
@@ -75,12 +78,12 @@ class RecruitmentCandidateResource extends JsonResource
         $data = [
             'id' => $candidature->id,
             'userId' => $candidature->user_id,
-            'candidateName' => $application['candidateName'],
-            'candidateEmail' => $application['candidateEmail'],
-            'candidateTitle' => $application['candidateTitle'],
-            'candidateSkills' => $application['candidateSkills'],
-            'candidatePhone' => $application['candidatePhone'],
-            'candidateLocation' => $application['candidateLocation'],
+            'candidateName' => $candidature->candidate_name,
+            'candidateEmail' => $candidature->candidate_email,
+            'candidateTitle' => $candidature->user?->title,
+            'candidateSkills' => CandidatureResource::skillsOf($candidature),
+            'candidatePhone' => $candidature->candidate_phone,
+            'candidateLocation' => $candidature->candidate_location,
             'jobOffer' => $candidature->jobOffer ? [
                 'id' => $candidature->jobOffer->id,
                 'title' => $candidature->jobOffer->title,
@@ -94,7 +97,7 @@ class RecruitmentCandidateResource extends JsonResource
             'stage' => $stage->value,
             'stageSince' => $candidature->stageSince()?->toIso8601String(),
             'rejectionReason' => $stage === RecruitmentStage::REJECTED ? $candidature->rejection_reason : null,
-            'hasResume' => ! empty($application['resume']['url'] ?? null),
+            'hasResume' => MediaUrl::resolve($candidature->resume?->path) !== null,
             'assessmentScore' => $candidature->assessment?->overall_score,
             'interviewsCount' => $interviews->count(),
             'nextInterview' => $next ? [

@@ -8,6 +8,7 @@ use App\Enums\HrWorkflowStatus;
 use App\Enums\LeaveType;
 use App\Enums\PayrollRunStatus;
 use App\Models\Employee;
+use App\Models\EmployeeLeave;
 use App\Models\HrRequest;
 use App\Models\PayrollRun;
 use App\Models\Payslip;
@@ -282,6 +283,11 @@ class PayrollService
             ->where(fn (Builder $q) => $q->whereNull('employee_id')->orWhereNotIn('employee_id', $ids))
             ->delete();
 
+        // Congés sans solde et avances de tout l'effectif en deux requêtes,
+        // au lieu de deux requêtes par employé.
+        $leaves = $this->unpaidLeavesQuery($start, $end)->whereIn('employee_id', $ids)->get()->groupBy('employee_id');
+        $advances = $this->pendingAdvancesQuery($end)->whereIn('employee_id', $ids)->get()->groupBy('employee_id');
+
         $existing = $run->payslips()->get()->keyBy('employee_id');
         foreach ($employees as $employee) {
             $payslip = $existing->get($employee->id) ?? new Payslip([
@@ -291,7 +297,10 @@ class PayrollService
                 'bonuses' => [],
                 'deductions' => [],
             ]);
-            $this->computePayslip($payslip, $employee, $start, $end, $settings);
+            $this->computePayslip(
+                $payslip, $employee, $start, $end, $settings,
+                $leaves->get($employee->id, new Collection), $advances->get($employee->id, new Collection),
+            );
         }
 
         $this->refreshTotals($run);
@@ -320,9 +329,13 @@ class PayrollService
     /**
      * @param  array<string, mixed>  $settings
      */
-    private function computePayslip(Payslip $payslip, Employee $employee, CarbonImmutable $start, CarbonImmutable $end, array $settings): void
+    /**
+     * @param  ?Collection<int, EmployeeLeave>  $leaves    Congés sans solde du mois, déjà chargés (paie complète) ; `null` : lus ici.
+     * @param  ?Collection<int, HrRequest>  $advances  Avances à retenir, déjà chargées ; `null` : lues ici.
+     */
+    private function computePayslip(Payslip $payslip, Employee $employee, CarbonImmutable $start, CarbonImmutable $end, array $settings, ?Collection $leaves = null, ?Collection $advances = null): void
     {
-        $inputs = $this->inputsFor($employee, $start, $end);
+        $inputs = $this->inputsFor($employee, $start, $end, $leaves, $advances);
         $result = $this->calculator->compute($inputs + [
             'bonuses' => $payslip->bonuses ?? [],
             'deductions' => $payslip->deductions ?? [],
@@ -352,7 +365,7 @@ class PayrollService
     /**
      * @return array{baseSalary: int, businessDays: int, employedDays: int, unpaidLeaveDays: int, advances: list<array{id: string, label: string, amount: int}>, warnings: list<array{code: string, message: string, blocking: bool}>}
      */
-    private function inputsFor(Employee $employee, CarbonImmutable $start, CarbonImmutable $end): array
+    private function inputsFor(Employee $employee, CarbonImmutable $start, CarbonImmutable $end, ?Collection $leaves = null, ?Collection $advances = null): array
     {
         $businessDays = EmployeeLeaveService::businessDays($start, $end);
 
@@ -371,15 +384,14 @@ class PayrollService
 
         $unpaidDays = 0;
         if ($employedDays > 0) {
-            $leaves = $employee->leaves()
-                ->where('status', HrWorkflowStatus::APPROVED->value)
-                ->where('type', LeaveType::UNPAID->value)
-                ->whereDate('start_date', '<=', $to->toDateString())
-                ->whereDate('end_date', '>=', $from->toDateString())
-                ->get();
+            $leaves ??= $this->unpaidLeavesQuery($from, $to)->where('employee_id', $employee->id)->get();
             foreach ($leaves as $leave) {
                 $leaveStart = CarbonImmutable::instance($leave->start_date)->startOfDay();
                 $leaveEnd = CarbonImmutable::instance($leave->end_date)->startOfDay();
+                // Chargés pour le mois entier : seuls comptent ceux qui recoupent la période du contrat.
+                if ($leaveStart->greaterThan($to) || $leaveEnd->lessThan($from)) {
+                    continue;
+                }
                 $unpaidDays += EmployeeLeaveService::businessDays(
                     $leaveStart->greaterThan($from) ? $leaveStart : $from,
                     $leaveEnd->lessThan($to) ? $leaveEnd : $to,
@@ -389,15 +401,9 @@ class PayrollService
 
         // Avances approuvées au plus tard ce mois-ci et pas encore retenues sur
         // une paie validée.
-        $advances = HrRequest::query()
-            ->where('employee_id', $employee->id)
-            ->where('type', HrRequestType::SALARY_ADVANCE->value)
-            ->where('status', HrWorkflowStatus::APPROVED->value)
-            ->whereNull('payslip_id')
-            ->where('decided_at', '<=', $end->endOfDay())
-            ->orderBy('decided_at')
-            ->get()
+        $advances = ($advances ?? $this->pendingAdvancesQuery($end)->where('employee_id', $employee->id)->get())
             ->map(fn (HrRequest $request) => ['id' => $request->id, 'label' => $request->subject, 'amount' => (int) $request->amount])
+            ->values()
             ->all();
 
         $warnings = [];
@@ -424,6 +430,27 @@ class PayrollService
      *
      * @return array<string, mixed>
      */
+    /** Congés sans solde approuvés qui recoupent la période. */
+    private function unpaidLeavesQuery(CarbonImmutable $from, CarbonImmutable $to): Builder
+    {
+        return EmployeeLeave::query()
+            ->where('status', HrWorkflowStatus::APPROVED->value)
+            ->where('type', LeaveType::UNPAID->value)
+            ->whereDate('start_date', '<=', $to->toDateString())
+            ->whereDate('end_date', '>=', $from->toDateString());
+    }
+
+    /** Avances approuvées au plus tard à la fin de la période, pas encore retenues sur une paie validée. */
+    private function pendingAdvancesQuery(CarbonImmutable $end): Builder
+    {
+        return HrRequest::query()
+            ->where('type', HrRequestType::SALARY_ADVANCE->value)
+            ->where('status', HrWorkflowStatus::APPROVED->value)
+            ->whereNull('payslip_id')
+            ->where('decided_at', '<=', $end->endOfDay())
+            ->orderBy('decided_at');
+    }
+
     private function snapshot(Employee $employee): array
     {
         return [

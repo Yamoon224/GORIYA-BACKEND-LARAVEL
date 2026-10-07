@@ -19,7 +19,9 @@ use App\Models\Pitch;
 use App\Models\Presentation;
 use App\Models\ResearchQuery;
 use App\Models\User;
+use App\Services\Concerns\CountsByPeriod;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Throwable;
 
 /**
@@ -29,6 +31,13 @@ use Throwable;
  */
 class DashboardService
 {
+    use CountsByPeriod;
+
+    /** Relations lues par CandidatureResource et JobOfferResource : préchargées, jamais une requête par carte. */
+    private const CANDIDATURE_RELATIONS = ['user', 'jobOffer.company', 'answers', 'resume'];
+
+    private const OFFER_RELATIONS = ['company', 'questions'];
+
     public function __construct(private readonly BookmarkService $bookmarkService) {}
 
     /**
@@ -69,7 +78,7 @@ class DashboardService
     {
         $range = $this->buildRange($start, $end);
 
-        $applicationsQuery = Candidature::whereHas('jobOffer', fn ($q) => $q->where('company_id', $companyId));
+        $applicationsQuery = Candidature::forCompany($companyId);
         $applicationsReceived = $range
             ? (clone $applicationsQuery)->whereBetween('applied_date', [$range['start'], $range['end']])->count()
             : $applicationsQuery->count();
@@ -81,15 +90,15 @@ class DashboardService
         $weeklyViews = 0;
         $interviewsScheduled = 0;
 
-        $recentCandidates = Candidature::whereHas('jobOffer', fn ($q) => $q->where('company_id', $companyId))
-            ->with(['user', 'jobOffer.company'])
+        $recentCandidates = Candidature::forCompany($companyId)
+            ->with(self::CANDIDATURE_RELATIONS)
             ->orderByDesc('applied_date')->take(5)->get();
 
         $topOffers = JobOffer::where('company_id', $companyId)->where('status', JobStatus::ACTIVE)
-            ->with('company')->orderByDesc('applicants')->take(5)->get();
+            ->with(self::OFFER_RELATIONS)->orderByDesc('applicants')->take(5)->get();
 
         $recentOffers = JobOffer::where('company_id', $companyId)
-            ->with('company')->orderByDesc('publish_date')->take(5)->get();
+            ->with(self::OFFER_RELATIONS)->orderByDesc('publish_date')->take(5)->get();
 
         // Ordre fixe attendu par entreprise/app/(protected)/dashboard/content.tsx
         // (lecture positionnelle statsData[i].value) — ne pas réordonner.
@@ -132,13 +141,13 @@ class DashboardService
         $totalApplications = $applicationsInRange;
         $interviews = InterviewSession::count();
 
-        $recentCandidates = Candidature::with(['user', 'jobOffer.company'])
+        $recentCandidates = Candidature::with(self::CANDIDATURE_RELATIONS)
             ->orderByDesc('applied_date')->take(5)->get();
 
         $topOffers = JobOffer::where('status', JobStatus::ACTIVE)
-            ->with('company')->orderByDesc('applicants')->take(5)->get();
+            ->with(self::OFFER_RELATIONS)->orderByDesc('applicants')->take(5)->get();
 
-        $recentOffers = JobOffer::with('company')
+        $recentOffers = JobOffer::with(self::OFFER_RELATIONS)
             ->orderByDesc('publish_date')->take(5)->get();
 
         // Libellés français copiés tels quels depuis la source NestJS (sans
@@ -164,7 +173,8 @@ class DashboardService
             'savedJobs' => 0,
             'statsData' => $statsData,
             'monthly' => $this->getMonthlyGrowth(),
-            'aiTools' => $this->getAiToolsUsage(),
+            // Les deux compteurs déjà lus ci-dessus ne sont pas recalculés.
+            'aiTools' => $this->getAiToolsUsage($analyzedCVs, $interviews),
             'chartData' => $this->getPerformanceData('month'),
             'lineChartData' => $this->getRecentOffersTrend(6),
             'recentCandidates' => CandidatureResource::collection($recentCandidates),
@@ -199,12 +209,12 @@ class DashboardService
      *
      * @return array<int, array{key: string, name: string, value: int}>
      */
-    public function getAiToolsUsage(): array
+    public function getAiToolsUsage(?int $analyzedCVs = null, ?int $interviews = null): array
     {
         return [
-            ['key' => 'cvAnalysis', 'name' => 'Analyse de CV', 'value' => CvAnalysis::where('status', CVStatus::COMPLETED)->count()],
+            ['key' => 'cvAnalysis', 'name' => 'Analyse de CV', 'value' => $analyzedCVs ?? CvAnalysis::where('status', CVStatus::COMPLETED)->count()],
             ['key' => 'cvCreation', 'name' => 'Création de CV', 'value' => Cv::count()],
-            ['key' => 'interview', 'name' => "Simulation d'entretien", 'value' => InterviewSession::count()],
+            ['key' => 'interview', 'name' => "Simulation d'entretien", 'value' => $interviews ?? InterviewSession::count()],
             ['key' => 'pitch', 'name' => 'Pitch Goriya', 'value' => Pitch::count()],
             ['key' => 'presentation', 'name' => 'Présentations IA', 'value' => Presentation::count()],
             ['key' => 'research', 'name' => 'Recherche entreprise', 'value' => ResearchQuery::count()],
@@ -213,12 +223,12 @@ class DashboardService
 
     public function getRecentApplications(int $limit, ?User $user = null): mixed
     {
-        $query = Candidature::with(['jobOffer.company', 'user'])->orderByDesc('applied_date');
+        $query = Candidature::with(self::CANDIDATURE_RELATIONS)->orderByDesc('applied_date');
 
         if ($user?->role === UserRole::USER) {
             $query->where('user_id', $user->id);
         } elseif ($user?->role === UserRole::ENTERPRISE) {
-            $query->whereHas('jobOffer', fn ($q) => $q->where('company_id', $user->company_id));
+            $query->forCompany($user->company_id);
         }
 
         return CandidatureResource::collection($query->take($limit)->get());
@@ -227,7 +237,7 @@ class DashboardService
     public function getRecommendedJobs(int $limit): mixed
     {
         $jobs = JobOffer::where('status', JobStatus::ACTIVE)
-            ->with('company')
+            ->with(self::OFFER_RELATIONS)
             ->orderByDesc('publish_date')
             ->take($limit)
             ->get();
@@ -296,26 +306,42 @@ class DashboardService
 
         if ($period === 'week') {
             $dayNames = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+            $counts = $this->countPerDay(Candidature::query(), 'applied_date', $now->copy()->subDays(6)->startOfDay(), $now->copy()->endOfDay());
             for ($i = 6; $i >= 0; $i--) {
                 $dayStart = $now->copy()->subDays($i)->startOfDay();
-                $dayEnd = $dayStart->copy()->endOfDay();
-                $count = Candidature::whereBetween('applied_date', [$dayStart, $dayEnd])->count();
-                $data[] = ['month' => $dayNames[$dayStart->dayOfWeek], 'value' => $count];
+                $data[] = ['month' => $dayNames[$dayStart->dayOfWeek], 'value' => $counts[$dayStart->format('Y-m-d')] ?? 0];
             }
         } else {
             $monthCount = $period === 'year' ? 12 : 6;
             $monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
 
-            for ($i = $monthCount - 1; $i >= 0; $i--) {
-                $monthStart = $now->copy()->startOfMonth()->subMonths($i);
-                $monthEnd = $monthStart->copy()->endOfMonth();
-                $count = Candidature::whereBetween('applied_date', [$monthStart, $monthEnd])->count();
-                $data[] = [
-                    'month' => $monthNames[$monthStart->month - 1],
-                    'value' => $count,
-                    'label' => "{$monthNames[$monthStart->month - 1]} {$monthStart->year}",
-                ];
-            }
+            return $this->monthlySeries(Candidature::query(), 'applied_date', $monthCount, $monthNames);
+        }
+
+        return $data;
+    }
+
+    /**
+     * Série des `$monthCount` derniers mois (le mois courant compris), dans
+     * l'ordre chronologique : une requête pour toute la série.
+     *
+     * @param  list<string>  $monthNames
+     * @return list<array{month: string, value: int, label: string}>
+     */
+    private function monthlySeries(Builder $query, string $column, int $monthCount, array $monthNames): array
+    {
+        $now = now();
+        $first = $now->copy()->startOfMonth()->subMonths($monthCount - 1);
+        $counts = $this->countPerMonth($query, $column, $first, $now->copy()->endOfMonth());
+
+        $data = [];
+        for ($i = $monthCount - 1; $i >= 0; $i--) {
+            $monthStart = $now->copy()->startOfMonth()->subMonths($i);
+            $data[] = [
+                'month' => $monthNames[$monthStart->month - 1],
+                'value' => $counts[$monthStart->format('Y-m')] ?? 0,
+                'label' => "{$monthNames[$monthStart->month - 1]} {$monthStart->year}",
+            ];
         }
 
         return $data;
@@ -326,27 +352,16 @@ class DashboardService
      */
     private function getRecentOffersTrend(int $monthCount = 6, ?string $companyId = null): array
     {
-        $now = now();
         // Liste non accentuée, différente de celle de getPerformanceData() —
         // incohérence réelle de la source, copiée telle quelle.
         $monthNames = ['Jan', 'Fev', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aou', 'Sep', 'Oct', 'Nov', 'Dec'];
-        $trend = [];
 
-        for ($i = $monthCount - 1; $i >= 0; $i--) {
-            $monthStart = $now->copy()->startOfMonth()->subMonths($i);
-            $monthEnd = $monthStart->copy()->endOfMonth();
-            $query = JobOffer::whereBetween('publish_date', [$monthStart, $monthEnd]);
-            if ($companyId) {
-                $query->where('company_id', $companyId);
-            }
-            $trend[] = [
-                'month' => $monthNames[$monthStart->month - 1],
-                'value' => $query->count(),
-                'label' => "{$monthNames[$monthStart->month - 1]} {$monthStart->year}",
-            ];
-        }
-
-        return $trend;
+        return $this->monthlySeries(
+            JobOffer::query()->when($companyId, fn ($q) => $q->where('company_id', $companyId)),
+            'publish_date',
+            $monthCount,
+            $monthNames,
+        );
     }
 
     /**
@@ -357,23 +372,8 @@ class DashboardService
      */
     private function getCompanyMonthlyTrend(?string $companyId, int $monthCount = 6): array
     {
-        $now = now();
         $monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-        $data = [];
 
-        for ($i = $monthCount - 1; $i >= 0; $i--) {
-            $monthStart = $now->copy()->startOfMonth()->subMonths($i);
-            $monthEnd = $monthStart->copy()->endOfMonth();
-            $count = Candidature::whereHas('jobOffer', fn ($q) => $q->where('company_id', $companyId))
-                ->whereBetween('applied_date', [$monthStart, $monthEnd])
-                ->count();
-            $data[] = [
-                'month' => $monthNames[$monthStart->month - 1],
-                'value' => $count,
-                'label' => "{$monthNames[$monthStart->month - 1]} {$monthStart->year}",
-            ];
-        }
-
-        return $data;
+        return $this->monthlySeries(Candidature::forCompany($companyId), 'applied_date', $monthCount, $monthNames);
     }
 }

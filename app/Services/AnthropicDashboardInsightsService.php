@@ -48,11 +48,17 @@ Retournez UNIQUEMENT un objet JSON valide (sans markdown) :
 {$this->localizedInstruction()}
 PROMPT;
 
-            $text = $this->requestClaudeText($prompt, 512);
-            $parsed = $this->parseClaudeJson($text, ['items' => $fallback]);
-            $rephrased = $this->ensureClaudeStringArray($parsed['items'] ?? null, $fallback);
+            // Le tableau de bord est rechargé à chaque visite, mais ses phrases
+            // ne changent que lorsque les chiffres changent : tant qu'ils sont
+            // identiques, la reformulation déjà obtenue est resservie sans
+            // nouvel appel à l'IA.
+            return $this->rememberClaudeResult('dashboard-recommendations', $fallback, 24, function () use ($prompt, $fallback) {
+                $text = $this->requestClaudeText($prompt, 512);
+                $parsed = $this->parseClaudeJson($text, ['items' => $fallback]);
+                $rephrased = $this->ensureClaudeStringArray($parsed['items'] ?? null, $fallback);
 
-            return count($rephrased) === count($fallback) ? $rephrased : $fallback;
+                return count($rephrased) === count($fallback) && $rephrased !== $fallback ? $rephrased : null;
+            }) ?? $fallback;
         } catch (Throwable $e) {
             Log::error('Dashboard insights phrasing failed: '.$e->getMessage());
 
