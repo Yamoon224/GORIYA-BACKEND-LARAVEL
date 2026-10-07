@@ -32,12 +32,17 @@ class UpdateInterviewSessionRequest extends FormRequest
      * L'email du candidat désigne le propriétaire de la session : seul un
      * administrateur peut le changer, comme le nom qui l'accompagne.
      */
-    protected function prepareForValidation(): void
+    public function validated($key = null, $default = null): mixed
     {
+        $data = parent::validated();
+
+        // Filtré sur les données validées, et non sur l'entrée : un champ
+        // glissé dans l'URL plutôt que dans le corps passerait sinon.
         if ($this->user()?->role !== UserRole::ADMIN) {
-            $this->getInputSource()->remove('candidateName');
-            $this->getInputSource()->remove('candidateEmail');
+            unset($data['candidateName'], $data['candidateEmail']);
         }
+
+        return data_get($data, $key, $default);
     }
 
     /**

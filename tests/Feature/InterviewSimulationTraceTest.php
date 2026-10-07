@@ -59,6 +59,9 @@ class InterviewSimulationTraceTest extends TestCase
             ->assertJsonPath('score', 78)
             ->assertJsonPath('duration', 12);
 
+        // Même tentative par l'URL plutôt que par le corps de la requête.
+        $this->actingAs($awa, 'api')->patchJson("/interview-sessions/{$id}?candidateEmail=koffi@example.ci&candidateName=Koffi", ['score' => 78])->assertOk();
+
         $session = InterviewSession::findOrFail($id);
         $this->assertSame($summary, $session->feedback);
         // Le propriétaire de la session ne change pas en cours de route.
