@@ -6,18 +6,14 @@ use App\Enums\InterviewStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CvAnalysisResource;
 use App\Http\Resources\InterviewSessionResource;
-use App\Http\Resources\MatchingResultResource;
-use App\Http\Resources\ScoringResultResource;
+use App\Models\Candidature;
 use App\Models\CvAnalysis;
 use App\Models\InterviewSession;
-use App\Models\MatchingResult;
-use App\Models\ScoringResult;
 use App\Services\Admin\AdminActionService;
 use App\Services\Admin\AdminReportingService;
+use App\Services\CandidatureService;
 use App\Services\CvAnalysisService;
 use App\Services\InterviewSessionService;
-use App\Services\MatchingResultService;
-use App\Services\ScoringResultService;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
@@ -34,8 +30,7 @@ class AdminAiController extends Controller
     public function __construct(
         private readonly CvAnalysisService $cvAnalysisService,
         private readonly InterviewSessionService $interviewSessionService,
-        private readonly MatchingResultService $matchingResultService,
-        private readonly ScoringResultService $scoringResultService,
+        private readonly CandidatureService $candidatureService,
         private readonly AdminReportingService $adminReportingService,
         private readonly AdminActionService $adminActionService,
     ) {}
@@ -607,13 +602,9 @@ class AdminAiController extends Controller
         $page = (int) $request->query('page', 1);
         $limit = (int) $request->query('limit', 10);
 
-        $paginator = $this->matchingResultService->paginate($page, $limit, [
+        $paginator = $this->adminReportingService->paginateMatching($page, $limit, [
             'status' => $request->query('status'),
         ]);
-
-        $paginator->setCollection(
-            $paginator->getCollection()->map(fn (MatchingResult $result) => (new MatchingResultResource($result))->resolve())
-        );
 
         return ApiResponse::paginated($paginator);
     }
@@ -738,15 +729,16 @@ class AdminAiController extends Controller
     )]
     public function updateMatchingStatus(string $id, Request $request)
     {
-        $result = MatchingResult::find($id);
+        $candidature = Candidature::find($id);
 
-        if (! $result) {
+        if (! $candidature) {
             abort(404, 'MatchingResult not found');
         }
 
-        $updated = $this->matchingResultService->update($result, ['status' => $request->input('status')]);
+        $status = $this->adminReportingService->matchingStatusToCandidatureStatus((string) $request->input('status'));
+        $updated = $this->candidatureService->update($candidature, ['status' => $status->value]);
 
-        return ApiResponse::success(new MatchingResultResource($updated));
+        return ApiResponse::success($this->adminReportingService->toMatchingResultArray($updated));
     }
 
     /*
@@ -871,13 +863,9 @@ class AdminAiController extends Controller
         $page = (int) $request->query('page', 1);
         $limit = (int) $request->query('limit', 10);
 
-        $paginator = $this->scoringResultService->paginate($page, $limit, [
+        $paginator = $this->adminReportingService->paginateScoring($page, $limit, [
             'status' => $request->query('status'),
         ]);
-
-        $paginator->setCollection(
-            $paginator->getCollection()->map(fn (ScoringResult $result) => (new ScoringResultResource($result))->resolve())
-        );
 
         return ApiResponse::paginated($paginator);
     }
@@ -904,13 +892,13 @@ class AdminAiController extends Controller
     )]
     public function showScoringResult(string $id)
     {
-        $result = ScoringResult::find($id);
+        $result = $this->adminReportingService->findScoringResult($id);
 
         if (! $result) {
             abort(404, 'ScoringResult not found');
         }
 
-        return ApiResponse::success(new ScoringResultResource($result));
+        return ApiResponse::success($result);
     }
 
     #[OA\Post(

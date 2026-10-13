@@ -20,9 +20,7 @@ use App\Models\Company;
 use App\Models\CvAnalysis;
 use App\Models\InterviewSession;
 use App\Models\JobOffer;
-use App\Models\MatchingResult;
 use App\Models\Portfolio;
-use App\Models\ScoringResult;
 use App\Models\User;
 use App\Repositories\Contracts\CalendarEventRepositoryInterface;
 use App\Repositories\Contracts\CandidatureRepositoryInterface;
@@ -30,13 +28,12 @@ use App\Repositories\Contracts\CompanyRepositoryInterface;
 use App\Repositories\Contracts\CvAnalysisRepositoryInterface;
 use App\Repositories\Contracts\InterviewSessionRepositoryInterface;
 use App\Repositories\Contracts\JobOfferRepositoryInterface;
-use App\Repositories\Contracts\MatchingResultRepositoryInterface;
 use App\Repositories\Contracts\PortfolioRepositoryInterface;
-use App\Repositories\Contracts\ScoringResultRepositoryInterface;
 use App\Repositories\Contracts\UserRepositoryInterface;
 use App\Services\Concerns\BuildsCsv;
 use App\Services\Concerns\PaginatesArrays;
 use Carbon\Carbon;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 
@@ -70,8 +67,6 @@ class AdminReportingService
         private readonly PortfolioRepositoryInterface $portfolioRepository,
         private readonly CvAnalysisRepositoryInterface $cvAnalysisRepository,
         private readonly InterviewSessionRepositoryInterface $interviewSessionRepository,
-        private readonly MatchingResultRepositoryInterface $matchingResultRepository,
-        private readonly ScoringResultRepositoryInterface $scoringResultRepository,
     ) {}
 
     /*
@@ -365,26 +360,76 @@ class AdminReportingService
 
     /*
     |--------------------------------------------------------------------------
-    | MATCHING
+    | MATCHING — projection sur les candidatures déjà scorées par
+    | CandidatureCompatibilityService (candidatures.score > 0), plutôt que sur
+    | la table matching_results qui ne reçoit jamais d'écriture en usage
+    | normal (uniquement via l'action manuelle AdminActionService::
+    | triggerMatching, sans bouton côté UI). Un rejet n'est pas un match actif
+    | : exclu de la requête de base.
     |--------------------------------------------------------------------------
     */
+    private function matchingQuery(): Builder
+    {
+        return Candidature::query()
+            ->where('score', '>', 0)
+            ->whereIn('status', [
+                CandidatureStatus::EN_ATTENTE->value,
+                CandidatureStatus::EN_COURS->value,
+                CandidatureStatus::APPROUVEE->value,
+            ]);
+    }
+
+    private function candidatureStatusToMatchingStatus(CandidatureStatus $status): MatchingStatus
+    {
+        return match ($status) {
+            CandidatureStatus::EN_ATTENTE => MatchingStatus::NOUVEAU,
+            CandidatureStatus::EN_COURS => MatchingStatus::EN_COURS,
+            CandidatureStatus::APPROUVEE => MatchingStatus::FINALISE,
+            CandidatureStatus::REJETEE => MatchingStatus::EN_COURS,
+        };
+    }
+
+    public function matchingStatusToCandidatureStatus(string $status): CandidatureStatus
+    {
+        return match ($status) {
+            MatchingStatus::NOUVEAU->value => CandidatureStatus::EN_ATTENTE,
+            MatchingStatus::FINALISE->value => CandidatureStatus::APPROUVEE,
+            default => CandidatureStatus::EN_COURS,
+        };
+    }
+
+    public function toMatchingResultArray(Candidature $candidature): array
+    {
+        return [
+            'id' => $candidature->id,
+            'candidateName' => $candidature->candidate_name,
+            'candidateEmail' => $candidature->candidate_email,
+            'position' => $candidature->jobOffer?->title ?? '-',
+            'company' => $candidature->jobOffer?->company?->name ?? '-',
+            'matchingScore' => (int) $candidature->score,
+            'status' => $this->candidatureStatusToMatchingStatus($candidature->status)->value,
+            'matchDate' => $candidature->applied_date,
+            'createdAt' => $candidature->created_at,
+            'updatedAt' => $candidature->updated_at,
+        ];
+    }
+
     public function getMatchingStats(): array
     {
-        $byStatus = $this->countBy(MatchingResult::query(), 'status');
-        $total = array_sum($byStatus);
-        $finalized = $byStatus[MatchingStatus::FINALISE->value] ?? 0;
+        $total = $this->matchingQuery()->count();
+        $approved = $this->matchingQuery()->where('status', CandidatureStatus::APPROUVEE->value)->count();
 
         return [
             'totalMatches' => $total,
-            'averageScore' => $this->averageOf(MatchingResult::query(), 'matching_score'),
-            'successRate' => $total ? (int) round($finalized / $total * 100) : 0,
-            'pendingMatches' => $total - $finalized,
+            'averageScore' => $this->averageOf($this->matchingQuery(), 'score'),
+            'successRate' => $total ? (int) round($approved / $total * 100) : 0,
+            'pendingMatches' => $total - $approved,
         ];
     }
 
     public function getMatchingAlgorithms(): array
     {
-        $precision = $this->averageOf(MatchingResult::query(), 'matching_score');
+        $precision = $this->averageOf($this->matchingQuery(), 'score');
         $recall = max(0, $precision - 5);
         $f1Score = (int) round((2 * $precision * $recall) / max(1, $precision + $recall));
 
@@ -401,47 +446,94 @@ class AdminReportingService
 
     public function getMatchingActivity(): array
     {
-        $matches = $this->matchingResultRepository->findRecent(10);
+        $matches = $this->matchingQuery()->with('jobOffer')->orderByDesc('updated_at')->limit(10)->get();
 
-        return $matches->map(fn ($m) => [
-            'id' => $m->id,
+        return $matches->map(fn (Candidature $c) => [
+            'id' => $c->id,
             'type' => 'matching',
-            'message' => "{$m->candidate_name} matche sur {$m->position}",
-            'timestamp' => $m->match_date->clone()->utc()->format('Y-m-d\TH:i:s.v\Z'),
+            'message' => "{$c->candidate_name} matche sur ".($c->jobOffer->title ?? 'une offre'),
+            'timestamp' => $c->updated_at,
         ])->all();
+    }
+
+    /**
+     * @param  array{status?: ?string}  $filters
+     */
+    public function paginateMatching(int $page, int $limit, array $filters = []): LengthAwarePaginator
+    {
+        $query = $this->matchingQuery()->with('jobOffer.company');
+
+        if (! empty($filters['status'])) {
+            $query->where('status', $this->matchingStatusToCandidatureStatus($filters['status'])->value);
+        }
+
+        $paginator = $query->orderByDesc('applied_date')->paginate(max(1, $limit), ['*'], 'page', max(1, $page));
+        $paginator->setCollection($paginator->getCollection()->map(fn (Candidature $c) => $this->toMatchingResultArray($c)));
+
+        return $paginator;
     }
 
     /*
     |--------------------------------------------------------------------------
-    | SCORING
+    | SCORING — même principe : projection sur candidatures.score plutôt que
+    | sur scoring_results. « Scores Générés » = candidatures dont le score de
+    | compatibilité a déjà été calculé ; les critères n'ont pas de répartition
+    | réelle par catégorie (un seul score IA par candidature), donc chaque
+    | critère pondéré affiche la même moyenne réelle plutôt qu'une
+    | décomposition inventée.
     |--------------------------------------------------------------------------
     */
-    public function getScoringStats(): array
+    public function toScoringResultArray(Candidature $candidature): array
     {
-        $byStatus = $this->countBy(ScoringResult::query(), 'status');
-        $total = array_sum($byStatus);
+        $score = (int) $candidature->score;
+        $criteriaDefs = Cache::rememberForever('admin:scoring_criteria', fn () => self::DEFAULT_SCORING_CRITERIA);
 
         return [
-            'generatedScores' => $total,
-            'averageScore' => $this->averageOf(ScoringResult::query(), 'overall_score'),
-            'accuracy' => $total ? (int) round(($byStatus[ScoringStatus::COMPLETED->value] ?? 0) / $total * 100) : 0,
+            'id' => $candidature->id,
+            'candidateName' => $candidature->candidate_name,
+            'candidateEmail' => $candidature->candidate_email,
+            'position' => $candidature->jobOffer?->title ?? '-',
+            'overallScore' => $score,
+            'criteria' => collect($criteriaDefs)->map(fn (array $item) => [
+                'name' => $item['name'],
+                'weight' => $item['weight'],
+                'score' => $score,
+                'maxScore' => 100,
+            ])->all(),
+            'analysisDate' => $candidature->updated_at,
+            'status' => $score > 0 ? ScoringStatus::COMPLETED->value : ScoringStatus::IN_PROGRESS->value,
+            'createdAt' => $candidature->created_at,
+            'updatedAt' => $candidature->updated_at,
+        ];
+    }
+
+    public function findScoringResult(string $id): ?array
+    {
+        $candidature = Candidature::with('jobOffer')->find($id);
+
+        return $candidature ? $this->toScoringResultArray($candidature) : null;
+    }
+
+    public function getScoringStats(): array
+    {
+        $total = Candidature::query()->count();
+        $scored = Candidature::query()->where('score', '>', 0)->count();
+
+        return [
+            'generatedScores' => $scored,
+            'averageScore' => $this->averageOf(Candidature::query()->where('score', '>', 0), 'score'),
+            'accuracy' => $total ? (int) round($scored / $total * 100) : 0,
             'averageTime' => '3 min',
         ];
     }
 
     public function getScoringCriteria(): array
     {
-        $scores = $this->scoringResultRepository->findRecent(10);
         $criteria = Cache::rememberForever('admin:scoring_criteria', fn () => self::DEFAULT_SCORING_CRITERIA);
+        $averageScore = $this->averageOf(Candidature::query()->where('score', '>', 0), 'score');
 
-        if ($scores->isEmpty()) {
-            return $criteria;
-        }
-
-        return collect($criteria)->map(function (array $item) use ($scores) {
-            $item['score'] = (int) round($this->average(
-                $scores->map(fn (ScoringResult $score) => $this->extractCriterionScore($score->criteria, $item['name']))->all()
-            ));
+        return collect($criteria)->map(function (array $item) use ($averageScore) {
+            $item['score'] = $averageScore;
 
             return $item;
         })->all();
@@ -456,22 +548,37 @@ class AdminReportingService
 
     public function getScoringPerformance(): array
     {
-        // Deux colonnes, sans modèle : le mois se lit sur les 7 premiers
+        // Une colonne, sans modèle dédié : le mois se lit sur les 7 premiers
         // caractères de la date (AAAA-MM), identique sur MySQL et SQLite.
-        $scores = ScoringResult::query()->orderBy('analysis_date')->toBase()->get(['analysis_date', 'overall_score']);
+        $scores = Candidature::query()->where('score', '>', 0)->orderBy('applied_date')->toBase()->get(['applied_date', 'score']);
 
-        $trendData = $scores->groupBy(fn ($s) => substr((string) $s->analysis_date, 0, 7))
+        $trendData = $scores->groupBy(fn ($s) => substr((string) $s->applied_date, 0, 7))
             ->map(function ($items, $month) {
-                $avg = $this->average($items->pluck('overall_score')->all());
+                $avg = $this->average($items->pluck('score')->all());
 
                 return ['month' => $month, 'precision' => $avg, 'recall' => max(0, $avg - 5)];
             })->values()->all();
 
-        $precision = $this->average($scores->pluck('overall_score')->all());
+        $precision = $this->average($scores->pluck('score')->all());
         $recall = max(0, $precision - 5);
         $f1Score = (int) round((2 * $precision * $recall) / max(1, $precision + $recall));
 
         return compact('precision', 'recall', 'f1Score', 'trendData');
+    }
+
+    /**
+     * @param  array{status?: ?string}  $filters
+     */
+    public function paginateScoring(int $page, int $limit, array $filters = []): LengthAwarePaginator
+    {
+        $query = Candidature::query()->with('jobOffer');
+        $status = $filters['status'] ?? null;
+        $query->where('score', $status === ScoringStatus::IN_PROGRESS->value ? '=' : '>', 0);
+
+        $paginator = $query->orderByDesc('updated_at')->paginate(max(1, $limit), ['*'], 'page', max(1, $page));
+        $paginator->setCollection($paginator->getCollection()->map(fn (Candidature $c) => $this->toScoringResultArray($c)));
+
+        return $paginator;
     }
 
     /*
@@ -520,24 +627,5 @@ class AdminReportingService
         }
 
         return (int) round(array_sum(array_map(fn ($value) => $value ?? 0, $values)) / count($values));
-    }
-
-    private function extractCriterionScore(mixed $criteria, string $name): float
-    {
-        if (is_array($criteria) && array_is_list($criteria)) {
-            foreach ($criteria as $item) {
-                if (($item['name'] ?? null) === $name) {
-                    return (float) ($item['score'] ?? 0);
-                }
-            }
-
-            return 0;
-        }
-
-        if (is_array($criteria) && array_key_exists($name, $criteria) && is_numeric($criteria[$name])) {
-            return (float) $criteria[$name];
-        }
-
-        return 0;
     }
 }
