@@ -180,13 +180,18 @@ class SubscriptionService
             abort(400, 'Ce plan est gratuit, utilisez /subscribe directement');
         }
 
-        // Périodicité entreprise (1/3/6/12 mois) : le prix catalogue est
-        // toujours mensuel, le montant facturé se multiplie par la durée
-        // choisie. Les plans USER (Standard/Premium) n'ont pas
-        // `available_periods` -> restent fixés à 1 mois quoi qu'on envoie.
-        $periodMonths = (int) ($data['periodMonths'] ?? 1);
-        if (! in_array($periodMonths, $plan->allowedPeriods(), true)) {
-            $periodMonths = 1;
+        // Périodicité entreprise (3/6/12 mois, pas d'engagement 1 mois) : le
+        // prix catalogue est toujours mensuel, le montant facturé se
+        // multiplie par la durée choisie. Les plans USER (Standard/Premium)
+        // n'ont pas `available_periods` -> restent fixés à 1 mois quoi qu'on
+        // envoie. Si la durée envoyée ne figure pas dans allowedPeriods() du
+        // plan, on retombe sur sa plus courte durée autorisée (et non un "1"
+        // fixe, invalide pour Business/Business+ depuis qu'ils n'acceptent
+        // plus 1 mois).
+        $allowedPeriods = $plan->allowedPeriods();
+        $periodMonths = (int) ($data['periodMonths'] ?? $allowedPeriods[0]);
+        if (! in_array($periodMonths, $allowedPeriods, true)) {
+            $periodMonths = $allowedPeriods[0];
         }
 
         $gatewayName = $data['gateway'] ?? $this->paymentGatewayManager->defaultGatewayName();
@@ -649,7 +654,7 @@ class SubscriptionService
 
         $this->userSubscriptionRepository->cancelActiveForUser($userId);
 
-        // La durée vient de la période achetée (1/3/6/12 mois pour les
+        // La durée vient de la période achetée (3/6/12 mois pour les
         // plans entreprise à période choisissable) plutôt que de
         // billing_period, qui ne distingue plus que MONTHLY/ANNUAL pour
         // l'affichage catalogue.

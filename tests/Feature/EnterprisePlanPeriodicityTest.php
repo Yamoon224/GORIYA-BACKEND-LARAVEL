@@ -14,8 +14,8 @@ use Tests\TestCase;
 /**
  * Périodicité entreprise (grille tarifaire sept. 2026) : Business et
  * Business+ ont un prix mensuel de base, multiplié par la durée choisie
- * (1/3/6/12 mois) au checkout — voir SubscriptionService::checkout() et
- * SubscriptionPlanSeeder.
+ * (3/6/12 mois, pas d'engagement 1 mois) au checkout — voir
+ * SubscriptionService::checkout() et SubscriptionPlanSeeder.
  *
  * RefreshDatabase ne rejoue que les migrations (dont celle qui insère
  * "Offre gratuite" en dur) — pas les seeders classiques : on lance donc
@@ -58,7 +58,7 @@ class EnterprisePlanPeriodicityTest extends TestCase
         $plan = SubscriptionPlan::where('name', 'Business')->firstOrFail();
 
         $this->assertSame(35500.0, (float) $plan->price);
-        $this->assertSame([1, 3, 6, 12], $plan->available_periods);
+        $this->assertSame([3, 6, 12], $plan->available_periods);
         $this->assertSame('FAIBLE', $plan->notification_level);
     }
 
@@ -68,7 +68,7 @@ class EnterprisePlanPeriodicityTest extends TestCase
 
         $this->assertSame(45500.0, (float) $plan->price);
         $this->assertSame('MONTHLY', $plan->billing_period->value);
-        $this->assertSame([1, 3, 6, 12], $plan->available_periods);
+        $this->assertSame([3, 6, 12], $plan->available_periods);
         $this->assertSame('ELEVE', $plan->notification_level);
     }
 
@@ -94,7 +94,7 @@ class EnterprisePlanPeriodicityTest extends TestCase
         ]);
     }
 
-    public function test_checkout_falls_back_to_one_month_for_a_period_the_plan_does_not_offer(): void
+    public function test_checkout_falls_back_to_the_shortest_allowed_period_for_a_period_the_plan_does_not_offer(): void
     {
         $user = $this->enterpriseUser();
         $plan = SubscriptionPlan::where('name', 'Business')->firstOrFail();
@@ -106,7 +106,7 @@ class EnterprisePlanPeriodicityTest extends TestCase
             'periodMonths' => 9,
         ])->assertOk();
 
-        $response->assertJsonPath('amount', 35500);
+        $response->assertJsonPath('amount', 35500 * 3);
     }
 
     public function test_standard_user_plan_ignores_period_months_and_stays_at_one_month(): void

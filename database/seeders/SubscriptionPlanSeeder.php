@@ -32,7 +32,8 @@ use Illuminate\Database\Seeder;
  *    les URLs vidéo qui sont retenues ; voir CourseAccessService (qui gère
  *    aussi le pass découverte de 7 jours ouvert à tous).
  *  - Entreprise (Business, Business+) : `available_periods` rend la
- *    périodicité choisissable (1/3/6/12 mois) au checkout — le prix
+ *    périodicité choisissable (3/6/12 mois, pas d'engagement 1 mois) au
+ *    checkout — le prix
  *    ci-dessous reste le prix MENSUEL de base, multiplié par la durée
  *    choisie (voir SubscriptionService::checkout()). Le palier "Sur Mesure"
  *    n'est pas un SubscriptionPlan : il est sur devis, sans checkout — voir
@@ -150,7 +151,7 @@ class SubscriptionPlanSeeder extends Seeder
                 'name' => 'Business',
                 'price' => 35500,
                 'billing_period' => BillingPeriod::MONTHLY,
-                'available_periods' => [1, 3, 6, 12],
+                'available_periods' => [3, 6, 12],
                 'user_type' => SubscriptionUserType::ENTERPRISE,
                 'features' => [
                     'Poster une offre',
@@ -172,7 +173,7 @@ class SubscriptionPlanSeeder extends Seeder
                 'name' => 'Business+',
                 'price' => 45500,
                 'billing_period' => BillingPeriod::MONTHLY,
-                'available_periods' => [1, 3, 6, 12],
+                'available_periods' => [3, 6, 12],
                 'user_type' => SubscriptionUserType::ENTERPRISE,
                 'features' => [
                     'Poster une offre',
