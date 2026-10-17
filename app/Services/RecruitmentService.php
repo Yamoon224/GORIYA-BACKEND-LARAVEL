@@ -247,6 +247,20 @@ class RecruitmentService
         return RecruitmentInterview::where('company_id', $companyId)->with(self::INTERVIEW_RELATIONS)->find($id);
     }
 
+    /** Entretiens du candidat authentifié, sur toutes ses candidatures (vue lecture seule). */
+    public function listInterviewsForUser(string $userId): Collection
+    {
+        $interviews = RecruitmentInterview::query()
+            ->whereHas('candidature', fn (Builder $q) => $q->where('user_id', $userId))
+            ->with(['candidature.jobOffer.company', 'callSession'])
+            ->orderBy('scheduled_at')
+            ->get();
+
+        $this->closePastCalls($interviews);
+
+        return $interviews;
+    }
+
     /**
      * @param  array<string, mixed>  $data  Champs validés (camelCase)
      */

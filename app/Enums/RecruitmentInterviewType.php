@@ -14,8 +14,8 @@ enum RecruitmentInterviewType: string
     {
         return match ($this) {
             self::PHONE => 'téléphonique',
-            self::VIDEO => 'en visioconférence sur GORIYA Meet',
-            self::ONSITE => 'sur place',
+            self::VIDEO => 'sur GORIYA Meet',
+            self::ONSITE => 'en présentiel',
         };
     }
 }

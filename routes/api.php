@@ -62,6 +62,7 @@ use App\Http\Controllers\Api\LunionMeetWebhookController;
 use App\Http\Controllers\Api\MatchingResultsController;
 use App\Http\Controllers\Api\MessagesController;
 use App\Http\Controllers\Api\MyEmployeeController;
+use App\Http\Controllers\Api\MyInterviewsController;
 use App\Http\Controllers\Api\MyProfileController;
 use App\Http\Controllers\Api\MyResumesController;
 use App\Http\Controllers\Api\NewsletterController;
@@ -202,6 +203,11 @@ Route::middleware('auth:api')->group(function () {
 Route::middleware('auth:api')->group(function () {
     Route::get('/me/cv-profile', [CvProfileController::class, 'show']);
     Route::put('/me/cv-profile', [CvProfileController::class, 'update']);
+});
+
+// --- Entretiens du candidat authentifié (lecture seule, tous recruteurs confondus) ---
+Route::middleware('auth:api')->group(function () {
+    Route::get('/me/interviews', [MyInterviewsController::class, 'index']);
 });
 
 // --- Espace employé : fiche employé (tous employeurs confondus) + congés et
