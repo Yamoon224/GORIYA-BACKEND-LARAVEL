@@ -114,13 +114,26 @@ return [
     // SMS (OTP, réinitialisation de mot de passe, notifications prioritaires
     // des forfaits payants) via MTarget — voir MtargetSmsService.
     // https://developers.m-target.com/#/operations/sendASimpleSMSMessage
-    // Sans MTARGET_API_KEY, no-op silencieux (log seulement), même contrat
-    // que fcm ci-dessous. default_country_code : indicatif appliqué aux
-    // numéros saisis sans +, les numéros de l'app n'étant pas garantis en
-    // format international.
+    // Authentification Basic (login/password du compte MTarget, fournis par
+    // leur support — pas une clé API dédiée). service_id : identifiant de
+    // l'offre MTarget souscrite (champ `serviceid` de l'API, optionnel).
+    // base_url : api-public.mtarget.fr, pas api.mtarget.fr — ce dernier
+    // bloque la connexion TCP (timeout) pour toute IP non-listée côté
+    // MTarget, alors que api-public.mtarget.fr répond avec une erreur JSON
+    // explicite ({"code":"-1","reason":"ip address not allowed"}), bien plus
+    // facile à diagnostiquer. IMPORTANT : l'IP sortante du serveur qui
+    // appelle cette API doit être ajoutée à la liste blanche du compte
+    // MTarget (back-office MTarget ou support@mtarget.fr) — sinon tout envoi
+    // échoue avec ce code -1, quels que soient les identifiants.
+    // Sans MTARGET_LOGIN/MTARGET_PASSWORD, no-op silencieux (log seulement),
+    // même contrat que fcm ci-dessous. default_country_code : indicatif
+    // appliqué aux numéros saisis sans +, les numéros de l'app n'étant pas
+    // garantis en format international.
     'mtarget' => [
-        'api_key' => env('MTARGET_API_KEY'),
-        'base_url' => env('MTARGET_BASE_URL', 'https://api.mtarget.fr'),
+        'login' => env('MTARGET_LOGIN'),
+        'password' => env('MTARGET_PASSWORD'),
+        'service_id' => env('MTARGET_SERVICE_ID'),
+        'base_url' => env('MTARGET_BASE_URL', 'https://api-public.mtarget.fr'),
         'sender' => env('MTARGET_SENDER', 'GORIYA'),
         'default_country_code' => env('MTARGET_DEFAULT_COUNTRY_CODE', '225'),
     ],

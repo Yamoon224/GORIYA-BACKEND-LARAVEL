@@ -31,7 +31,8 @@ class NotificationSmsBoostTest extends TestCase
         $this->seed(SubscriptionPlanSeeder::class);
 
         config([
-            'services.mtarget.api_key' => 'test-key',
+            'services.mtarget.login' => 'goriya',
+            'services.mtarget.password' => 'test-password',
             'services.mtarget.base_url' => 'https://api.mtarget.fr',
             'services.mtarget.sender' => 'GORIYA',
             'services.mtarget.default_country_code' => '225',
