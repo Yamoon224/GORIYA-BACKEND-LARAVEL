@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Contracts\PushNotificationServiceInterface;
+use App\Contracts\SmsGatewayInterface;
 use App\Enums\CandidatureStatus;
 use App\Enums\HrWorkflowStatus;
 use App\Enums\NotificationType;
@@ -36,8 +37,11 @@ use function Illuminate\Support\defer;
  * best-effort, ne bloque jamais la création de la notification in-app — et,
  * si le forfait actif du destinataire porte `notification_level: ELEVE`
  * (Standard, Premium, Business+ — voir SubscriptionPlanSeeder), doublée par
- * email (voir maybeEmail()). Les autres forfaits (Grouilleur, Business,
- * aucun abonnement) restent en notification "Faible" : in-app uniquement.
+ * email (voir maybeEmail()) et, si un numéro de téléphone est connu, par SMS
+ * (voir maybeSms()) — c'est ce niveau de forfait qui matérialise "les plans
+ * payants Standard/Entreprise" pour le canal SMS. Les autres forfaits
+ * (Grouilleur, Business, aucun abonnement) restent en notification
+ * "Faible" : in-app uniquement.
  */
 class NotificationService
 {
@@ -50,6 +54,7 @@ class NotificationService
     public function __construct(
         private readonly PushNotificationServiceInterface $pushService,
         private readonly UserSubscriptionRepositoryInterface $userSubscriptionRepository,
+        private readonly SmsGatewayInterface $smsGateway,
     ) {}
 
     public function listFor(User $user): Collection
@@ -380,6 +385,7 @@ class NotificationService
         // `$email` à false : l'appelant envoie déjà son propre email (convocation).
         if ($email) {
             $this->maybeEmail($user, $title, $body, $link);
+            $this->maybeSms($user, $title, $body);
         }
     }
 
@@ -406,5 +412,25 @@ class NotificationService
         } catch (\Throwable $e) {
             report($e);
         }
+    }
+
+    /**
+     * Même porte que maybeEmail() (forfait `notification_level: ELEVE`) : ce
+     * sont les forfaits payants qui ouvrent le SMS, pas seulement un numéro
+     * renseigné. SmsGatewayInterface::send() ne lève jamais — pas de
+     * try/catch nécessaire ici, contrairement à Mail::queue().
+     */
+    private function maybeSms(User $user, string $title, string $body): void
+    {
+        if (! $user->phone) {
+            return;
+        }
+
+        $subscription = $this->userSubscriptionRepository->findActiveForUser($user->id);
+        if (($subscription?->plan?->notification_level) !== 'ELEVE') {
+            return;
+        }
+
+        $this->smsGateway->send($user->phone, mb_strimwidth("{$title} : {$body}", 0, 300, '…'));
     }
 }

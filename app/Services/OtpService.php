@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Contracts\SmsGatewayInterface;
 use App\Mail\OtpMail;
 use App\Models\OtpCode;
 use App\Models\User;
@@ -14,6 +15,11 @@ use Illuminate\Support\Facades\Mail;
  * code non vide). Un seul mécanisme, réutilisé par tous les flux
  * (vérification d'inscription candidat/entreprise, admin, réinitialisation
  * de mot de passe).
+ *
+ * Doublé par SMS (MtargetSmsService) quand l'utilisateur a un numéro de
+ * téléphone — tous forfaits confondus, contrairement aux notifications
+ * (NotificationService), qui réservent le SMS/l'email aux forfaits payants :
+ * l'OTP sécurise un compte avant même qu'il ait un abonnement.
  */
 class OtpService
 {
@@ -28,6 +34,7 @@ class OtpService
     public function __construct(
         private readonly UserRepositoryInterface $userRepository,
         private readonly WelcomeEmailService $welcomeEmailService,
+        private readonly SmsGatewayInterface $smsGateway,
     ) {}
 
     public function send(User $user, string $purpose = self::PURPOSE_EMAIL_VERIFICATION): void
@@ -52,6 +59,23 @@ class OtpService
         ]);
 
         Mail::to($user->email)->send(new OtpMail($user, $code, self::EXPIRY_MINUTES, $purpose));
+
+        // Canal complémentaire, pas de remplacement : l'email reste la
+        // référence (c'est lui que verify() identifie par adresse). Le SMS
+        // n'est qu'un doublon best-effort quand un numéro est connu — voir
+        // SmsGatewayInterface, qui ne lève jamais d'exception.
+        if ($user->phone) {
+            $this->smsGateway->send($user->phone, $this->smsMessage($code, $purpose));
+        }
+    }
+
+    private function smsMessage(string $code, string $purpose): string
+    {
+        $action = $purpose === self::PURPOSE_PASSWORD_RESET
+            ? 'réinitialiser votre mot de passe'
+            : 'vérifier votre compte';
+
+        return "GORIYA : votre code pour {$action} est {$code}. Valable ".self::EXPIRY_MINUTES.' minutes.';
     }
 
     public function verify(string $email, string $code, string $purpose = self::PURPOSE_EMAIL_VERIFICATION): User

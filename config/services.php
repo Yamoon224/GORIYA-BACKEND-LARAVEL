@@ -111,6 +111,20 @@ return [
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
 
+    // SMS (OTP, réinitialisation de mot de passe, notifications prioritaires
+    // des forfaits payants) via MTarget — voir MtargetSmsService.
+    // https://developers.m-target.com/#/operations/sendASimpleSMSMessage
+    // Sans MTARGET_API_KEY, no-op silencieux (log seulement), même contrat
+    // que fcm ci-dessous. default_country_code : indicatif appliqué aux
+    // numéros saisis sans +, les numéros de l'app n'étant pas garantis en
+    // format international.
+    'mtarget' => [
+        'api_key' => env('MTARGET_API_KEY'),
+        'base_url' => env('MTARGET_BASE_URL', 'https://api.mtarget.fr'),
+        'sender' => env('MTARGET_SENDER', 'GORIYA'),
+        'default_country_code' => env('MTARGET_DEFAULT_COUNTRY_CODE', '225'),
+    ],
+
     // Push notifications (app mobile). Voir FcmPushNotificationService —
     // sans compte de service configuré, no-op silencieux (log seulement).
     'fcm' => [
