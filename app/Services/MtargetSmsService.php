@@ -90,6 +90,13 @@ class MtargetSmsService implements SmsGatewayInterface
             return '+'.substr($digits, 2);
         }
 
-        return '+'.config('services.mtarget.default_country_code').ltrim($digits, '0');
+        // Depuis la réforme ARTCI 2021, les numéros ivoiriens sont passés à
+        // 10 chiffres et le chiffre de tête (0, 1, 2...) fait partie du
+        // numéro significatif — ce n'est plus un préfixe de tri à retirer
+        // (contrairement à la convention française par ex.). On NE retire
+        // donc PAS le 0 initial : 0565855202 → +2250565855202, pas
+        // +225565855202 (qui ne correspond à aucun abonné et échoue en
+        // silence côté MTarget, qui répond quand même code 0/ACCEPTED).
+        return '+'.config('services.mtarget.default_country_code').$digits;
     }
 }

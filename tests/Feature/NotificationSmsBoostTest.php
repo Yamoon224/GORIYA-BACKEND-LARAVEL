@@ -109,7 +109,7 @@ class NotificationSmsBoostTest extends TestCase
         app(NotificationService::class)->notifyApplicationStatusChanged($candidature);
 
         Http::assertSent(fn ($request) => $request->url() === 'https://api.mtarget.fr/messages'
-            && $request->data()['msisdn'] === '+225700000000');
+            && $request->data()['msisdn'] === '+2250700000000');
     }
 
     public function test_a_standard_subscriber_without_a_phone_gets_no_sms(): void

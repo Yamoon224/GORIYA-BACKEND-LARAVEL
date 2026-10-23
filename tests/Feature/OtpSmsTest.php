@@ -34,7 +34,7 @@ class OtpSmsTest extends TestCase
 
         Http::fake([
             'api.mtarget.fr/*' => Http::response([
-                'results' => [['msisdn' => '+225700000000', 'smscount' => 1, 'code' => 0, 'reason' => 'ACCEPTED', 'ticket' => 't-1']],
+                'results' => [['msisdn' => '+2250700000000', 'smscount' => 1, 'code' => 0, 'reason' => 'ACCEPTED', 'ticket' => 't-1']],
             ]),
         ]);
     }
@@ -55,7 +55,7 @@ class OtpSmsTest extends TestCase
         app(OtpService::class)->send($user);
 
         Http::assertSent(fn ($request) => $request->url() === 'https://api.mtarget.fr/messages'
-            && $request->data()['msisdn'] === '+225700000000');
+            && $request->data()['msisdn'] === '+2250700000000');
     }
 
     public function test_does_not_send_a_sms_when_the_user_has_no_phone(): void
