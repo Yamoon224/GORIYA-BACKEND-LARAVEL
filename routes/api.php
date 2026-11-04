@@ -167,6 +167,12 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/me/feature-usage/{featureKey}', [FeatureUsageController::class, 'status']);
     Route::post('/me/feature-usage/{featureKey}/consume', [FeatureUsageController::class, 'consume']);
 
+    // Garde d'accès « Adapter son CV à une offre » (Premium) : appelée par la
+    // route Next /api/adapter-cv avant tout appel IA. 403 si le forfait actif
+    // n'inclut pas `adaptation_cv`.
+    Route::get('/me/plan-features/adaptation_cv', fn () => response()->json(['allowed' => true]))
+        ->middleware('plan.feature:adaptation_cv');
+
     Route::get('/me/resumes', [MyResumesController::class, 'index']);
     Route::post('/me/resumes', [MyResumesController::class, 'store']);
     Route::patch('/me/resumes/{id}', [MyResumesController::class, 'update']);

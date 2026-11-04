@@ -87,6 +87,26 @@ class PlanFeatureGateTest extends TestCase
         $this->assertNotSame(403, $response->status());
     }
 
+    // --- USER : Adapter son CV à une offre (Premium uniquement) -------------
+
+    public function test_standard_cannot_adapt_a_cv_to_a_job_offer(): void
+    {
+        $user = $this->userWithPlan('Standard');
+
+        $this->actingAs($user, 'api')
+            ->getJson('/me/plan-features/adaptation_cv')
+            ->assertStatus(403);
+    }
+
+    public function test_premium_can_adapt_a_cv_to_a_job_offer(): void
+    {
+        $user = $this->userWithPlan('Premium');
+
+        $this->actingAs($user, 'api')
+            ->getJson('/me/plan-features/adaptation_cv')
+            ->assertOk();
+    }
+
     // --- USER : Recherche avancée sur une entreprise (Standard + Premium) ---
 
     public function test_grouilleur_cannot_use_company_research(): void

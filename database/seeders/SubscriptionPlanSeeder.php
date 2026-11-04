@@ -108,6 +108,7 @@ class SubscriptionPlanSeeder extends Seeder
                     'Formations : accès illimité au catalogue',
                     'Goriya Pitch',
                     'Goriya Docs',
+                    "Adapter son CV aux TDR d'une offre d'emploi",
                     "Notifications d'offres prioritaires : in-app + email",
                     'Support prioritaire',
                 ],
@@ -115,7 +116,7 @@ class SubscriptionPlanSeeder extends Seeder
                 'feature_limits' => ['cv_creation' => 20, 'document_generation' => 20, 'cv_analysis' => 20],
                 'included_features' => [
                     'goriya_meet', 'goriya_connect', 'recherche_entreprise',
-                    'simulation_entretien', 'portfolio', 'goriya_pitch', 'goriya_docs', 'formations',
+                    'simulation_entretien', 'portfolio', 'goriya_pitch', 'goriya_docs', 'formations', 'adaptation_cv',
                 ],
                 'reset_price' => 500,
                 'is_active' => true,
