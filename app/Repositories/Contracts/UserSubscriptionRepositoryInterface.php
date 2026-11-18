@@ -31,5 +31,5 @@ interface UserSubscriptionRepositoryInterface extends RepositoryInterface
      */
     public function findAllWithPlan(): Collection;
 
-    public function paginateAllWithPlanAndUser(int $page, int $limit): LengthAwarePaginator;
+    public function paginateAllWithPlanAndUser(int $page, int $limit, ?string $status = null): LengthAwarePaginator;
 }

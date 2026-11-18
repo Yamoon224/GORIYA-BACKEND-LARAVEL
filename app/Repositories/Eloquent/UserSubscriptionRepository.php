@@ -57,12 +57,13 @@ class UserSubscriptionRepository extends BaseRepository implements UserSubscript
         return UserSubscription::with('plan')->get();
     }
 
-    public function paginateAllWithPlanAndUser(int $page, int $limit): LengthAwarePaginator
+    public function paginateAllWithPlanAndUser(int $page, int $limit, ?string $status = null): LengthAwarePaginator
     {
         $page = max(1, $page);
         $limit = max(1, $limit);
 
         return UserSubscription::with(['plan', 'user'])
+            ->when($status, fn ($q) => $q->where('status', $status))
             ->orderByDesc('created_at')
             ->paginate($limit, ['*'], 'page', $page);
     }

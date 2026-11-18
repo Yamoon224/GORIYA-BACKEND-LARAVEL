@@ -586,9 +586,9 @@ class SubscriptionService
         ];
     }
 
-    public function adminAll(int $page, int $limit)
+    public function adminAll(int $page, int $limit, ?string $status = null)
     {
-        $paginator = $this->userSubscriptionRepository->paginateAllWithPlanAndUser($page, $limit);
+        $paginator = $this->userSubscriptionRepository->paginateAllWithPlanAndUser($page, $limit, $status);
         $paginator->setCollection(
             $paginator->getCollection()->map(fn (UserSubscription $sub) => (new UserSubscriptionResource($sub))->resolve())
         );

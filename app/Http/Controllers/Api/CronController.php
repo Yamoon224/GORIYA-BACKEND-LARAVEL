@@ -18,8 +18,12 @@ class CronController extends Controller
         $secret = (string) config('services.cron.secret');
         $given = (string) ($request->bearerToken() ?? $request->query('token', ''));
 
-        if ($secret === '' || ! hash_equals($secret, $given)) {
-            return response()->json(['message' => 'Non autorisé'], 401);
+        if ($secret === '') {
+            return response()->json(['message' => 'CRON_SECRET non configuré sur le serveur'], 401);
+        }
+
+        if (! hash_equals($secret, trim($given))) {
+            return response()->json(['message' => 'Token invalide'], 401);
         }
 
         return response()->json(['expired' => $subscriptions->expireOverdue()]);

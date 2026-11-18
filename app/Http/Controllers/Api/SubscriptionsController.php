@@ -334,6 +334,7 @@ class SubscriptionsController extends Controller
         parameters: [
             new OA\Parameter(name: 'page', in: 'query', schema: new OA\Schema(type: 'integer', default: 1)),
             new OA\Parameter(name: 'limit', in: 'query', schema: new OA\Schema(type: 'integer', default: 20)),
+            new OA\Parameter(name: 'status', in: 'query', description: 'Filtre optionnel', schema: new OA\Schema(type: 'string', enum: ['ACTIVE', 'EXPIRED', 'CANCELLED'])),
         ],
         responses: [
             new OA\Response(
@@ -352,8 +353,10 @@ class SubscriptionsController extends Controller
     {
         $page = (int) $request->query('page', 1);
         $limit = (int) $request->query('limit', 20);
+        $status = strtoupper((string) $request->query('status', ''));
+        $status = in_array($status, ['ACTIVE', 'EXPIRED', 'CANCELLED'], true) ? $status : null;
 
-        return $this->subscriptionService->adminAll($page, $limit);
+        return $this->subscriptionService->adminAll($page, $limit, $status);
     }
 
     #[OA\Get(
