@@ -19,6 +19,7 @@ class UserSubscriptionRepository extends BaseRepository implements UserSubscript
     {
         return UserSubscription::where('user_id', $userId)
             ->where('status', SubscriptionStatus::ACTIVE)
+            ->notPastEndDate()
             ->with('plan')
             ->orderByDesc('created_at')
             ->first();
@@ -29,8 +30,19 @@ class UserSubscriptionRepository extends BaseRepository implements UserSubscript
         return UserSubscription::where('user_id', $userId)
             ->where('plan_id', $planId)
             ->where('status', SubscriptionStatus::ACTIVE)
+            ->notPastEndDate()
             ->with('plan')
             ->first();
+    }
+
+    public function expireOverdue(): int
+    {
+        return UserSubscription::where('status', SubscriptionStatus::ACTIVE)
+            ->whereNotNull('end_date')
+            ->where('end_date', '<', now())
+            ->get()
+            ->each(fn (UserSubscription $sub) => $sub->update(['status' => SubscriptionStatus::EXPIRED]))
+            ->count();
     }
 
     public function cancelActiveForUser(string $userId): void

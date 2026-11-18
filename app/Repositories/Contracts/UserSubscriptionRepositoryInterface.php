@@ -20,6 +20,13 @@ interface UserSubscriptionRepositoryInterface extends RepositoryInterface
     public function cancelActiveForUser(string $userId): void;
 
     /**
+     * Passe en EXPIRED les abonnements ACTIVE dont end_date est dépassée.
+     *
+     * @return int nombre d'abonnements expirés
+     */
+    public function expireOverdue(): int;
+
+    /**
      * @return Collection<int, UserSubscription>
      */
     public function findAllWithPlan(): Collection;

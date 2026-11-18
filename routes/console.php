@@ -31,6 +31,9 @@ Schedule::command('queue:work --stop-when-empty --max-time=55 --tries=3')
 // dépassée — voir CloseExpiredSurveysCommand.
 Schedule::command('surveys:close-expired')->daily();
 
+// Abonnements dont la date de fin est dépassée → statut EXPIRED.
+Schedule::command('subscriptions:expire-overdue')->daily()->withoutOverlapping();
+
 // Termine les sessions GORIYA Meet dont l'heure est passée (restées
 // « Planifié » ou « En cours ») — voir CloseExpiredCallsCommand.
 Schedule::command('calls:close-expired')->everyFiveMinutes()->withoutOverlapping();

@@ -118,6 +118,9 @@ Route::get('/auth/profile', [AuthController::class, 'profile'])->middleware('aut
 // qu'il reste dans la fenêtre refresh_ttl (voir AuthService::refresh).
 Route::post('/auth/refresh', [AuthController::class, 'refresh']);
 
+// --- Cron externe (secret CRON_SECRET) ---
+Route::match(['get', 'post'], '/cron/subscriptions/expire', [\App\Http\Controllers\Api\CronController::class, 'expireSubscriptions']);
+
 // --- Users ---
 Route::post('/users', [UsersController::class, 'store']);
 Route::get('/users', [UsersController::class, 'index'])->middleware(['auth:api', 'role:ADMIN']);

@@ -172,6 +172,10 @@ return [
     | déploiement de code via PAYMENT_ENABLED_GATEWAYS="kkiapay,stripe".
     |
     */
+    'cron' => [
+        'secret' => env('CRON_SECRET'),
+    ],
+
     'payment' => [
         'enabled_gateways' => array_filter(explode(',', env('PAYMENT_ENABLED_GATEWAYS', 'paiementpro,kkiapay'))),
         'default_gateway' => env('PAYMENT_DEFAULT_GATEWAY', 'paiementpro'),
